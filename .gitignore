@@ -1,0 +1,14 @@
+# Environment
+.env
+backend/config/database.php
+
+# XAMPP
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
