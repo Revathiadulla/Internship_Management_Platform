@@ -193,7 +193,7 @@ git push origin branch-name
 
 ---
 
-## 🧪 Testing
+##  Testing
 
 * UI Testing
 * Backend Testing
