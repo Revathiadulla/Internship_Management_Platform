@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html class="light" lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>Browse Talent Pool | Company Portal</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+    <script id="tailwind-config">
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#1d4ed8",
+                        secondary: "#64748b",
+                        surface: "#f8f9fa",
+                        "surface-container": "#ffffff",
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #f8f9fa; color: #1e293b; }
+        .sidebar-link { display: flex; items-center: center; gap: 0.75rem; padding: 0.75rem 1rem; border-radius: 0.5rem; transition: all 0.2s; font-size: 0.875rem; font-weight: 500; color: #64748b; }
+        .sidebar-link:hover { background-color: #f1f5f9; color: #1d4ed8; }
+        .sidebar-link.active { background-color: #1d4ed8; color: #ffffff; box-shadow: 0 4px 6px -1px rgb(29 78 216 / 0.1), 0 2px 4px -2px rgb(29 78 216 / 0.1); }
+        .filter-select { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; border-color: #e2e8f0; border-radius: 0.75rem; padding: 0.5rem 2rem 0.5rem 1rem; }
+    </style>
+</head>
+<body class="min-h-screen flex font-sans">
+
+    <!-- Sidebar -->
+    <aside class="w-64 bg-white border-r border-gray-200 p-6 flex flex-col fixed h-screen z-50">
+        <div class="flex items-center gap-3 mb-10 px-2">
+            <div class="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg">
+                <span class="material-symbols-outlined">recruitment</span>
+            </div>
+            <div>
+                <h1 class="text-xl font-black text-gray-900 tracking-tight leading-none">IMP</h1>
+                <p class="text-[10px] text-blue-600 font-bold uppercase tracking-widest mt-1">Recruitment Hub</p>
+            </div>
+        </div>
+
+        <nav class="flex-1 space-y-1">
+            <a href="company_dashboard.html" class="sidebar-link">
+                <span class="material-symbols-outlined text-xl">dashboard</span>
+                Hiring Overview
+            </a>
+            <a href="browse_talent_pool.html" class="sidebar-link active">
+                <span class="material-symbols-outlined text-xl">person_search</span>
+                Browse Talent Pool
+            </a>
+            <a href="#" class="sidebar-link">
+                <span class="material-symbols-outlined text-xl">verified</span>
+                Verified Talent
+            </a>
+            <a href="#" class="sidebar-link">
+                <span class="material-symbols-outlined text-xl">handshake</span>
+                Hiring Requests
+            </a>
+            <a href="#" class="sidebar-link">
+                <span class="material-symbols-outlined text-xl">analytics</span>
+                Recruitment Stats
+            </a>
+            <a href="#" class="sidebar-link">
+                <span class="material-symbols-outlined text-xl">help</span>
+                Support
+            </a>
+        </nav>
+
+        <div class="mt-auto pt-6 border-t border-gray-100">
+            <a href="index.html" class="sidebar-link text-red-600 hover:bg-red-50">
+                <span class="material-symbols-outlined">logout</span>
+                Logout
+            </a>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="ml-64 flex-1 p-8">
+        <div class="max-w-7xl mx-auto space-y-8">
+            
+            <!-- Header -->
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                <div>
+                    <h2 class="text-3xl font-black text-gray-900 tracking-tight">Browse Talent Pool</h2>
+                    <p class="text-gray-500 font-medium mt-1">Discover certified interns ready for industry roles.</p>
+                </div>
+                <div class="flex gap-3">
+                    <button class="bg-white border border-gray-200 text-gray-700 px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-gray-50 transition-all shadow-sm">
+                        <span class="material-symbols-outlined text-lg">fact_check</span> View Shortlisted
+                    </button>
+                    <button class="bg-blue-600 text-white px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-blue-700 transition-all shadow-lg shadow-blue-100">
+                        <span class="material-symbols-outlined text-lg">download</span> Export List
+                    </button>
+                </div>
+            </div>
+
+            <!-- Search & Filters -->
+            <div class="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-6">
+                <div class="relative">
+                    <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">search</span>
+                    <input type="text" placeholder="Search by name, skill (e.g. React), or technology..." class="w-full pl-12 pr-4 py-3 bg-gray-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-blue-600/10 transition-all">
+                </div>
+                <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+                    <select class="filter-select">
+                        <option>Domain</option>
+                        <option>Web Development</option>
+                        <option>AI / ML</option>
+                        <option>UI / UX</option>
+                    </select>
+                    <select class="filter-select">
+                        <option>Tech Stack</option>
+                        <option>MERN</option>
+                        <option>Python / AI</option>
+                        <option>Flutter</option>
+                    </select>
+                    <select class="filter-select">
+                        <option>Duration</option>
+                        <option>3 Months</option>
+                        <option>6 Months</option>
+                    </select>
+                    <select class="filter-select">
+                        <option>Score</option>
+                        <option>90% +</option>
+                        <option>80% +</option>
+                    </select>
+                    <select class="filter-select">
+                        <option>Certification</option>
+                        <option>Certified</option>
+                        <option>Verified</option>
+                    </select>
+                    <select class="filter-select">
+                        <option>Mentor Rating</option>
+                        <option>Excellent</option>
+                        <option>Ready</option>
+                    </select>
+                    <button class="bg-gray-900 text-white py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-gray-800 transition-all">Clear</button>
+                </div>
+            </div>
+
+            <!-- Talent Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                
+                <!-- Candidate Card 1 -->
+                <div class="bg-white rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden group flex flex-col">
+                    <div class="p-6 flex-1">
+                        <div class="flex justify-between items-start mb-6">
+                            <div class="flex items-center gap-4">
+                                <div class="w-16 h-16 rounded-2xl overflow-hidden border border-gray-100 shadow-sm">
+                                    <img src="https://lh3.googleusercontent.com/aida-public/AB6AXuDyL_0hh2u--yxSMZOQdJiOkaGT3j7U9e0FfI0qcTd7sUFNQyL9PArBVQ7I2ledL3LgHA6A3LocxYUxiQnpU1XJgf0fea1nARRVS-7OkkJIIlVWKnpY9c7t3BJITcxADotIwUF2dd6jdeSyYfPwSguP-8AG5Vi5EVOat6m6oVVo_TrEuPAjKhhlI2rXYztnS9djBJuuIbYGiWsD1pPNRvOxTOzHCpqdn77lVCD0GtQWiHUuvw9L-br01BoH4Smzy5Nd3mq4NuVX1Q" alt="Talent" class="w-full h-full object-cover">
+                                </div>
+                                <div>
+                                    <h4 class="font-bold text-gray-900 text-lg">Alex Rivera</h4>
+                                    <p class="text-[10px] font-bold text-blue-600 uppercase tracking-widest mt-0.5">Web Development</p>
+                                </div>
+                            </div>
+                            <div class="bg-gray-50 px-3 py-1 rounded-lg border border-gray-100 text-center">
+                                <p class="text-[10px] font-bold text-gray-400 uppercase tracking-tighter leading-none">Score</p>
+                                <p class="text-sm font-black text-gray-900 mt-0.5">94%</p>
+                            </div>
+                        </div>
+
+                        <div class="space-y-4 mb-6">
+                            <div>
+                                <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Internship Project</p>
+                                <p class="text-sm font-bold text-gray-800 leading-tight">NextGen SaaS Dashboard UI/UX Architecture</p>
+                            </div>
+                            <div>
+                                <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Skills Used</p>
+                                <div class="flex flex-wrap gap-2">
+                                    <span class="bg-gray-50 border border-gray-200 text-gray-600 px-2.5 py-1 rounded-lg text-[10px] font-bold">React</span>
+                                    <span class="bg-gray-50 border border-gray-200 text-gray-600 px-2.5 py-1 rounded-lg text-[10px] font-bold">Tailwind</span>
+                                    <span class="bg-gray-50 border border-gray-200 text-gray-600 px-2.5 py-1 rounded-lg text-[10px] font-bold">Node.js</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-col gap-2 pt-6 border-t border-gray-50">
+                            <button class="w-full bg-gray-900 text-white py-3 rounded-xl text-xs font-bold hover:bg-gray-800 transition-all shadow-md">Shortlist Candidate</button>
+                            <div class="grid grid-cols-2 gap-2">
+                                <button class="bg-white border border-gray-200 text-gray-700 py-2.5 rounded-xl text-xs font-bold hover:bg-gray-50 transition-all">Contact</button>
+                                <button class="bg-blue-50 text-blue-700 py-2.5 rounded-xl text-xs font-bold hover:bg-blue-100 transition-all">View Profile</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="px-6 py-3 bg-blue-50/30 flex justify-between items-center text-[10px] font-bold uppercase tracking-widest border-t border-blue-50">
+                        <div class="flex items-center gap-1">
+                            <span class="material-symbols-outlined text-blue-600 text-base">verified</span>
+                            <span>Certified</span>
+                        </div>
+                        <span class="text-gray-500">Mentor: Industry Ready</span>
+                    </div>
+                </div>
+
+                <!-- Card 2 -->
+                <div class="bg-white rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden group flex flex-col">
+                    <div class="p-6 flex-1">
+                        <div class="flex justify-between items-start mb-6">
+                            <div class="flex items-center gap-4">
+                                <div class="w-16 h-16 rounded-2xl bg-indigo-50 flex items-center justify-center border border-indigo-100 shadow-sm text-indigo-700 font-black text-xl">JD</div>
+                                <div>
+                                    <h4 class="font-bold text-gray-900 text-lg">Jane Doe</h4>
+                                    <p class="text-[10px] font-bold text-indigo-600 uppercase tracking-widest mt-0.5">AI Research</p>
+                                </div>
+                            </div>
+                            <div class="bg-gray-50 px-3 py-1 rounded-lg border border-gray-100 text-center">
+                                <p class="text-[10px] font-bold text-gray-400 uppercase tracking-tighter leading-none">Score</p>
+                                <p class="text-sm font-black text-gray-900 mt-0.5">98%</p>
+                            </div>
+                        </div>
+                        <div class="space-y-4 mb-6">
+                            <div>
+                                <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Internship Project</p>
+                                <p class="text-sm font-bold text-gray-800 leading-tight">Predictive NLP for Enterprise Knowledge Bases</p>
+                            </div>
+                            <div class="flex flex-wrap gap-2">
+                                <span class="bg-gray-50 border border-gray-200 text-gray-600 px-2.5 py-1 rounded-lg text-[10px] font-bold">Python</span>
+                                <span class="bg-gray-50 border border-gray-200 text-gray-600 px-2.5 py-1 rounded-lg text-[10px] font-bold">TensorFlow</span>
+                            </div>
+                        </div>
+                        <div class="flex flex-col gap-2 pt-6 border-t border-gray-50 mt-auto">
+                            <button class="w-full bg-gray-900 text-white py-3 rounded-xl text-xs font-bold hover:bg-gray-800 transition-all shadow-md">Shortlist Candidate</button>
+                            <div class="grid grid-cols-2 gap-2">
+                                <button class="bg-white border border-gray-200 text-gray-700 py-2.5 rounded-xl text-xs font-bold hover:bg-gray-50 transition-all">Contact</button>
+                                <button class="bg-blue-50 text-blue-700 py-2.5 rounded-xl text-xs font-bold hover:bg-blue-100 transition-all">View Profile</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="px-6 py-3 bg-blue-50/30 flex justify-between items-center text-[10px] font-bold uppercase tracking-widest border-t border-blue-50">
+                        <div class="flex items-center gap-1">
+                            <span class="material-symbols-outlined text-blue-600 text-base">verified</span>
+                            <span>Certified</span>
+                        </div>
+                        <span class="text-gray-500">Mentor: Excellent</span>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Pagination -->
+            <div class="flex justify-center items-center gap-4 pt-8">
+                <button class="w-10 h-10 rounded-xl border border-gray-200 flex items-center justify-center text-gray-400 hover:bg-gray-50 transition-all">
+                    <span class="material-symbols-outlined">chevron_left</span>
+                </button>
+                <div class="flex gap-2">
+                    <button class="w-10 h-10 rounded-xl bg-blue-600 text-white font-bold text-sm shadow-md">1</button>
+                    <button class="w-10 h-10 rounded-xl border border-gray-200 text-gray-600 font-bold text-sm hover:bg-gray-50 transition-all">2</button>
+                    <button class="w-10 h-10 rounded-xl border border-gray-200 text-gray-600 font-bold text-sm hover:bg-gray-50 transition-all">3</button>
+                </div>
+                <button class="w-10 h-10 rounded-xl border border-gray-200 flex items-center justify-center text-gray-400 hover:bg-gray-50 transition-all">
+                    <span class="material-symbols-outlined">chevron_right</span>
+                </button>
+            </div>
+
+        </div>
+
+        <footer class="max-w-7xl mx-auto mt-16 pt-8 border-t border-gray-100 text-center">
+            <p class="text-xs text-gray-400 font-medium tracking-tight">© 2024 InternshipHub Enterprise Portal. All candidates are certified via the internal Internship Management Platform.</p>
+        </footer>
+    </main>
+
+</body>
+</html>

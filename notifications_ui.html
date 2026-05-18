@@ -1,0 +1,391 @@
+<!DOCTYPE html><html class="light" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Notifications - InternshipHub</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-surface-variant": "#434655",
+                    "secondary-fixed-dim": "#c0c7d0",
+                    "on-primary-container": "#eeefff",
+                    "surface-container-low": "#f3f4f5",
+                    "primary-fixed": "#dbe1ff",
+                    "outline": "#737686",
+                    "secondary": "#585f67",
+                    "tertiary-container": "#bc4800",
+                    "error": "#ba1a1a",
+                    "primary-container": "#2563eb",
+                    "surface": "#f8f9fa",
+                    "on-primary-fixed-variant": "#003ea8",
+                    "on-primary": "#ffffff",
+                    "on-secondary-container": "#5e656d",
+                    "on-background": "#191c1d",
+                    "surface-container": "#edeeef",
+                    "on-tertiary": "#ffffff",
+                    "on-secondary": "#ffffff",
+                    "secondary-fixed": "#dce3ec",
+                    "on-tertiary-container": "#ffede6",
+                    "on-tertiary-fixed-variant": "#7d2d00",
+                    "outline-variant": "#c3c6d7",
+                    "inverse-primary": "#b4c5ff",
+                    "secondary-container": "#dce3ec",
+                    "surface-dim": "#d9dadb",
+                    "on-surface": "#191c1d",
+                    "on-secondary-fixed-variant": "#40484f",
+                    "inverse-surface": "#2e3132",
+                    "on-error": "#ffffff",
+                    "background": "#f8f9fa",
+                    "primary": "#004ac6",
+                    "tertiary": "#943700",
+                    "tertiary-fixed": "#ffdbcd",
+                    "surface-variant": "#e1e3e4",
+                    "surface-container-highest": "#e1e3e4",
+                    "on-tertiary-fixed": "#360f00",
+                    "surface-container-lowest": "#ffffff",
+                    "error-container": "#ffdad6",
+                    "on-primary-fixed": "#00174b",
+                    "surface-tint": "#0053db",
+                    "primary-fixed-dim": "#b4c5ff",
+                    "on-error-container": "#93000a",
+                    "surface-bright": "#f8f9fa",
+                    "inverse-on-surface": "#f0f1f2",
+                    "on-secondary-fixed": "#151c23",
+                    "surface-container-high": "#e7e8e9",
+                    "tertiary-fixed-dim": "#ffb596"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "xl": "32px",
+                    "lg": "24px",
+                    "container-margin": "40px",
+                    "md": "16px",
+                    "sm": "8px",
+                    "xs": "4px",
+                    "gutter": "20px",
+                    "unit": "4px"
+            },
+            "fontFamily": {
+                    "body-lg": ["Inter"],
+                    "label-md": ["Inter"],
+                    "body-md": ["Inter"],
+                    "h1": ["Inter"],
+                    "label-sm": ["Inter"],
+                    "h3": ["Inter"],
+                    "h2": ["Inter"]
+            },
+            "fontSize": {
+                    "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "label-md": ["14px", {"lineHeight": "20px", "fontWeight": "500"}],
+                    "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "h1": ["30px", {"lineHeight": "38px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "label-sm": ["12px", {"lineHeight": "16px", "fontWeight": "600"}],
+                    "h3": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "h2": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            display: inline-block;
+            line-height: 1;
+        }
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-background text-on-surface">
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-0 h-screen w-60 z-50 bg-gray-50 dark:bg-gray-950 border-r border-gray-200 dark:border-gray-800 flex flex-col h-full py-6">
+<div class="px-6 mb-8 flex items-center gap-3">
+<div class="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+<span class="material-symbols-outlined text-white text-lg" data-icon="school">school</span>
+</div>
+<div>
+<a href="index.html" class="text-lg font-black tracking-tight text-blue-600 hover:opacity-80 transition-opacity cursor-pointer block">IMP</a>
+<p class="text-[10px] uppercase tracking-widest text-secondary font-bold">Admin Panel</p>
+</div>
+</div>
+<nav class="flex-1 flex flex-col font-sans text-sm font-medium">
+<a class="flex items-center gap-3 text-gray-600 dark:text-gray-400 px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-900 transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 text-gray-600 dark:text-gray-400 px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-900 transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="work">work</span>
+<span class="">Postings</span>
+</a>
+<a class="flex items-center gap-3 text-gray-600 dark:text-gray-400 px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-900 transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+<span class="">Candidates</span>
+</a>
+<a class="flex items-center gap-3 text-gray-600 dark:text-gray-400 px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-900 transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="account_tree">account_tree</span>
+<span class="">Workflows</span>
+</a>
+<a class="flex items-center gap-3 text-gray-600 dark:text-gray-400 px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-900 transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="analytics">analytics</span>
+<span class="">Reports</span>
+</a>
+<a class="flex items-center gap-3 text-gray-600 dark:text-gray-400 px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-900 transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="manage_accounts">manage_accounts</span>
+<span class="">Users</span>
+</a>
+</nav>
+<div class="mt-auto px-4 font-sans text-sm font-medium">
+<a class="flex items-center gap-3 text-gray-600 dark:text-gray-400 px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-900 transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="help">help</span>
+<span class="">Help Center</span>
+</a>
+<a class="flex items-center gap-3 text-gray-600 dark:text-gray-400 px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-900 transition-all" href="index.html">
+<span class="material-symbols-outlined" data-icon="logout">logout</span>
+<span class="">Logout</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Area -->
+<div class="pl-60">
+<!-- TopNavBar -->
+<header class="w-full sticky top-0 z-40 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 shadow-sm flex items-center justify-between px-6 py-3 font-sans antialiased text-sm">
+<div class="flex items-center gap-4 flex-1">
+<div class="relative w-full max-w-md">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-lg" data-icon="search">search</span>
+<input class="w-full pl-10 pr-4 py-2 bg-surface-container-low border-none rounded-lg focus:ring-2 focus:ring-primary/20 text-body-md" placeholder="Search notifications..." type="text">
+</div>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 text-blue-600 dark:text-blue-400 font-semibold cursor-pointer active:opacity-80 transition-colors bg-blue-50 rounded-full relative">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+<span class="absolute top-2 right-2 w-2 h-2 bg-error rounded-full border-2 border-white"></span>
+</button>
+<button class="p-2 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-full cursor-pointer transition-colors">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+</button>
+<div class="h-8 w-[1px] bg-gray-200 mx-2"></div>
+<div class="flex items-center gap-3">
+<div class="text-right">
+<p class="text-xs font-bold text-on-surface">Alex Johnson</p>
+<p class="text-[10px] text-secondary">HOD, Computer Science</p>
+</div>
+<img alt="User profile" class="w-8 h-8 rounded-full border border-gray-200" data-alt="A professional headshot of a mid-30s male educator in a modern office environment. He wears a sharp charcoal suit and glasses, projecting an air of authoritative professionalism and accessibility. The background features a soft-focus academic workspace with books and digital displays. Lighting is clean and balanced, typical of a high-end corporate portal aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC-xRfaE0kRR1hXZsdE_knVOaT4SvJkSrOJKbv2S94nrK9dnYZqr3_J0Pliwf1DI3-vmt1CiLjm5BsnXUC-VDpzi5V7dO9iDzBF31aE43hBL0KMv14Rbn2iL-GGTxWcgHJK67pURXM96DsMj0U7RXtBM2Ox7mD8sHY-xIzrx-cDX8zjZCxavOTQsZCiYgPboIZCwaZ69vEoh1ARJV9ZWATgTfXoFY6hzLWKumyIe93FmtrHOYpYhXAxIZHZSk0EdrJ7Ouh0_20jmw">
+</div>
+</div>
+</header>
+<main class="p-container-margin max-w-5xl mx-auto">
+<div class="flex items-center justify-between mb-lg">
+<div>
+<h1 class="font-h1 text-h1 text-on-surface">Notifications<span class="ml-3 px-2.5 py-0.5 bg-primary-container text-white text-[12px] font-bold rounded-full vertical-align-middle shadow-sm">5 New</span></h1>
+<p class="font-body-md text-body-md text-secondary mt-1">Stay updated with your academic and administrative tasks.</p>
+</div>
+<div class="flex gap-sm">
+<button class="px-md py-2 bg-white border border-outline-variant text-label-md font-label-md rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]" data-icon="done_all">done_all</span>
+                        Mark all as read
+                    </button>
+<button class="px-md py-2 bg-white border border-outline-variant text-label-md font-label-md rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]" data-icon="filter_list">filter_list</span>
+                        Filter
+                    </button>
+</div>
+</div><div class="flex items-center gap-4 border-b border-outline-variant/30 mb-lg overflow-x-auto pb-1">
+<button class="px-4 py-2 text-label-md font-semibold text-primary border-b-2 border-primary whitespace-nowrap">All</button>
+<button class="px-4 py-2 text-label-md font-medium text-secondary hover:text-on-surface transition-colors whitespace-nowrap">Approvals</button>
+<button class="px-4 py-2 text-label-md font-medium text-secondary hover:text-on-surface transition-colors whitespace-nowrap">Tasks</button>
+<button class="px-4 py-2 text-label-md font-medium text-secondary hover:text-on-surface transition-colors whitespace-nowrap">Feedback</button>
+<button class="px-4 py-2 text-label-md font-medium text-secondary hover:text-on-surface transition-colors whitespace-nowrap">Alerts</button>
+</div>
+<!-- Notifications Feed -->
+<div class="space-y-xl">
+<!-- Today Section -->
+<section>
+<div class="flex items-center gap-4 mb-md">
+<h3 class="text-label-sm font-label-sm text-secondary uppercase tracking-widest">Today</h3>
+<div class="h-[1px] flex-1 bg-gray-200"></div>
+</div>
+<div class="space-y-sm">
+<!-- Unread Notification: HOD Approval -->
+<div class="group bg-white border-l-4 border-blue-600 shadow-sm hover:shadow-md hover:bg-gray-50 transition-all p-lg rounded-r-xl relative cursor-pointer">
+<div class="flex gap-lg">
+<div class="w-12 h-12 shrink-0 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center">
+<span class="material-symbols-outlined" data-icon="assignment_turned_in">assignment_turned_in</span>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-start mb-1">
+<div class="flex items-center gap-2">
+<h4 class="font-bold text-label-md text-on-surface">New HOD Approval Required</h4>
+<span class="px-2 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-bold rounded uppercase">Approval</span>
+</div>
+<span class="text-xs text-primary font-bold whitespace-nowrap">2 mins ago</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface font-medium">Your approval is requested for 3 internship applications in the AI &amp; Data Science track. These require review before the semester deadline.</p>
+<div class="mt-md flex items-center justify-between">
+<div class="flex gap-sm">
+<button class="px-4 py-1.5 bg-primary text-white text-label-sm font-label-sm rounded-lg hover:bg-primary-container transition-colors shadow-sm">Review Applications</button>
+<button class="px-4 py-1.5 bg-secondary-container text-on-secondary-container text-label-sm font-label-sm rounded-lg hover:bg-gray-200 transition-colors">View Details</button>
+</div>
+<button class="flex items-center gap-1 text-primary text-label-sm font-semibold hover:underline">
+<span class="material-symbols-outlined text-[16px]">done</span> Mark as read
+        </button>
+</div>
+</div>
+</div>
+</div>
+<!-- Unread Notification: Application Status -->
+<div class="group bg-white border-l-4 border-blue-600 shadow-sm hover:shadow-md hover:bg-gray-50 transition-all p-lg rounded-r-xl relative cursor-pointer">
+<div class="flex gap-lg">
+<div class="w-12 h-12 shrink-0 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center">
+<span class="material-symbols-outlined" data-icon="assignment">assignment</span>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-start mb-1">
+<div class="flex items-center gap-2">
+<h4 class="font-bold text-label-md text-on-surface">Application Status Update</h4>
+<span class="px-2 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-bold rounded uppercase">Status</span>
+</div>
+<span class="text-xs text-primary font-bold whitespace-nowrap">45 mins ago</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface font-medium">Microsoft Corp. has updated the status for <span class="font-semibold">Candidate: Sarah Chen</span> to 'Interview Scheduled'.</p>
+<div class="mt-md flex items-center justify-end">
+<button class="flex items-center gap-1 text-primary text-label-sm font-semibold hover:underline">
+<span class="material-symbols-outlined text-[16px]">done</span> Mark as read
+        </button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Yesterday Section -->
+<section>
+<div class="flex items-center gap-4 mb-md">
+<h3 class="text-label-sm font-label-sm text-secondary uppercase tracking-widest">Yesterday</h3>
+<div class="h-[1px] flex-1 bg-gray-200"></div>
+</div>
+<div class="space-y-sm">
+<!-- Read Notification: Feedback -->
+<div class="group bg-surface-container-lowest border border-outline-variant/20 shadow-sm hover:shadow-md hover:bg-white transition-all p-lg rounded-xl opacity-75 cursor-pointer">
+<div class="flex gap-lg">
+<div class="w-12 h-12 shrink-0 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center">
+<span class="material-symbols-outlined" data-icon="rate_review">rate_review</span>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-start mb-1">
+<div class="flex items-center gap-2">
+<h4 class="font-label-md text-label-md text-secondary">New Mentor Feedback</h4>
+<span class="px-2 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-bold rounded uppercase">Feedback</span>
+</div>
+<span class="text-xs text-secondary font-medium whitespace-nowrap">Yesterday, 4:15 PM</span>
+</div>
+<p class="font-body-md text-body-md text-secondary">Dr. Alan Turing left a comment on the "Phase 1 Weekly Report": <span class="italic">"Excellent progress on the data visualization module."</span></p>
+</div>
+</div>
+</div>
+<!-- Read Notification: Deadline -->
+<div class="group bg-surface-container-lowest border-l-4 border-error shadow-sm hover:shadow-md hover:bg-white transition-all p-lg rounded-r-xl opacity-75 cursor-pointer">
+<div class="flex gap-lg">
+<div class="w-12 h-12 shrink-0 bg-error-container text-error rounded-full flex items-center justify-center">
+<span class="material-symbols-outlined" data-icon="warning">warning</span>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-start mb-1">
+<div class="flex items-center gap-2">
+<h4 class="font-label-md text-label-md text-secondary">Approaching Deadline</h4>
+<span class="px-2 py-0.5 bg-error-container text-error text-[10px] font-bold rounded uppercase">Alert</span>
+</div>
+<span class="text-xs text-secondary font-medium whitespace-nowrap">Yesterday, 9:00 AM</span>
+</div>
+<p class="font-body-md text-body-md text-secondary">The final internship placement report is due in <span class="font-bold">48 hours</span>. Ensure all student records are finalized.</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Earlier Section -->
+<section>
+<div class="flex items-center gap-4 mb-md">
+<h3 class="text-label-sm font-label-sm text-secondary uppercase tracking-widest">Earlier</h3>
+<div class="h-[1px] flex-1 bg-gray-200"></div>
+</div>
+<div class="space-y-sm">
+<!-- Bento Grid for Archived Notifications -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-md">
+<!-- Workflow Update -->
+<div class="bg-white border border-outline-variant/30 p-lg rounded-xl flex gap-md items-start hover:shadow-md transition-shadow cursor-pointer"><div class="w-10 h-10 shrink-0 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center">
+<span class="material-symbols-outlined text-[20px]" data-icon="account_tree">account_tree</span>
+</div>
+<div class="flex-1">
+<h4 class="text-label-md font-label-md text-on-surface">Workflow Modified</h4>
+<p class="text-body-md text-on-surface-variant mt-1 leading-snug">The 'Tech Internship' workflow was updated by system admin.</p>
+<div class="mt-2 flex items-center justify-between">
+<p class="text-xs text-secondary">Oct 24, 2023</p>
+<button class="text-primary text-[11px] font-bold hover:underline">Mark as read</button>
+</div>
+</div></div>
+<!-- Success Report -->
+<div class="bg-white border border-outline-variant/30 p-lg rounded-xl flex gap-md items-start hover:shadow-md transition-shadow cursor-pointer"><div class="w-10 h-10 shrink-0 bg-green-50 text-green-600 rounded-lg flex items-center justify-center">
+<span class="material-symbols-outlined text-[20px]" data-icon="check_circle">check_circle</span>
+</div>
+<div class="flex-1">
+<h4 class="text-label-md font-label-md text-on-surface">Monthly Report Generated</h4>
+<p class="text-body-md text-on-surface-variant mt-1 leading-snug">September's analytics summary is now available for download.</p>
+<div class="mt-2 flex items-center justify-between">
+<p class="text-xs text-secondary">Oct 20, 2023</p>
+<button class="text-primary text-[11px] font-bold hover:underline">Mark as read</button>
+</div>
+</div></div>
+</div>
+</div>
+</section><div class="mt-lg flex justify-center">
+<button class="flex items-center gap-2 text-secondary hover:text-error transition-colors px-4 py-2 text-label-md font-medium group">
+<span class="material-symbols-outlined text-[20px] group-hover:text-error">delete_sweep</span>
+    Clear All Notifications
+  </button>
+</div>
+<!-- Empty State (Hidden) -->
+<div class="hidden flex flex-col items-center justify-center py-20 text-center">
+<div class="w-24 h-24 bg-surface-container rounded-full flex items-center justify-center mb-md text-outline">
+<span class="material-symbols-outlined text-[48px]" data-icon="notifications_off">notifications_off</span>
+</div>
+<h3 class="text-h3 font-h3 text-on-surface">All caught up!</h3>
+<p class="text-body-lg text-secondary max-w-sm mt-2">No new notifications to show. Check back later for updates on your internship portal.</p>
+</div>
+</div>
+<!-- Subscription Status Card -->
+<div class="mt-xl p-lg bg-primary-container rounded-xl text-white flex items-center justify-between shadow-lg"><div class="flex items-center gap-lg">
+<div class="w-14 h-14 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm shadow-inner">
+<span class="material-symbols-outlined text-[32px] text-white" data-icon="alternate_email">alternate_email</span>
+</div>
+<div class="flex-1">
+<h4 class="font-h3 text-h3 text-white">Email Digest</h4>
+<p class="font-body-md text-body-md text-white/80">Stay updated with a weekly summary sent to your inbox.</p>
+</div>
+</div>
+<div class="flex items-center gap-3 bg-white/10 px-4 py-3 rounded-lg border border-white/20">
+<span class="text-white text-label-md font-medium">Enable weekly email summary</span>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox" value="">
+<div class="w-11 h-6 bg-white/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-400"></div>
+</label>
+</div></div>
+</main>
+<!-- Footer Info -->
+<footer class="p-container-margin border-t border-gray-200 mt-xl text-center">
+<p class="text-label-sm font-label-sm text-secondary">© 2023 InternshipHub Academic Management System. All rights reserved.</p>
+</footer>
+</div>
+
+
+</body></html>

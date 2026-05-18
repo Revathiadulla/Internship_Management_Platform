@@ -1,0 +1,278 @@
+<!DOCTYPE html><html class="light" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-surface-variant": "#434655",
+                    "secondary-fixed-dim": "#c0c7d0",
+                    "on-primary-container": "#eeefff",
+                    "surface-container-low": "#f3f4f5",
+                    "primary-fixed": "#dbe1ff",
+                    "outline": "#737686",
+                    "secondary": "#585f67",
+                    "tertiary-container": "#bc4800",
+                    "error": "#ba1a1a",
+                    "primary-container": "#2563eb",
+                    "surface": "#f8f9fa",
+                    "on-primary-fixed-variant": "#003ea8",
+                    "on-primary": "#ffffff",
+                    "on-secondary-container": "#5e656d",
+                    "on-background": "#191c1d",
+                    "surface-container": "#edeeef",
+                    "on-tertiary": "#ffffff",
+                    "on-secondary": "#ffffff",
+                    "secondary-fixed": "#dce3ec",
+                    "on-tertiary-container": "#ffede6",
+                    "on-tertiary-fixed-variant": "#7d2d00",
+                    "outline-variant": "#c3c6d7",
+                    "inverse-primary": "#b4c5ff",
+                    "secondary-container": "#dce3ec",
+                    "surface-dim": "#d9dadb",
+                    "on-surface": "#191c1d",
+                    "on-secondary-fixed-variant": "#40484f",
+                    "inverse-surface": "#2e3132",
+                    "on-error": "#ffffff",
+                    "background": "#f8f9fa",
+                    "primary": "#004ac6",
+                    "tertiary": "#943700",
+                    "tertiary-fixed": "#ffdbcd",
+                    "surface-variant": "#e1e3e4",
+                    "surface-container-highest": "#e1e3e4",
+                    "on-tertiary-fixed": "#360f00",
+                    "surface-container-lowest": "#ffffff",
+                    "error-container": "#ffdad6",
+                    "on-primary-fixed": "#00174b",
+                    "surface-tint": "#0053db",
+                    "primary-fixed-dim": "#b4c5ff",
+                    "on-error-container": "#93000a",
+                    "surface-bright": "#f8f9fa",
+                    "inverse-on-surface": "#f0f1f2",
+                    "on-secondary-fixed": "#151c23",
+                    "surface-container-high": "#e7e8e9",
+                    "tertiary-fixed-dim": "#ffb596"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "xl": "32px",
+                    "lg": "24px",
+                    "container-margin": "40px",
+                    "md": "16px",
+                    "sm": "8px",
+                    "xs": "4px",
+                    "gutter": "20px",
+                    "unit": "4px"
+            },
+            "fontFamily": {
+                    "body-lg": ["Inter"],
+                    "label-md": ["Inter"],
+                    "body-md": ["Inter"],
+                    "h1": ["Inter"],
+                    "label-sm": ["Inter"],
+                    "h3": ["Inter"],
+                    "h2": ["Inter"]
+            },
+            "fontSize": {
+                    "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "label-md": ["14px", {"lineHeight": "20px", "fontWeight": "500"}],
+                    "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "h1": ["30px", {"lineHeight": "38px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "label-sm": ["12px", {"lineHeight": "16px", "fontWeight": "600"}],
+                    "h3": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "h2": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            background-color: #f8f9fa;
+            color: #191c1d;
+        }
+    </style>
+</head>
+<body class="font-body-md overflow-hidden">
+<!-- TopNavBar Implementation -->
+<nav class="w-full sticky top-0 z-40 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 shadow-sm flex items-center justify-between px-6 py-3">
+<div class="flex items-center gap-md">
+<a href="index.html" class="text-xl font-bold text-blue-600 dark:text-blue-400 font-h2 hover:opacity-80 transition-opacity cursor-pointer">IMP</a>
+<div class="h-6 w-px bg-outline-variant mx-sm"></div>
+<span class="font-label-md text-on-surface-variant">Engineering Assessment: Phase 1</span>
+</div>
+<div class="flex items-center gap-lg">
+<!-- Timer Component -->
+<div class="flex items-center gap-sm bg-error-container text-on-error-container px-4 py-2 rounded-lg">
+<span class="material-symbols-outlined text-lg" data-icon="timer">timer</span>
+<span class="font-mono font-bold text-lg">42:15</span>
+</div>
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined style_inactive_navigation cursor-pointer" data-icon="notifications">notifications</span>
+<span class="material-symbols-outlined style_inactive_navigation cursor-pointer" data-icon="settings">settings</span>
+<div class="w-8 h-8 rounded-full overflow-hidden border border-outline-variant">
+<img alt="User profile" class="w-full h-full object-cover" data-alt="A professional headshot of a young male candidate in a light blue oxford shirt, set against a soft-focus studio background. The lighting is bright and clean, characteristic of a high-end corporate portrait. The overall aesthetic is professional, ambitious, and focused, aligning with a career-oriented digital platform." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCNO9SJROx7vdLKMbgqvwjXUSN4pPq5WcdTGUgLQ5b0NSaynqefcBCpTb6IYM89fwYwm-FRp-_1iYiZnen4HQi_V_oXnc7IZ0VXKPSDpWnRo2tOBN5eWgp-Yt9IIFjLy0eXQcC-krqFbDBHtRCTUqoKNEsusM_U3hzCtSiZeB4OXK2D7b4NrmdR7t6D_NqoTM3cS52zpucyQJ1iqulbSDnduEob0rxsFSspdqtMhxpGTtza3egEh-vgOTqKMFBpMtna5tOWzVH_ug">
+</div>
+</div>
+</div>
+</nav>
+<div class="flex h-[calc(100vh-64px)]">
+<!-- SideNavBar as Question Navigator -->
+<aside class="w-72 bg-gray-50 border-r border-gray-200 flex flex-col h-full py-6">
+<div class="px-6 mb-lg">
+<h2 class="font-label-sm uppercase tracking-wider text-on-surface-variant mb-xs">Progress Overview</h2>
+<div class="flex items-center justify-between text-xs font-label-md">
+<span class="">12 of 30 Answered</span>
+<span class="text-primary font-bold">40%</span>
+</div>
+<div class="w-full bg-surface-variant h-1.5 rounded-full mt-xs">
+<div class="bg-primary h-full rounded-full" style="width: 40%"></div>
+</div>
+</div>
+<div class="px-4 overflow-y-auto flex-grow">
+<div class="grid grid-cols-5 gap-2">
+<!-- Nav Grid -->
+<div class="w-10 h-10 flex items-center justify-center rounded-lg bg-primary text-on-primary font-bold shadow-sm cursor-pointer border border-primary">1</div>
+<div class="w-10 h-10 flex items-center justify-center rounded-lg bg-white border border-outline-variant text-on-surface-variant font-medium cursor-pointer hover:bg-surface-variant transition-colors">2</div>
+<div class="w-10 h-10 flex items-center justify-center rounded-lg bg-white border border-outline-variant text-on-surface-variant font-medium cursor-pointer hover:bg-surface-variant transition-colors">3</div>
+<div class="w-10 h-10 flex items-center justify-center rounded-lg bg-tertiary-container text-on-tertiary-container font-bold relative cursor-pointer">
+                        4
+                        <span class="absolute -top-1 -right-1 material-symbols-outlined text-[14px] text-tertiary fill" data-icon="flag" style="font-variation-settings: &quot;FILL&quot; 1;">flag</span>
+</div>
+<div class="w-10 h-10 flex items-center justify-center rounded-lg bg-white border border-outline-variant text-on-surface-variant font-medium cursor-pointer">5</div>
+<div class="w-10 h-10 flex items-center justify-center rounded-lg bg-primary-fixed text-on-primary-fixed-variant font-bold cursor-pointer">6</div>
+<div class="w-10 h-10 flex items-center justify-center rounded-lg bg-primary-fixed text-on-primary-fixed-variant font-bold cursor-pointer">7</div>
+<div class="w-10 h-10 flex items-center justify-center rounded-lg bg-primary-fixed text-on-primary-fixed-variant font-bold cursor-pointer">8</div>
+<div class="w-10 h-10 flex items-center justify-center rounded-lg bg-primary-fixed text-on-primary-fixed-variant font-bold cursor-pointer">9</div>
+<div class="w-10 h-10 flex items-center justify-center rounded-lg bg-white border border-outline-variant text-on-surface-variant font-medium cursor-pointer">10</div>
+<!-- Mocking more for visual depth -->
+<div class="w-10 h-10 flex items-center justify-center rounded-lg bg-white border border-outline-variant text-on-surface-variant font-medium cursor-pointer">11</div>
+<div class="w-10 h-10 flex items-center justify-center rounded-lg bg-primary-fixed text-on-primary-fixed-variant font-bold cursor-pointer">12</div>
+<div class="w-10 h-10 flex items-center justify-center rounded-lg bg-white border border-outline-variant text-on-surface-variant font-medium cursor-pointer">13</div>
+<div class="w-10 h-10 flex items-center justify-center rounded-lg bg-white border border-outline-variant text-on-surface-variant font-medium cursor-pointer">14</div>
+<div class="w-10 h-10 flex items-center justify-center rounded-lg bg-white border border-outline-variant text-on-surface-variant font-medium cursor-pointer">15</div>
+</div>
+</div>
+<div class="mt-auto px-6 pt-lg border-t border-gray-200">
+<div class="space-y-sm mb-lg">
+<div class="flex items-center gap-sm text-xs font-label-md text-on-surface-variant">
+<div class="w-3 h-3 rounded bg-primary"></div>
+<span class="">Current</span>
+</div>
+<div class="flex items-center gap-sm text-xs font-label-md text-on-surface-variant">
+<div class="w-3 h-3 rounded bg-primary-fixed"></div>
+<span class="">Answered</span>
+</div>
+<div class="flex items-center gap-sm text-xs font-label-md text-on-surface-variant">
+<div class="w-3 h-3 rounded bg-tertiary-container"></div>
+<span class="">Flagged for Review</span>
+</div>
+</div>
+<button class="w-full py-3 px-4 bg-primary text-on-primary font-label-md rounded-lg shadow-sm hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-lg" data-icon="check_circle">check_circle</span>
+                    Submit Test
+                </button>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="flex-grow bg-surface p-xl overflow-y-auto">
+<div class="max-w-3xl mx-auto">
+<!-- Question Header -->
+<div class="flex items-center justify-between mb-lg">
+<div class="space-y-xs">
+<span class="text-primary font-label-sm uppercase tracking-widest">Question 1 of 30</span>
+<h1 class="font-h2 text-on-surface">Data Structures &amp; Algorithms</h1>
+</div>
+<button class="flex items-center gap-xs text-on-surface-variant font-label-md hover:text-tertiary transition-colors border border-outline-variant px-4 py-2 rounded-lg bg-white shadow-sm">
+<span class="material-symbols-outlined text-lg" data-icon="flag">flag</span>
+                        Flag Question
+                    </button>
+</div>
+<!-- Bento-style Question Card -->
+<div class="bg-white rounded-xl shadow-sm border border-outline-variant p-xl mb-lg">
+<p class="font-body-lg text-on-surface leading-relaxed mb-xl">
+                        A software engineer is designing a real-time tracking system for a logistics company. Which data structure would provide the most efficient time complexity for looking up a vehicle's current location by its unique ID while maintaining an average $O(1)$ complexity?
+                    </p>
+<div class="space-y-md">
+<!-- Options -->
+<div class="group cursor-pointer flex items-center p-lg rounded-xl border-2 border-outline-variant hover:border-primary-container hover:bg-primary-fixed/20 transition-all">
+<div class="w-10 h-10 rounded-full border-2 border-outline-variant group-hover:border-primary flex items-center justify-center font-bold text-on-surface-variant group-hover:text-primary transition-colors mr-lg">A</div>
+<span class="font-body-md text-on-surface flex-grow">Balanced Binary Search Tree (AVL Tree)</span>
+<div class="w-6 h-6 rounded-full border-2 border-outline-variant group-hover:border-primary"></div>
+</div>
+<div class="group cursor-pointer flex items-center p-lg rounded-xl border-2 border-primary-container bg-primary-fixed/20 transition-all">
+<div class="w-10 h-10 rounded-full border-2 border-primary bg-primary text-on-primary flex items-center justify-center font-bold transition-colors mr-lg">B</div>
+<span class="font-body-md text-on-surface font-semibold flex-grow">Hash Table with Collision Resolution</span>
+<div class="w-6 h-6 rounded-full border-2 border-primary bg-primary flex items-center justify-center">
+<span class="material-symbols-outlined text-white text-sm" data-icon="check">check</span>
+</div>
+</div>
+<div class="group cursor-pointer flex items-center p-lg rounded-xl border-2 border-outline-variant hover:border-primary-container hover:bg-primary-fixed/20 transition-all">
+<div class="w-10 h-10 rounded-full border-2 border-outline-variant group-hover:border-primary flex items-center justify-center font-bold text-on-surface-variant group-hover:text-primary transition-colors mr-lg">C</div>
+<span class="font-body-md text-on-surface flex-grow">Doubly Linked List</span>
+<div class="w-6 h-6 rounded-full border-2 border-outline-variant group-hover:border-primary"></div>
+</div>
+<div class="group cursor-pointer flex items-center p-lg rounded-xl border-2 border-outline-variant hover:border-primary-container hover:bg-primary-fixed/20 transition-all">
+<div class="w-10 h-10 rounded-full border-2 border-outline-variant group-hover:border-primary flex items-center justify-center font-bold text-on-surface-variant group-hover:text-primary transition-colors mr-lg">D</div>
+<span class="font-body-md text-on-surface flex-grow">Min-Max Heap</span>
+<div class="w-6 h-6 rounded-full border-2 border-outline-variant group-hover:border-primary"></div>
+</div>
+</div>
+</div>
+<!-- Navigation Controls -->
+<div class="flex items-center justify-between">
+<button class="flex items-center gap-xs px-6 py-3 text-on-surface-variant font-label-md hover:bg-surface-variant rounded-lg transition-colors border border-outline-variant opacity-50 cursor-not-allowed">
+<span class="material-symbols-outlined" data-icon="arrow_back">arrow_back</span>
+                        Previous Question
+                    </button>
+<div class="flex items-center gap-md">
+<button class="px-6 py-3 bg-white border border-primary text-primary font-label-md rounded-lg hover:bg-primary-fixed/30 transition-colors">
+                            Clear Selection
+                        </button>
+<button class="flex items-center gap-xs px-8 py-3 bg-primary text-on-primary font-label-md rounded-lg shadow-md hover:opacity-90 transition-opacity">
+                            Next Question
+                            <span class="material-symbols-outlined" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</div>
+</div>
+<!-- Contextual Hint / Info Box -->
+<div class="mt-xl grid grid-cols-1 md:grid-cols-2 gap-lg">
+<div class="bg-surface-container-low p-lg rounded-xl border border-outline-variant/30 flex items-start gap-md">
+<span class="material-symbols-outlined text-primary" data-icon="info">info</span>
+<div>
+<h4 class="font-label-sm text-on-surface mb-xs">Exam Protocol</h4>
+<p class="text-xs text-on-surface-variant leading-relaxed">Auto-save is enabled. Your progress is recorded every 30 seconds. Do not refresh or exit the fullscreen mode.</p>
+</div>
+</div>
+<div class="bg-surface-container-low p-lg rounded-xl border border-outline-variant/30 flex items-start gap-md">
+<span class="material-symbols-outlined text-tertiary" data-icon="lightbulb">lightbulb</span>
+<div>
+<h4 class="font-label-sm text-on-surface mb-xs">Calculator Available</h4>
+<p class="text-xs text-on-surface-variant leading-relaxed">You can access the scientific calculator from the tools menu in the top right if needed for complex calculations.</p>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+<!-- Background Pattern Element -->
+<div class="fixed inset-0 pointer-events-none z-[-1] opacity-5">
+<div class="absolute inset-0 bg-[radial-gradient(#2563eb_1px,transparent_1px)] [background-size:24px_24px]"></div>
+</div>
+
+
+</body></html>

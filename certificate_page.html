@@ -1,0 +1,273 @@
+<!DOCTYPE html><html class="light" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .cert-border {
+            border: 20px solid transparent;
+            border-image: linear-gradient(to bottom right, #004ac6, #2563eb, #dbe1ff) 1;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-surface-variant": "#434655",
+                        "secondary-fixed-dim": "#c0c7d0",
+                        "on-primary-container": "#eeefff",
+                        "surface-container-low": "#f3f4f5",
+                        "primary-fixed": "#dbe1ff",
+                        "outline": "#737686",
+                        "secondary": "#585f67",
+                        "tertiary-container": "#bc4800",
+                        "error": "#ba1a1a",
+                        "primary-container": "#2563eb",
+                        "surface": "#f8f9fa",
+                        "on-primary-fixed-variant": "#003ea8",
+                        "on-primary": "#ffffff",
+                        "on-secondary-container": "#5e656d",
+                        "on-background": "#191c1d",
+                        "surface-container": "#edeeef",
+                        "on-tertiary": "#ffffff",
+                        "on-secondary": "#ffffff",
+                        "secondary-fixed": "#dce3ec",
+                        "on-tertiary-container": "#ffede6",
+                        "on-tertiary-fixed-variant": "#7d2d00",
+                        "outline-variant": "#c3c6d7",
+                        "inverse-primary": "#b4c5ff",
+                        "secondary-container": "#dce3ec",
+                        "surface-dim": "#d9dadb",
+                        "on-surface": "#191c1d",
+                        "on-secondary-fixed-variant": "#40484f",
+                        "inverse-surface": "#2e3132",
+                        "on-error": "#ffffff",
+                        "background": "#f8f9fa",
+                        "primary": "#004ac6",
+                        "tertiary": "#943700",
+                        "tertiary-fixed": "#ffdbcd",
+                        "surface-variant": "#e1e3e4",
+                        "surface-container-highest": "#e1e3e4",
+                        "on-tertiary-fixed": "#360f00",
+                        "surface-container-lowest": "#ffffff",
+                        "error-container": "#ffdad6",
+                        "on-primary-fixed": "#00174b",
+                        "surface-tint": "#0053db",
+                        "primary-fixed-dim": "#b4c5ff",
+                        "on-error-container": "#93000a",
+                        "surface-bright": "#f8f9fa",
+                        "inverse-on-surface": "#f0f1f2",
+                        "on-secondary-fixed": "#151c23",
+                        "surface-container-high": "#e7e8e9",
+                        "tertiary-fixed-dim": "#ffb596"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "xl": "32px",
+                        "lg": "24px",
+                        "container-margin": "40px",
+                        "md": "16px",
+                        "sm": "8px",
+                        "xs": "4px",
+                        "gutter": "20px",
+                        "unit": "4px"
+                    },
+                    "fontFamily": {
+                        "body-lg": ["Inter"],
+                        "label-md": ["Inter"],
+                        "body-md": ["Inter"],
+                        "h1": ["Inter"],
+                        "label-sm": ["Inter"],
+                        "h3": ["Inter"],
+                        "h2": ["Inter"]
+                    },
+                    "fontSize": {
+                        "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "label-md": ["14px", {"lineHeight": "20px", "fontWeight": "500"}],
+                        "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "h1": ["30px", {"lineHeight": "38px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "label-sm": ["12px", {"lineHeight": "16px", "fontWeight": "600"}],
+                        "h3": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                        "h2": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}]
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-surface text-on-surface font-body-md">
+<!-- TopNavBar - Rendered from JSON Authority -->
+<header class="w-full sticky top-0 z-40 bg-white border-b border-gray-200 shadow-sm flex items-center justify-between px-6 py-3">
+<div class="flex items-center gap-8">
+<a href="index.html" class="text-xl font-bold text-blue-600 hover:opacity-80 transition-opacity cursor-pointer">IMP</a>
+<div class="hidden md:flex items-center gap-6">
+<span class="text-gray-500 font-sans antialiased text-sm cursor-pointer hover:bg-gray-50 transition-colors px-2 py-1 rounded">Dashboard</span>
+<span class="text-gray-500 font-sans antialiased text-sm cursor-pointer hover:bg-gray-50 transition-colors px-2 py-1 rounded">Postings</span>
+<span class="text-blue-600 font-semibold font-sans antialiased text-sm cursor-pointer hover:bg-gray-50 transition-colors px-2 py-1 rounded">My Certificates</span>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-gray-500 cursor-pointer active:opacity-80">notifications</span>
+<span class="material-symbols-outlined text-gray-500 cursor-pointer active:opacity-80">settings</span>
+<div class="w-8 h-8 rounded-full overflow-hidden border border-outline-variant">
+<img alt="User profile" data-alt="A professional headshot of a young adult student for a corporate profile, featuring soft studio lighting and a clean, blurred office background. The subject is smiling confidently, wearing business-casual attire. The color palette is composed of soft whites and corporate blues, maintaining a high-fidelity and professional aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD_b32SWG1KNedRfbzdBqaBLU6aQxXQerBkOK0Yi0KoYCGVWalhxRZFKUsMJod5keQNCQjnwwfdKnglrSqLYa6tdZHsEPXWHwoZLIxCMICQJoAPBDeW6oB-i4fpE8GB0jeaVEzHW5zw-6j5nRC4H-d2bDp3QvLn5RRJDc37YdcuVtkpzkWF3wvJgqCifxqCL3y2EJMtXjmci8kSl80dK2exsLG7IlaV-k_3_1ic0T71mN-xHckb_Bp9g-uW2tT5DCJb31uM7tzH8g" class="">
+</div>
+</div>
+</header>
+<main class="max-w-7xl mx-auto px-container-margin py-xl flex flex-col lg:flex-row gap-lg">
+<!-- Left Column: Certificate Preview -->
+<div class="flex-1">
+<div class="bg-white p-12 shadow-md rounded-lg relative overflow-hidden cert-border flex flex-col items-center text-center">
+<!-- Decorative Elements -->
+<div class="absolute top-0 left-0 w-32 h-32 bg-primary-fixed opacity-20 -translate-x-1/2 -translate-y-1/2 rounded-full"></div>
+<div class="absolute bottom-0 right-0 w-48 h-48 bg-primary opacity-5 translate-x-1/4 translate-y-1/4 rounded-full"></div>
+<!-- Platform Logo -->
+<div class="mb-8 flex flex-col items-center">
+<div class="w-16 h-16 bg-primary rounded-xl flex items-center justify-center mb-2 shadow-lg">
+<span class="material-symbols-outlined text-on-primary text-4xl" data-weight="fill">school</span>
+</div>
+<span class="font-h2 text-primary tracking-tight">InternshipHub</span>
+</div>
+<!-- Content -->
+<div class="mb-4">
+<span class="font-label-sm uppercase tracking-widest text-secondary">Certificate of Excellence</span>
+</div>
+<div class="mb-6">
+<p class="font-body-lg italic text-on-surface-variant">This is to certify that</p>
+<h1 class="font-h1 text-4xl my-4 text-on-surface">Alex Rivera</h1>
+<p class="font-body-lg text-on-surface-variant max-w-lg mx-auto">
+                        has successfully completed a high-impact internship program as a <span class="font-bold text-primary">Senior UI Design Intern</span> within the Digital Innovation Department.
+                    </p>
+</div>
+<div class="grid grid-cols-2 gap-xl w-full max-w-2xl my-8 border-y border-outline-variant py-8">
+<div class="text-left">
+<span class="font-label-sm text-secondary block mb-1">PROJECT TITLE</span>
+<span class="font-body-md font-semibold text-on-surface">NextGen Enterprise Dashboard v2.0</span>
+</div>
+<div class="text-right">
+<span class="font-label-sm text-secondary block mb-1">PROGRAM DATES</span>
+<span class="font-body-md font-semibold text-on-surface">June 01, 2023 - August 31, 2023</span>
+</div>
+</div>
+<!-- Signatures -->
+<div class="flex justify-between w-full max-w-2xl mt-8">
+<div class="flex flex-col items-center">
+<div class="mb-2 h-16 flex items-center justify-center">
+<img alt="Mentor Signature" class="opacity-80" data-alt="A sophisticated, flowing digital signature of 'Marcus Thorne' in a dark blue ink style, set against a transparent background. The signature looks authentic, with varying line weights and a professional, executive flourish. The overall feel is authoritative and clean, fitting for a corporate certificate of completion." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBAfV6_4JLKiBUKJrugKmK4vxUEnRsfqqmvCqjNa6_QvfxYhoprH5H8UA7H6WnOOuToGJWTXALkHen1N81jTbrqBpv1vZbuaCFg1S_XNXmM-72Bjgw2EytWakyy-Hgpkhfap6rwXPlmUps4ER8lslQ_4r7sK5FaKagmVq8gE5KpnoVYUHdp5WeG5o_4MNgKmJq_4SPa8-aycA0a1kbfVQA7D01x1tjynRupgqtdukNmNzFlwTCcQNaYlp9-jvDBDpK-GSHyCY-cnQ">
+</div>
+<div class="h-[1px] w-40 bg-outline mb-2"></div>
+<span class="font-label-md text-on-surface">Marcus Thorne</span>
+<span class="font-label-sm text-secondary">Design Mentor</span>
+</div>
+<div class="flex items-center justify-center">
+<div class="w-24 h-24 border-4 border-primary/20 rounded-full flex items-center justify-center relative">
+<div class="w-20 h-20 border border-primary/40 rounded-full flex items-center justify-center">
+<span class="material-symbols-outlined text-primary text-3xl opacity-40">verified</span>
+</div>
+<span class="absolute -bottom-2 bg-primary text-on-primary px-2 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-tighter">OFFICIAL SEAL</span>
+</div>
+</div>
+<div class="flex flex-col items-center">
+<div class="mb-2 h-16 flex items-center justify-center">
+<img alt="HOD Signature" class="opacity-80" data-alt="A clean, modern digital signature of 'Dr. Sarah Jenkins' in elegant black ink. The strokes are smooth and professional, suggesting a senior academic or corporate official. The signature is placed centrally on a white background, evoking trust and official validation for an academic certificate." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDvoXFap_oAhAiBvmkG1p5iy8zVvqnTWnjLrHcQbl10_xAJb8azuWEu0HBgyrb3TzfCEwUuXoaj5cTnOaNrWZyvm_vs-HiuMD3NotJicmUwcx9rTTpAGa_GtsvwQgm480Tj42qUjFY4gDHv2kGbNbxkvNiQ_DrDuxSIcb7yjYrfb6IJyrBQl6PAXZhDO098NfQHVH96yDnMyOK45Z7eGrFQlkc5mNrxVIqAnvKIPJalBSWYfzVZgH704_scrYg_8Vbi9lDjuI6Btw">
+</div>
+<div class="h-[1px] w-40 bg-outline mb-2"></div>
+<span class="font-label-md text-on-surface">Dr. Sarah Jenkins</span>
+<span class="font-label-sm text-secondary">Head of Department</span>
+</div>
+</div>
+<!-- Footer -->
+<div class="mt-12">
+<span class="font-label-sm text-outline-variant uppercase">Certificate ID: IH-2023-AR-89210-UX</span>
+</div>
+</div>
+</div>
+<!-- Right Column: Actions & Details -->
+<div class="w-full lg:w-80 flex flex-col gap-lg">
+<!-- Action Card -->
+<div class="bg-surface-container-lowest p-lg rounded-xl shadow-sm border border-outline-variant">
+<h3 class="font-h3 text-on-surface mb-4">Manage Certificate</h3>
+<div class="flex flex-col gap-md">
+<button class="w-full bg-primary-container text-on-primary py-3 rounded-lg font-label-md flex items-center justify-center gap-2 hover:opacity-90 transition-all shadow-md active:scale-95">
+<span class="material-symbols-outlined text-lg">download</span>
+                        Download Certificate (PDF)
+                    </button>
+<button class="w-full bg-secondary-container text-primary py-3 rounded-lg font-label-md flex items-center justify-center gap-2 hover:bg-primary-fixed-dim transition-all active:scale-95">
+<span class="material-symbols-outlined text-lg">share</span>
+                        Share to LinkedIn
+                    </button>
+</div>
+<div class="mt-xl pt-lg border-t border-outline-variant">
+<div class="flex items-center gap-3 p-md bg-surface-container rounded-lg">
+<span class="material-symbols-outlined text-primary">verified_user</span>
+<div>
+<p class="font-label-sm text-on-surface">Blockchain Verified</p>
+<p class="text-[10px] text-secondary font-mono">Hash: 0x82f...a12c</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Internship Stats Bento Small -->
+<div class="grid grid-cols-1 gap-md">
+<div class="bg-white p-md rounded-xl shadow-sm border border-outline-variant">
+<span class="font-label-sm text-secondary block">DURATION</span>
+<span class="font-h3 text-on-surface">12 Weeks</span>
+</div>
+<div class="bg-white p-md rounded-xl shadow-sm border border-outline-variant">
+<span class="font-label-sm text-secondary block">TASKS COMPLETED</span>
+<span class="font-h3 text-on-surface">48 PRs</span>
+</div>
+<div class="bg-white p-md rounded-xl shadow-sm border border-outline-variant">
+<span class="font-label-sm text-secondary block">FINAL GRADE</span>
+<span class="font-h3 text-tertiary-container">Distinction</span>
+</div>
+</div>
+<!-- Share History -->
+<div class="bg-white p-lg rounded-xl shadow-sm border border-outline-variant">
+<h4 class="font-label-sm text-secondary uppercase mb-3">Verification Views</h4>
+<div class="space-y-3">
+<div class="flex items-center justify-between">
+<span class="font-body-md text-on-surface">University Portal</span>
+<span class="bg-green-100 text-green-700 text-[10px] px-2 py-0.5 rounded-full font-bold">ACTIVE</span>
+</div>
+<div class="flex items-center justify-between">
+<span class="font-body-md text-on-surface">Public Link</span>
+<span class="bg-gray-100 text-gray-500 text-[10px] px-2 py-0.5 rounded-full font-bold">PRIVATE</span>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar for Mobile View (Hidden on Desktop per instructions) -->
+<nav class="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around py-3 px-6 z-50">
+<div class="flex flex-col items-center text-gray-500">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="text-[10px]">Home</span>
+</div>
+<div class="flex flex-col items-center text-gray-500">
+<span class="material-symbols-outlined">work</span>
+<span class="text-[10px]">Jobs</span>
+</div>
+<div class="flex flex-col items-center text-blue-600">
+<span class="material-symbols-outlined" data-weight="fill">workspace_premium</span>
+<span class="text-[10px] font-semibold">Certificates</span>
+</div>
+<div class="flex flex-col items-center text-gray-500">
+<span class="material-symbols-outlined">person</span>
+<span class="text-[10px]">Profile</span>
+</div>
+</nav>
+
+
+</body></html>

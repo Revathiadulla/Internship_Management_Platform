@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-surface-variant": "#434655",
+                        "secondary-fixed-dim": "#c0c7d0",
+                        "on-primary-container": "#eeefff",
+                        "surface-container-low": "#f3f4f5",
+                        "primary-fixed": "#dbe1ff",
+                        "outline": "#737686",
+                        "secondary": "#585f67",
+                        "tertiary-container": "#bc4800",
+                        "error": "#ba1a1a",
+                        "primary-container": "#2563eb",
+                        "surface": "#f8f9fa",
+                        "on-primary-fixed-variant": "#003ea8",
+                        "on-primary": "#ffffff",
+                        "on-secondary-container": "#5e656d",
+                        "on-background": "#191c1d",
+                        "surface-container": "#edeeef",
+                        "on-tertiary": "#ffffff",
+                        "on-secondary": "#ffffff",
+                        "secondary-fixed": "#dce3ec",
+                        "on-tertiary-container": "#ffede6",
+                        "on-tertiary-fixed-variant": "#7d2d00",
+                        "outline-variant": "#c3c6d7",
+                        "inverse-primary": "#b4c5ff",
+                        "secondary-container": "#dce3ec",
+                        "surface-dim": "#d9dadb",
+                        "on-surface": "#191c1d",
+                        "on-secondary-fixed-variant": "#40484f",
+                        "inverse-surface": "#2e3132",
+                        "on-error": "#ffffff",
+                        "background": "#f8f9fa",
+                        "primary": "#004ac6",
+                        "tertiary": "#943700",
+                        "tertiary-fixed": "#ffdbcd",
+                        "surface-variant": "#e1e3e4",
+                        "surface-container-highest": "#e1e3e4",
+                        "on-tertiary-fixed": "#360f00",
+                        "surface-container-lowest": "#ffffff",
+                        "error-container": "#ffdad6",
+                        "on-primary-fixed": "#00174b",
+                        "surface-tint": "#0053db",
+                        "primary-fixed-dim": "#b4c5ff",
+                        "on-error-container": "#93000a",
+                        "surface-bright": "#f8f9fa",
+                        "inverse-on-surface": "#f0f1f2",
+                        "on-secondary-fixed": "#151c23",
+                        "surface-container-high": "#e7e8e9",
+                        "tertiary-fixed-dim": "#ffb596"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "xl": "32px",
+                        "lg": "24px",
+                        "container-margin": "40px",
+                        "md": "16px",
+                        "sm": "8px",
+                        "xs": "4px",
+                        "gutter": "20px",
+                        "unit": "4px"
+                    },
+                    "fontFamily": {
+                        "body-lg": ["Inter"],
+                        "label-md": ["Inter"],
+                        "body-md": ["Inter"],
+                        "h1": ["Inter"],
+                        "label-sm": ["Inter"],
+                        "h3": ["Inter"],
+                        "h2": ["Inter"]
+                    },
+                    "fontSize": {
+                        "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "label-md": ["14px", {"lineHeight": "20px", "fontWeight": "500"}],
+                        "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "h1": ["30px", {"lineHeight": "38px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "label-sm": ["12px", {"lineHeight": "16px", "fontWeight": "600"}],
+                        "h3": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                        "h2": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            background-color: #f8f9fa;
+        }
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="font-body-md text-on-surface">
+<!-- TopNavBar -->
+<header class="w-full sticky top-0 z-40 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 shadow-sm font-sans antialiased text-sm">
+<div class="flex items-center justify-between px-6 py-3 max-w-7xl mx-auto">
+<div class="flex items-center gap-8">
+<a href="index.html" class="text-xl font-bold text-blue-600 dark:text-blue-400 hover:opacity-80 transition-opacity cursor-pointer">IMP</a>
+<nav class="hidden md:flex gap-6">
+<a class="text-blue-600 dark:text-blue-400 font-semibold cursor-pointer active:opacity-80" href="#">Home</a>
+<a class="text-gray-500 dark:text-gray-400 hover:text-primary transition-colors cursor-pointer active:opacity-80 font-medium" href="#">Explore</a>
+<a class="text-gray-500 dark:text-gray-400 hover:text-primary transition-colors cursor-pointer active:opacity-80 font-medium" href="#">Companies</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<div class="hidden sm:flex items-center gap-3 mr-2">
+<button onclick="window.location.href='login.html'" class="px-4 py-2 font-label-md text-label-md text-primary hover:bg-primary/5 rounded-lg transition-all active:scale-95">Login</button>
+<button onclick="window.location.href='registration_page.html'" class="px-4 py-2 font-label-md text-label-md bg-primary text-on-primary rounded-lg shadow-sm hover:brightness-110 transition-all active:scale-95">Register</button>
+</div>
+<div class="flex items-center gap-1 border-l pl-4 border-outline-variant">
+<span class="material-symbols-outlined text-gray-500 hover:bg-gray-50 p-2 rounded-full cursor-pointer transition-colors" data-icon="notifications">notifications</span>
+<div class="w-8 h-8 rounded-full bg-gray-200 overflow-hidden cursor-pointer active:opacity-80">
+<img alt="User profile" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBkkq3Zr-7DUixXw10tFkGdgqJZHDIyhx9DXPChUuZhgWRYXJCUiHQ_EVaEqOThLqunjewgV88fH_JA1_mpoQEM8Whkwhqd5l7jKyXajOOawFRHSqx8tMTfCFcKzZM3Ct3qGfMqdNjHKu8PUbuXN8Gm_tDyAU-QnXHEUualH7dfBx5ZKPQrVKm10aZeHFx4cHc6vzT1O8LdLHvVGPoe7G-uQfuVyU8eVaxU1Zf2eM1SM_s_71L16F5KqIFRnMgmnWE6yHwmbplzIA"/>
+</div>
+</div>
+</div>
+</div>
+</header>
+<main>
+<!-- Hero Section -->
+<section class="relative px-container-margin py-xl lg:pt-24 lg:pb-16 overflow-hidden">
+<div class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-gutter items-center">
+<div class="lg:col-span-7 z-10">
+<h1 class="font-h1 text-h1 text-on-background mb-md leading-tight lg:text-5xl lg:leading-[1.1]">Internship Management Platform</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant mb-md max-w-xl">
+                        Manage the full internship lifecycle from application to certification. Our enterprise-grade platform connects ambitious students with world-class recruiters.
+                    </p>
+<!-- Trust Badges -->
+<div class="flex flex-wrap items-center gap-x-4 gap-y-2 mb-xl text-[13px] font-medium text-on-surface-variant/80">
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-green-600 text-lg" data-icon="check_circle">check_circle</span> Verified Profiles</span>
+<span class="text-outline-variant">|</span>
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-green-600 text-lg" data-icon="verified_user">verified_user</span> Secure Aadhaar-Based Verification</span>
+<span class="text-outline-variant">|</span>
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-green-600 text-lg" data-icon="workspace_premium">workspace_premium</span> Industry-Ready Interns</span>
+</div>
+<div class="flex flex-wrap gap-md">
+<button onclick="window.location.href='registration_page.html'" class="bg-primary-container text-on-primary font-label-md text-label-md px-lg py-md rounded-lg shadow-sm hover:brightness-110 transition-all active:scale-[0.98]">
+                            Apply as Student
+                        </button>
+<button onclick="window.location.href='company.html'" class="bg-secondary-container text-on-secondary-container font-label-md text-label-md px-lg py-md rounded-lg border border-outline-variant hover:bg-surface-container-high transition-all active:scale-[0.98]">
+                            Hire Interns
+                        </button>
+</div>
+<div class="mt-xl flex items-center gap-md">
+<div class="flex -space-x-3">
+<div class="w-10 h-10 rounded-full border-2 border-white overflow-hidden bg-surface-variant">
+<img alt="User 1" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBuChoqFycTJN1MeQzL2p-hbGVHzorJtXUO25yBJltyOkjxphaqeB8biXSCN0C180V9dIDSG7EL0N_IyWDL4g_bvMzeEexryvyZSGNUHlppMnX5WmpJN0oRxUE7p5XD5nJpL5GMSjwASRWmW5VVlCIZ845unuZdBfN9XO-sxSn9DAzj_OpqmtmpTS9uf2WDqbsfO0TMaBEiR_HplCR4a2P7m5GBw1Qd934-NUORHdG2N9Yd5KKzlqOwSOX8I66E_jyZ-VUXRP3D_Q"/>
+</div>
+<div class="w-10 h-10 rounded-full border-2 border-white overflow-hidden bg-surface-variant">
+<img alt="User 2" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDu3H7LnjGDOy9fmXB0RwmmAatkMA8PFa6ss9P7XI82K_ZzME7knGSBqP-Z4Zl6zh5cOArEDuBg2OKW7qtTU948oDdkYhlBK7r1821MXOwe1xySe0h7okeDIHXjnN0ipLi0nZooGiPuUY_fV9_JE-bGEyjHjlJji4HJKyeweMmB6vRsUE83khqWyxYe__y96zHO3dm6LvnvG3lqDogvjm2cvYRyGvBz_ptZ1OUb3s2ncmf6oaiPJoFLCKGKXW776jxSuG8hpbD2Q"/>
+</div>
+<div class="w-10 h-10 rounded-full border-2 border-white overflow-hidden bg-surface-variant">
+<img alt="User 3" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAatzOOveQWvnlpI5-m4WUnMA3T-9akAMF56eMelG7zuVOiJVVi03Lzoou7NiMWCh34NQP7Q_6d8cea2YaxY_jjwNfcm8tU6EaG9zklwKj1ZJno7VogbyLJvu2eIYtOcb7LXvwTFqtedV2GBW_A3Yf66F7cWp7GWHFIdKA36PLb5GlLP7TVw6QDzjz4qgnb-leMoeAZhce_E9ZZt69AaVjjVuuhqQEhzPq1DT5Sqpj27dqgb1OKsglbwpxcEux0f3ktU7ZLTWpUUg"/>
+</div>
+</div>
+<div class="text-label-sm font-label-sm text-on-surface-variant">
+<span class="text-primary font-bold">5,000+</span> internships started this month
+                        </div>
+</div>
+</div>
+<!-- Hero Visual -->
+<div class="lg:col-span-5 relative hidden lg:block">
+<div class="relative w-full aspect-square">
+<div class="absolute top-0 right-0 w-[85%] h-[85%] bg-surface-container-lowest rounded-xl shadow-lg border border-outline-variant p-6 z-10 rotate-3">
+<div class="flex items-center justify-between mb-4">
+<div class="flex items-center gap-2">
+<div class="w-8 h-8 rounded-lg bg-primary-container flex items-center justify-center text-white">
+<span class="material-symbols-outlined text-[18px]" data-icon="work">work</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-sm text-on-surface">Software Engineering</span>
+<span class="text-[10px] text-on-surface-variant">Google • Intern</span>
+</div>
+</div>
+<span class="bg-primary-fixed text-on-primary-fixed-variant px-2 py-0.5 rounded text-[10px] font-bold">ACTIVE</span>
+</div>
+<div class="space-y-3">
+<div class="h-2 w-full bg-surface-variant rounded"></div>
+<div class="h-2 w-3/4 bg-surface-variant rounded"></div>
+<div class="h-2 w-1/2 bg-surface-variant rounded"></div>
+</div>
+<div class="mt-8 flex justify-between items-end">
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-primary text-[14px]" data-icon="group" data-weight="fill">group</span>
+<span class="text-[10px] text-on-surface-variant">42 Applicants</span>
+</div>
+<div class="h-6 w-16 bg-primary rounded flex items-center justify-center text-[10px] text-white">Manage</div>
+</div>
+</div>
+<div class="absolute bottom-0 left-0 w-[85%] h-[85%] bg-white rounded-xl shadow-md border border-outline-variant overflow-hidden -rotate-6">
+<img alt="Platform Preview" class="w-full h-full object-cover opacity-80" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBqQjFTQyjVNj5UznzZHkyipxvKFhZNJzjhmvsd4UYGWeOqi11b4WEYPnyhp4IQGA17_SDQ3TBTaxM8W5bm0S9KrwDGSCww5CDqgKMK3hxjA5gvsj2yMFhd67vS6ZOgfcbKuzS7_BHRqye3uiTf7slj8bA5A5JeExhcA8UV_79UyKMODvJpec-_teUpTGzdAOHuCalwvOlALydi1T_dAVe2f_84XVOQvhGukINrL1YZeWyidlV0GxzhDxtEEyEZV9KV2aeQNF779A"/>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Social Proof -->
+<section class="bg-surface-container-low py-lg border-y border-outline-variant/30">
+<div class="max-w-7xl mx-auto px-container-margin">
+<p class="text-center font-label-sm text-label-sm text-outline mb-md tracking-widest">DESIGNED FOR ACADEMIC AND INDUSTRY COLLABORATION</p>
+<div class="flex flex-wrap justify-center items-center gap-xl opacity-60 grayscale hover:grayscale-0 transition-all duration-500"><span class="font-h2 text-h2 text-secondary">Sample Company A</span>
+<span class="font-h2 text-h2 text-secondary">Sample Company B</span>
+<span class="font-h2 text-h2 text-secondary">Sample Company C</span></div>
+</div>
+</section>
+<!-- How It Works Section -->
+<section class="py-xl lg:py-24 px-container-margin bg-white overflow-hidden">
+<div class="max-w-7xl mx-auto">
+<div class="text-center mb-16">
+<span class="text-primary font-label-sm text-label-sm uppercase tracking-widest">Process Flow</span>
+<h2 class="font-h2 text-h2 lg:text-4xl mt-sm text-on-background">How It Works</h2>
+<p class="text-on-surface-variant mt-2 max-w-2xl mx-auto">A seamless 8-step journey from application to professional success.</p>
+</div>
+<div class="relative">
+<!-- Progress Line -->
+<div class="hidden lg:block absolute top-12 left-0 w-full h-0.5 bg-surface-variant z-0"></div>
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-8 relative z-10">
+<!-- Step 1 -->
+<div class="flex flex-col items-center text-center">
+<div class="w-16 h-16 rounded-full bg-primary text-on-primary flex items-center justify-center mb-4 shadow-md">
+<span class="material-symbols-outlined" data-icon="fingerprint">fingerprint</span>
+</div>
+<span class="text-[12px] font-bold text-primary mb-1">STEP 1</span>
+<h4 class="font-label-md text-xs px-2">Apply &amp; Verify Identity</h4>
+</div>
+<!-- Step 2 -->
+<div class="flex flex-col items-center text-center">
+<div class="w-16 h-16 rounded-full bg-surface-container-high text-primary flex items-center justify-center mb-4 border border-outline-variant">
+<span class="material-symbols-outlined" data-icon="assignment">assignment</span>
+</div>
+<span class="text-[12px] font-bold text-outline mb-1">STEP 2</span>
+<h4 class="font-label-md text-xs px-2">Take Assessment Test</h4>
+</div>
+<!-- Step 3 -->
+<div class="flex flex-col items-center text-center">
+<div class="w-16 h-16 rounded-full bg-surface-container-high text-primary flex items-center justify-center mb-4 border border-outline-variant">
+<span class="material-symbols-outlined" data-icon="groups">groups</span>
+</div>
+<span class="text-[12px] font-bold text-outline mb-1">STEP 3</span>
+<h4 class="font-label-md text-xs px-2">HR Screening</h4>
+</div>
+<!-- Step 4 -->
+<div class="flex flex-col items-center text-center">
+<div class="w-16 h-16 rounded-full bg-surface-container-high text-primary flex items-center justify-center mb-4 border border-outline-variant">
+<span class="material-symbols-outlined" data-icon="how_to_reg">how_to_reg</span>
+</div>
+<span class="text-[12px] font-bold text-outline mb-1">STEP 4</span>
+<h4 class="font-label-md text-xs px-2">HOD Approval</h4>
+</div>
+<!-- Step 5 -->
+<div class="flex flex-col items-center text-center">
+<div class="w-16 h-16 rounded-full bg-surface-container-high text-primary flex items-center justify-center mb-4 border border-outline-variant">
+<span class="material-symbols-outlined" data-icon="rocket_launch">rocket_launch</span>
+</div>
+<span class="text-[12px] font-bold text-outline mb-1">STEP 5</span>
+<h4 class="font-label-md text-xs px-2">Project Execution</h4>
+</div>
+<!-- Step 6 -->
+<div class="flex flex-col items-center text-center">
+<div class="w-16 h-16 rounded-full bg-surface-container-high text-primary flex items-center justify-center mb-4 border border-outline-variant">
+<span class="material-symbols-outlined" data-icon="analytics">analytics</span>
+</div>
+<span class="text-[12px] font-bold text-outline mb-1">STEP 6</span>
+<h4 class="font-label-md text-xs px-2">Final Evaluation</h4>
+</div>
+<!-- Step 7 -->
+<div class="flex flex-col items-center text-center">
+<div class="w-16 h-16 rounded-full bg-surface-container-high text-primary flex items-center justify-center mb-4 border border-outline-variant">
+<span class="material-symbols-outlined" data-icon="workspace_premium">workspace_premium</span>
+</div>
+<span class="text-[12px] font-bold text-outline mb-1">STEP 7</span>
+<h4 class="font-label-md text-xs px-2">Get Certified</h4>
+</div>
+<!-- Step 8 -->
+<div class="flex flex-col items-center text-center">
+<div class="w-16 h-16 rounded-full bg-green-100 text-green-700 flex items-center justify-center mb-4 border border-green-200">
+<span class="material-symbols-outlined" data-icon="business_center">business_center</span>
+</div>
+<span class="text-[12px] font-bold text-green-700 mb-1">STEP 8</span>
+<h4 class="font-label-md text-xs px-2">Company Hiring</h4>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Role-Based Features -->
+<section class="py-xl lg:py-24 px-container-margin bg-surface">
+<div class="max-w-7xl mx-auto">
+<div class="text-center mb-16">
+<span class="text-primary font-label-sm text-label-sm uppercase tracking-widest">One Platform, Many Roles</span>
+<h2 class="font-h2 text-h2 lg:text-4xl mt-sm text-on-background">Engineered for the Entire Ecosystem</h2>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-gutter">
+<!-- For Students -->
+<div class="group bg-surface-container-lowest p-xl rounded-xl border border-outline-variant shadow-sm hover:shadow-md transition-shadow">
+<div class="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center text-primary mb-lg group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined" data-icon="school">school</span>
+</div>
+<h3 class="font-h3 text-h3 mb-md">For Students</h3>
+<p class="font-body-md text-on-surface-variant mb-xl">
+                            Daily progress tracking, project-based learning, performance scoring, and a secure way to build your career.
+                        </p>
+<ul class="space-y-3 mb-xl">
+<li class="flex items-center gap-2 text-label-sm">
+<span class="material-symbols-outlined text-primary text-[18px]" data-icon="check_circle" data-weight="fill">check_circle</span>
+                                Daily Progress Tracking
+                            </li>
+<li class="flex items-center gap-2 text-label-sm">
+<span class="material-symbols-outlined text-primary text-[18px]" data-icon="check_circle" data-weight="fill">check_circle</span>
+                                Performance Scoring
+                            </li>
+</ul>
+<a class="text-primary font-label-md flex items-center gap-1 hover:gap-2 transition-all" href="#">Learn more <span class="material-symbols-outlined text-[18px]" data-icon="arrow_forward">arrow_forward</span></a>
+</div>
+<!-- For HR Professionals -->
+<div class="group bg-surface-container-lowest p-xl rounded-xl border border-outline-variant shadow-sm hover:shadow-md transition-shadow">
+<div class="w-12 h-12 bg-tertiary-container/10 rounded-lg flex items-center justify-center text-tertiary mb-lg group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined" data-icon="account_tree">account_tree</span>
+</div>
+<h3 class="font-h3 text-h3 mb-md">For HR</h3>
+<p class="font-body-md text-on-surface-variant mb-xl">
+                            Candidate pipeline, automated filtering, and verification status all in one centralized recruitment dashboard.
+                        </p>
+<ul class="space-y-3 mb-xl">
+<li class="flex items-center gap-2 text-label-sm">
+<span class="material-symbols-outlined text-tertiary text-[18px]" data-icon="check_circle" data-weight="fill">check_circle</span>
+                                Candidate Pipeline
+                            </li>
+<li class="flex items-center gap-2 text-label-sm">
+<span class="material-symbols-outlined text-tertiary text-[18px]" data-icon="check_circle" data-weight="fill">check_circle</span>
+                                Automated Filtering
+                            </li>
+</ul>
+<a class="text-tertiary font-label-md flex items-center gap-1 hover:gap-2 transition-all" href="#">Learn more <span class="material-symbols-outlined text-[18px]" data-icon="arrow_forward">arrow_forward</span></a>
+</div>
+<!-- For Companies -->
+<div class="group bg-surface-container-lowest p-xl rounded-xl border border-outline-variant shadow-sm hover:shadow-md transition-shadow">
+<div class="w-12 h-12 bg-secondary/10 rounded-lg flex items-center justify-center text-secondary mb-lg group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+</div>
+<h3 class="font-h3 text-h3 mb-md">For Companies</h3>
+<p class="font-body-md text-on-surface-variant mb-xl">
+                            Search interns by skills, performance score, or tech stack. <span class="font-bold text-secondary">Access Verified Talent Pool</span> instantly.
+                        </p>
+<ul class="space-y-3 mb-xl">
+<li class="flex items-center gap-2 text-label-sm">
+<span class="material-symbols-outlined text-secondary text-[18px]" data-icon="check_circle" data-weight="fill">check_circle</span>
+                                Search by Performance Score
+                            </li>
+<li class="flex items-center gap-2 text-label-sm">
+<span class="material-symbols-outlined text-secondary text-[18px]" data-icon="check_circle" data-weight="fill">check_circle</span>
+                                Verified Talent Access
+                            </li>
+</ul>
+<a class="text-secondary font-label-md flex items-center gap-1 hover:gap-2 transition-all" href="#">Learn more <span class="material-symbols-outlined text-[18px]" data-icon="arrow_forward">arrow_forward</span></a>
+</div>
+</div>
+</div>
+</section>
+<!-- Trust & Security Section -->
+<section class="py-xl lg:py-20 px-container-margin bg-white border-y border-outline-variant/30">
+<div class="max-w-7xl mx-auto">
+<div class="grid grid-cols-1 md:grid-cols-3 gap-12">
+<div class="flex items-start gap-4">
+<div class="p-3 bg-blue-50 rounded-xl text-primary">
+<span class="material-symbols-outlined text-3xl" data-icon="admin_panel_settings">admin_panel_settings</span>
+</div>
+<div>
+<h4 class="font-h3 text-lg mb-1">Secure Data Handling</h4>
+<p class="text-body-md text-on-surface-variant">Industry-standard encryption for all platform interactions and student data.</p>
+</div>
+</div>
+<div class="flex items-start gap-4">
+<div class="p-3 bg-blue-50 rounded-xl text-primary">
+<span class="material-symbols-outlined text-3xl" data-icon="lock_person">lock_person</span>
+</div>
+<div>
+<h4 class="font-h3 text-lg mb-1">Encrypted Aadhaar Storage</h4>
+<p class="text-body-md text-on-surface-variant">Sensitive identity documents are stored in secure, encrypted environments.</p>
+</div>
+</div>
+<div class="flex items-start gap-4">
+<div class="p-3 bg-blue-50 rounded-xl text-primary">
+<span class="material-symbols-outlined text-3xl" data-icon="key">key</span>
+</div>
+<div>
+<h4 class="font-h3 text-lg mb-1">Role-Based Access</h4>
+<p class="text-body-md text-on-surface-variant">Strict permissions ensuring only authorized personnel access specific data.</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Dynamic Data & Notifications -->
+<section class="py-xl lg:py-24 px-container-margin bg-surface">
+<div class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-24 items-center">
+<div class="relative">
+<!-- Dashboard Mockup -->
+<div class="bg-surface-container-low rounded-2xl p-sm border border-outline-variant shadow-xl overflow-hidden relative">
+<!-- Labels around dashboard -->
+<div class="absolute -top-4 -right-4 bg-primary text-on-primary px-3 py-1 rounded-full text-[10px] font-bold shadow-lg z-20 animate-pulse">
+                            LIVE INTERNSHIP TRACKING
+                        </div>
+<div class="absolute -bottom-4 -left-4 bg-inverse-surface text-inverse-on-surface px-3 py-1 rounded-full text-[10px] font-bold shadow-lg z-20">
+                            REAL-TIME PROGRESS MONITORING
+                        </div>
+<div class="bg-white rounded-xl overflow-hidden">
+<table class="w-full text-left">
+<thead class="bg-surface-container-high border-b border-outline-variant">
+<tr>
+<th class="px-md py-3 font-label-sm text-label-sm text-on-surface-variant">INTERN NAME</th>
+<th class="px-md py-3 font-label-sm text-label-sm text-on-surface-variant">STATUS</th>
+<th class="px-md py-3 font-label-sm text-label-sm text-on-surface-variant">PROGRESS</th>
+</tr>
+</thead>
+<tbody>
+<tr class="border-b border-surface-variant">
+<td class="px-md py-4">
+<div class="flex items-center gap-2">
+<div class="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-[10px]">AS</div>
+<span class="font-body-md text-on-surface">Alex Simmons</span>
+</div>
+</td>
+<td class="px-md py-4">
+<span class="bg-green-100 text-green-700 px-3 py-1 rounded-full text-[10px] font-bold">ONBOARDED</span>
+</td>
+<td class="px-md py-4">
+<div class="w-full bg-surface-variant h-1.5 rounded-full overflow-hidden">
+<div class="bg-primary h-full w-[85%]"></div>
+</div>
+</td>
+</tr>
+<tr class="border-b border-surface-variant">
+<td class="px-md py-4">
+<div class="flex items-center gap-2">
+<div class="w-8 h-8 rounded-full bg-tertiary-container/20 flex items-center justify-center text-tertiary font-bold text-[10px]">ML</div>
+<span class="font-body-md text-on-surface">Maria Lopez</span>
+</div>
+</td>
+<td class="px-md py-4">
+<span class="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-[10px] font-bold">SCREENING</span>
+</td>
+<td class="px-md py-4">
+<div class="w-full bg-surface-variant h-1.5 rounded-full overflow-hidden">
+<div class="bg-primary h-full w-[40%]"></div>
+</div>
+</td>
+</tr>
+<tr>
+<td class="px-md py-4">
+<div class="flex items-center gap-2">
+<div class="w-8 h-8 rounded-full bg-secondary/20 flex items-center justify-center text-secondary font-bold text-[10px]">JD</div>
+<span class="font-body-md text-on-surface">Jameson Doe</span>
+</div>
+</td>
+<td class="px-md py-4">
+<span class="bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-[10px] font-bold">INTERVIEW</span>
+</td>
+<td class="px-md py-4">
+<div class="w-full bg-surface-variant h-1.5 rounded-full overflow-hidden">
+<div class="bg-primary h-full w-[65%]"></div>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+<div>
+<h2 class="font-h2 text-h2 lg:text-4xl text-on-background mb-md">Real-time Visibility for Every Stakeholder</h2>
+<p class="font-body-lg text-body-lg text-on-surface-variant mb-xl">
+                        Our dashboard provides a unified view of your entire internship ecosystem. Track progress, manage approvals, and never miss an update with our integrated notification engine.
+                    </p>
+<!-- Notification Feature Highlight -->
+<div class="mb-xl">
+<h4 class="font-label-md text-on-surface mb-sm flex items-center gap-2">
+<span class="material-symbols-outlined text-primary" data-icon="notifications_active">notifications_active</span>
+                            Instant Alerts &amp; Notifications
+                        </h4>
+<div class="flex flex-wrap gap-sm">
+<span class="px-3 py-1.5 bg-white border border-outline-variant rounded-full text-xs font-medium flex items-center gap-1">
+<span class="w-1.5 h-1.5 bg-primary rounded-full"></span> Email alerts
+                            </span>
+<span class="px-3 py-1.5 bg-white border border-outline-variant rounded-full text-xs font-medium flex items-center gap-1">
+<span class="w-1.5 h-1.5 bg-error rounded-full"></span> Deadline reminders
+                            </span>
+<span class="px-3 py-1.5 bg-white border border-outline-variant rounded-full text-xs font-medium flex items-center gap-1">
+<span class="w-1.5 h-1.5 bg-green-500 rounded-full"></span> Approval notifications
+                            </span>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-md">
+<div class="p-lg bg-white rounded-xl border border-outline-variant shadow-sm">
+<span class="text-3xl font-black text-primary">98%</span>
+<p class="text-label-sm text-on-surface-variant mt-xs">Conversion Rate</p>
+</div>
+<div class="p-lg bg-white rounded-xl border border-outline-variant shadow-sm">
+<span class="text-3xl font-black text-primary">12k+</span>
+<p class="text-label-sm text-on-surface-variant mt-xs">Active Partnerships</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- CTA Section -->
+<section class="py-xl lg:py-32 px-container-margin">
+<div class="max-w-5xl mx-auto bg-primary-container rounded-3xl p-xl lg:p-24 text-center relative overflow-hidden shadow-2xl">
+<div class="absolute top-0 left-0 w-full h-full opacity-10">
+<img alt="Pattern" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBiXxye8LE-lu4nlOC9dXY9mCpCfm52L6-fHJgkkjSfJd5hGAzTlr1LhoUcDuHYXJb2E_zBk5P8D072NxCw51hsv-w6KKP-xXcCJn4gh6mHl7Bpn3iepUmyniJNzRa1Y1I5f4mQbZj_pprH1hi2ZaFBKlYYLfFKNXrSDBDALu_4tfQMrPlcWsRPR2vn5N-wBSq-u7c-Aow-RodCY-YsTDFy7nlT11zECBrqy1KANrt10CSGw0FQnJHzWVtABtPBgIXAyjRRjRqrLQ"/>
+</div>
+<div class="relative z-10">
+<h2 class="font-h1 text-h1 text-on-primary-container mb-md">Ready to Start Your Journey?</h2>
+<p class="font-body-lg text-on-primary-container/80 mb-xl max-w-2xl mx-auto">
+                        From application to hiring — everything in one platform. Join thousands of students and companies already using InternshipHub.
+                    </p>
+<div class="flex flex-wrap justify-center gap-md">
+<button onclick="window.location.href='registration_page.html'" class="bg-white text-primary font-label-md text-label-md px-xl py-md rounded-lg shadow-sm hover:bg-surface transition-all active:scale-[0.98]">
+                            Get Started Now
+                        </button>
+<button onclick="window.location.href='login.html'" class="bg-transparent border border-white text-white font-label-md text-label-md px-xl py-md rounded-lg hover:bg-white/10 transition-all active:scale-[0.98]">
+                            Schedule a Demo
+                        </button>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Footer -->
+<footer class="bg-surface-container-highest py-xl border-t border-outline-variant">
+<div class="max-w-7xl mx-auto px-container-margin">
+<div class="grid grid-cols-1 md:grid-cols-4 gap-xl">
+<div class="md:col-span-1">
+<span class="text-xl font-bold text-primary">InternshipHub</span>
+<p class="mt-md text-label-sm text-on-surface-variant">
+                        Bridging talent and opportunity since 2024.
+                    </p>
+<div class="mt-lg">
+<p class="text-[12px] font-bold text-on-surface-variant mb-1">Support Email:</p>
+<a class="text-primary text-[12px] hover:underline" href="mailto:support@internshiphub.com">support@internshiphub.com</a>
+</div>
+</div>
+<div>
+<h4 class="font-label-md text-on-surface mb-md">Platform</h4>
+<ul class="space-y-sm text-label-sm text-on-surface-variant">
+<li class=""><a class="hover:text-primary" href="#">Internships</a></li>
+<li class=""><a class="hover:text-primary" href="#">Certification</a></li>
+<li class=""><a class="hover:text-primary" href="#">University Links</a></li>
+</ul>
+</div>
+<div>
+<h4 class="font-label-md text-on-surface mb-md">Resources</h4>
+<ul class="space-y-sm text-label-sm text-on-surface-variant">
+<li class=""><a class="hover:text-primary" href="#">Career Advice</a></li>
+<li class=""><a class="hover:text-primary" href="#">Recruiting Tips</a></li>
+<li class=""><a class="hover:text-primary" href="#">Case Studies</a></li>
+</ul>
+</div>
+<div>
+<h4 class="font-label-md text-on-surface mb-md">Company</h4>
+<ul class="space-y-sm text-label-sm text-on-surface-variant">
+<li class=""><a class="hover:text-primary" href="#">About Us</a></li>
+<li class=""><a class="hover:text-primary" href="#">Contact Us</a></li>
+<li class=""><a class="hover:text-primary" href="#">Privacy Policy</a></li>
+<li class=""><a class="hover:text-primary" href="#">Terms &amp; Conditions</a></li>
+</ul>
+</div>
+</div>
+<div class="mt-xl pt-lg border-t border-outline-variant/30 flex flex-col md:flex-row justify-between items-center gap-md">
+<p class="text-[12px] text-outline">© 2024 InternshipHub Inc. All rights reserved.</p>
+<div class="flex gap-md">
+<span class="material-symbols-outlined text-outline cursor-pointer hover:text-primary" data-icon="public">public</span>
+<span class="material-symbols-outlined text-outline cursor-pointer hover:text-primary" data-icon="share">share</span>
+</div>
+</div>
+</div>
+</footer>
+</body></html>

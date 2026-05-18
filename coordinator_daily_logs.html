@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html class="light" lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>Intern Activity Tracker | Coordinator</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+    <script id="tailwind-config">
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#1d4ed8",
+                        surface: "#f8f9fa",
+                        "surface-container": "#ffffff",
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #f8f9fa; color: #191c1d; }
+        .status-pill { padding: 4px 12px; border-radius: 9999px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
+        .status-submitted { background-color: #ecfdf5; color: #059669; }
+        .status-reviewed { background-color: #eff6ff; color: #2563eb; }
+        .status-missing { background-color: #fef2f2; color: #dc2626; }
+        .status-late { background-color: #fffbeb; color: #d97706; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col font-sans">
+    <!-- Top Nav -->
+    <header class="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between sticky top-0 z-10">
+        <div class="flex items-center gap-8">
+            <h1 class="text-xl font-bold text-blue-600">InternshipHub</h1>
+            <div class="hidden md:flex gap-2 text-xs font-bold text-gray-400 uppercase tracking-widest border-l border-gray-200 pl-6">
+                Coordinator Console
+            </div>
+        </div>
+        <div class="flex items-center gap-4 text-sm font-medium">
+            <button onclick="window.location.href='coordinator_dashboard.html'" class="text-gray-600 hover:text-gray-900 flex items-center gap-2">
+                <span class="material-symbols-outlined text-lg">arrow_back</span> Back to Dashboard
+            </button>
+        </div>
+    </header>
+
+    <div class="flex flex-1 overflow-hidden">
+        <!-- Main Content -->
+        <main class="flex-1 p-8 overflow-y-auto">
+            <div class="max-w-6xl mx-auto space-y-8">
+                
+                <!-- Header -->
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-900">Intern Activity Tracker</h1>
+                        <p class="text-gray-500 text-sm mt-1">Monitor progress and submission status across your assigned batches.</p>
+                    </div>
+                    <div class="flex gap-3">
+                        <button class="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium hover:bg-gray-50 shadow-sm transition-all">
+                            <span class="material-symbols-outlined text-lg">download</span> Export Batch Report
+                        </button>
+                        <button class="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium hover:bg-blue-700 shadow-sm transition-all">
+                            <span class="material-symbols-outlined text-lg">mail</span> Send Reminders
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Summary Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                        <p class="text-gray-500 text-xs font-bold uppercase tracking-wider mb-2">Assigned Interns</p>
+                        <p class="text-3xl font-bold text-gray-900">165</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                        <p class="text-gray-500 text-xs font-bold uppercase tracking-wider mb-2">Missing Logs</p>
+                        <p class="text-3xl font-bold text-red-600">18</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                        <p class="text-gray-500 text-xs font-bold uppercase tracking-wider mb-2">Awaiting Review</p>
+                        <p class="text-3xl font-bold text-blue-600">42</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                        <p class="text-gray-500 text-xs font-bold uppercase tracking-wider mb-2">Steady Progress</p>
+                        <p class="text-3xl font-bold text-green-600">142</p>
+                    </div>
+                </div>
+
+                <!-- Filters -->
+                <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div class="space-y-1">
+                            <label class="text-[10px] font-bold text-gray-500 uppercase">Batch</label>
+                            <select class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                                <option>All Batches</option>
+                                <option>Summer AI Research '24</option>
+                            </select>
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-[10px] font-bold text-gray-500 uppercase">Search</label>
+                            <input type="text" placeholder="Name..." class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-[10px] font-bold text-gray-500 uppercase">Date</label>
+                            <input type="date" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-[10px] font-bold text-gray-500 uppercase">Status</label>
+                            <select class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                                <option>All Statuses</option>
+                                <option>Submitted</option>
+                                <option>Reviewed</option>
+                                <option>Missing</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Table -->
+                <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                    <table class="w-full text-left text-sm">
+                        <thead class="bg-gray-50 text-gray-500 uppercase font-bold text-[10px] tracking-wider border-b border-gray-100">
+                            <tr>
+                                <th class="px-6 py-4">Intern Name</th>
+                                <th class="px-6 py-4">Mentor</th>
+                                <th class="px-6 py-4">Status</th>
+                                <th class="px-6 py-4 text-right">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100 text-gray-600">
+                            <tr class="hover:bg-gray-50">
+                                <td class="px-6 py-4 font-medium text-gray-900">Jane Doe</td>
+                                <td class="px-6 py-4">Marcus Reed</td>
+                                <td class="px-6 py-4"><span class="status-pill status-reviewed">Reviewed</span></td>
+                                <td class="px-6 py-4 text-right">
+                                    <button onclick="toggleModal('log-modal')" class="text-blue-600 font-bold text-xs hover:underline">View Details</button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal -->
+    <div id="log-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden">
+            <div class="p-6 border-b border-gray-100 flex justify-between items-center">
+                <h3 class="text-lg font-bold text-gray-900">Activity Details</h3>
+                <button onclick="toggleModal('log-modal')" class="text-gray-400 hover:text-gray-600"><span class="material-symbols-outlined">close</span></button>
+            </div>
+            <div class="p-8 space-y-4">
+                <p class="text-sm text-gray-600">No audit records available for this entry. Viewing activity log details.</p>
+                <div class="bg-gray-50 p-4 rounded-lg text-sm text-gray-700 leading-relaxed">
+                    Student has completed the assigned module and is awaiting feedback.
+                </div>
+            </div>
+            <div class="p-6 border-t border-gray-100 bg-gray-50/50 flex justify-end">
+                <button onclick="toggleModal('log-modal')" class="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-bold">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function toggleModal(id) {
+            const modal = document.getElementById(id);
+            modal.classList.toggle('hidden');
+        }
+    </script>
+</body>
+</html>

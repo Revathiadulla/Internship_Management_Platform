@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html class="light" lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>Activity Reports | Admin</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+    <script id="tailwind-config">
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#1d4ed8",
+                        surface: "#f8f9fa",
+                        "surface-container": "#ffffff",
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #f8f9fa; color: #191c1d; }
+        .status-pill { padding: 4px 12px; border-radius: 9999px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
+        .status-submitted { background-color: #ecfdf5; color: #059669; }
+        .status-reviewed { background-color: #eff6ff; color: #2563eb; }
+        .status-missing { background-color: #fef2f2; color: #dc2626; }
+        .status-late { background-color: #fffbeb; color: #d97706; }
+        .status-needs-improvement { background-color: #faf5ff; color: #7c3aed; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col font-sans">
+    <!-- Top Nav -->
+    <header class="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between sticky top-0 z-10">
+        <div class="flex items-center gap-8">
+            <h1 class="text-xl font-bold text-blue-700">InternshipHub</h1>
+            <div class="hidden md:flex gap-2 text-xs font-bold text-gray-400 uppercase tracking-widest border-l border-gray-200 pl-6">
+                Reports Center
+            </div>
+        </div>
+        <div class="flex items-center gap-4 text-sm font-medium">
+            <button onclick="window.location.href='admin_dashboard.html'" class="text-gray-600 hover:text-gray-900 flex items-center gap-2">
+                <span class="material-symbols-outlined text-lg">arrow_back</span> Back to Dashboard
+            </button>
+        </div>
+    </header>
+
+    <div class="flex flex-1 overflow-hidden">
+        <!-- Main Content -->
+        <main class="flex-1 p-8 overflow-y-auto">
+            <div class="max-w-6xl mx-auto space-y-8">
+                
+                <!-- Header -->
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-900">Intern Activity Reports</h1>
+                        <p class="text-gray-500 text-sm mt-1">Monitor student activity submissions across internships and batches.</p>
+                    </div>
+                    <div class="flex gap-3">
+                        <button class="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium hover:bg-gray-50 shadow-sm transition-all">
+                            <span class="material-symbols-outlined text-lg">download</span> Export CSV
+                        </button>
+                        <button class="bg-primary text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium hover:bg-blue-800 shadow-sm transition-all">
+                            <span class="material-symbols-outlined text-lg">notification_add</span> Send Reminders
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Summary Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                        <p class="text-gray-500 text-xs font-bold uppercase tracking-wider mb-2">Total Logs Submitted</p>
+                        <div class="flex items-end justify-between">
+                            <p class="text-3xl font-bold text-gray-900">2,840</p>
+                            <span class="text-green-600 text-xs font-bold bg-green-50 px-2 py-1 rounded-lg">94% Comp.</span>
+                        </div>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                        <p class="text-gray-500 text-xs font-bold uppercase tracking-wider mb-2">Missing Logs</p>
+                        <div class="flex items-end justify-between">
+                            <p class="text-3xl font-bold text-red-600">124</p>
+                            <span class="text-red-600 text-xs font-bold bg-red-50 px-2 py-1 rounded-lg">+12 Today</span>
+                        </div>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                        <p class="text-gray-500 text-xs font-bold uppercase tracking-wider mb-2">Pending Reviews</p>
+                        <div class="flex items-end justify-between">
+                            <p class="text-3xl font-bold text-blue-600">456</p>
+                            <span class="text-blue-600 text-xs font-bold bg-blue-50 px-2 py-1 rounded-lg">Avg 4h delay</span>
+                        </div>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                        <p class="text-gray-500 text-xs font-bold uppercase tracking-wider mb-2">Late Submissions</p>
+                        <div class="flex items-end justify-between">
+                            <p class="text-3xl font-bold text-amber-600">82</p>
+                            <span class="text-amber-600 text-xs font-bold bg-amber-50 px-2 py-1 rounded-lg">-5% Improved</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Filters -->
+                <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                    <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+                        <div class="space-y-1">
+                            <label class="text-[10px] font-bold text-gray-500 uppercase">Internship Batch</label>
+                            <select class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none">
+                                <option>All Batches</option>
+                                <option>Summer AI Research '24</option>
+                                <option>Frontend Engineering Intensive</option>
+                            </select>
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-[10px] font-bold text-gray-500 uppercase">Student Name</label>
+                            <input type="text" placeholder="Search student..." class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none">
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-[10px] font-bold text-gray-500 uppercase">Mentor</label>
+                            <select class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none">
+                                <option>All Mentors</option>
+                                <option>Marcus Reed</option>
+                                <option>Alan Turing</option>
+                            </select>
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-[10px] font-bold text-gray-500 uppercase">Date Range</label>
+                            <input type="date" class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none">
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-[10px] font-bold text-gray-500 uppercase">Log Status</label>
+                            <select class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none">
+                                <option>All Statuses</option>
+                                <option>Submitted</option>
+                                <option>Reviewed</option>
+                                <option>Missing</option>
+                                <option>Late</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Daily Logs Table -->
+                <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm">
+                            <thead class="bg-gray-50 text-gray-500 uppercase font-bold text-[10px] tracking-wider border-b border-gray-100">
+                                <tr>
+                                    <th class="px-6 py-4">Student Name</th>
+                                    <th class="px-6 py-4">Internship Batch</th>
+                                    <th class="px-6 py-4">Assigned Mentor</th>
+                                    <th class="px-6 py-4">Date</th>
+                                    <th class="px-6 py-4">Hours</th>
+                                    <th class="px-6 py-4">Status</th>
+                                    <th class="px-6 py-4 text-right">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100 text-gray-600">
+                                <tr class="hover:bg-gray-50 transition-colors">
+                                    <td class="px-6 py-4 font-medium text-gray-900">Jane Doe</td>
+                                    <td class="px-6 py-4">Summer AI Research '24</td>
+                                    <td class="px-6 py-4">Marcus Reed</td>
+                                    <td class="px-6 py-4">May 08, 2024</td>
+                                    <td class="px-6 py-4">7.5h</td>
+                                    <td class="px-6 py-4"><span class="status-pill status-reviewed">Reviewed</span></td>
+                                    <td class="px-6 py-4 text-right">
+                                        <button onclick="toggleModal('log-modal')" class="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="View Details">
+                                            <span class="material-symbols-outlined text-lg">visibility</span>
+                                        </button>
+                                    </td>
+                                </tr>
+                                <tr class="hover:bg-gray-50 transition-colors">
+                                    <td class="px-6 py-4 font-medium text-gray-900">John Smith</td>
+                                    <td class="px-6 py-4">Frontend Intensive</td>
+                                    <td class="px-6 py-4">Sheryl Sandberg</td>
+                                    <td class="px-6 py-4">May 08, 2024</td>
+                                    <td class="px-6 py-4">6.0h</td>
+                                    <td class="px-6 py-4"><span class="status-pill status-submitted">Submitted</span></td>
+                                    <td class="px-6 py-4 text-right">
+                                        <button onclick="toggleModal('log-modal')" class="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="View Details">
+                                            <span class="material-symbols-outlined text-lg">visibility</span>
+                                        </button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- Log Detail Modal -->
+    <div id="log-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div class="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold">JD</div>
+                    <div>
+                        <h3 class="text-lg font-bold text-gray-900">Activity Details</h3>
+                        <p class="text-xs text-gray-500 font-medium">Summer AI Research '24 | May 08, 2024</p>
+                    </div>
+                </div>
+                <button onclick="toggleModal('log-modal')" class="text-gray-400 hover:text-gray-600 transition-colors">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <div class="p-8 space-y-6 overflow-y-auto max-h-[70vh]">
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="bg-gray-50 p-3 rounded-lg border border-gray-100">
+                        <p class="text-[10px] font-bold text-gray-500 uppercase mb-1">Time Spent</p>
+                        <p class="text-sm font-semibold text-gray-900">7 Hours 30 Minutes</p>
+                    </div>
+                    <div class="bg-gray-50 p-3 rounded-lg border border-gray-100">
+                        <p class="text-[10px] font-bold text-gray-500 uppercase mb-1">Status</p>
+                        <p class="text-sm font-semibold text-gray-900">On-Time</p>
+                    </div>
+                </div>
+                <div>
+                    <h4 class="text-xs font-bold text-gray-900 uppercase tracking-wider mb-3">Tasks Completed</h4>
+                    <div class="bg-blue-50/50 p-4 rounded-xl border border-blue-100 text-sm text-gray-700 leading-relaxed">
+                        • Finalized the data preprocessing script for the NLP module.<br>
+                        • Conducted initial training runs with the BERT base model.
+                    </div>
+                </div>
+                <div>
+                    <h4 class="text-xs font-bold text-gray-900 uppercase tracking-wider mb-3">Mentor Feedback</h4>
+                    <div class="bg-gray-50 p-4 rounded-xl border border-gray-200 italic text-sm text-gray-600">
+                        "Excellent progress on the BERT model."
+                    </div>
+                </div>
+            </div>
+            <div class="p-6 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-3">
+                <button onclick="toggleModal('log-modal')" class="px-6 py-2 border border-gray-300 rounded-lg text-sm font-medium hover:bg-white transition-colors">Close</button>
+                <button onclick="toggleModal('log-modal')" class="px-6 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-blue-800 shadow-sm">Mark as Reviewed</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function toggleModal(id) {
+            const modal = document.getElementById(id);
+            modal.classList.toggle('hidden');
+        }
+    </script>
+</body>
+</html>
