@@ -11,10 +11,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $role = $_POST['role'];
 
     if ($password !== $confirm_password) {
-        echo "<script>
-                alert('Passwords do not match');
-                window.location.href='register.html';
-              </script>";
+        $params = http_build_query(['error' => 'Passwords do not match. Please try again.', 'full_name' => $full_name, 'email' => $email]);
+        header("Location: registration_page.php?" . $params);
         exit();
     }
 
@@ -22,10 +20,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $result = mysqli_query($conn, $checkEmail);
 
     if (mysqli_num_rows($result) > 0) {
-        echo "<script>
-                alert('Email already registered');
-                window.location.href='register.html';
-              </script>";
+        $params = http_build_query(['error' => 'This email is already registered. Please log in instead.', 'full_name' => $full_name, 'email' => $email]);
+        header("Location: registration_page.php?" . $params);
         exit();
     }
 
@@ -43,42 +39,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $_SESSION['role'] = $role;
 
         if ($role === 'student') {
-            header("refresh:2;url=application_form.php");
-            echo '
-            <div style="
-            max-width:500px;
-            margin:100px auto;
-            padding:20px;
-            background:#dcfce7;
-            border:1px solid #86efac;
-            border-radius:10px;
-            color:#166534;
-            font-family:Arial;
-            font-size:18px;
-            text-align:center;
-            ">
-            Registration successful! Please complete your profile.
-            </div>
-            ';
+            header("Location: login.php?success=" . urlencode("Account created! Please log in to continue."));
             exit();
         } else {
-            header("refresh:2;url=login.html");
-            echo '
-            <div style="
-            max-width:500px;
-            margin:100px auto;
-            padding:20px;
-            background:#dcfce7;
-            border:1px solid #86efac;
-            border-radius:10px;
-            color:#166534;
-            font-family:Arial;
-            font-size:18px;
-            text-align:center;
-            ">
-            Registration successful! Please log in.
-            </div>
-            ';
+            header("Location: login.php?success=" . urlencode("Account created! Please wait for admin approval, then log in."));
             exit();
         }
     } else {
