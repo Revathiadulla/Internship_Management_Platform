@@ -1,10 +1,18 @@
+
 <?php
 
-$conn = mysqli_connect("localhost", "root", "", "imp_db");
+$host = getenv("MYSQLHOST") ?: "localhost";
+$user = getenv("MYSQLUSER") ?: "root";
+$password = getenv("MYSQLPASSWORD") ?: "";
+$database = getenv("MYSQLDATABASE") ?: "imp_db";
+$port = getenv("MYSQLPORT") ?: 3306;
+
+$conn = mysqli_connect($host, $user, $password, $database, $port);
 
 if (!$conn) {
     die("Connection failed: " . mysqli_connect_error());
 }
+
 
 // Alter table to add test columns if they do not exist
 $check_cols = mysqli_query($conn, "SHOW COLUMNS FROM internship_applications LIKE 'test_status'");
