@@ -38,6 +38,8 @@ $shortlist_result = mysqli_query($conn, $shortlist_sql);
 $shortlist_row = mysqli_fetch_assoc($shortlist_result);
 $shortlist_count = $shortlist_row['count'];
 
+$total_logs = 0;
+
 // Fetch active started internship (Started status)
 $active_sql = "SELECT a.id as app_id,
                       COALESCE(i.id, 0) as internship_id,
@@ -1397,6 +1399,7 @@ if ($has_active) {
             <h4 class="text-sm font-bold text-slate-700 uppercase tracking-wide mb-4">Eligibility Checklist</h4>
             <div class="space-y-3">
               <?php
+                $total_logs = $total_logs ?? 0;
                 $checks = [
                   ['label' => 'Internship Started',      'done' => $has_active],
                   ['label' => 'Daily Logs Submitted',    'done' => $total_logs > 0],
