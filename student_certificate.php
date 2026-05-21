@@ -229,7 +229,7 @@ $unread_count = intval($unread_row['c'] ?? 0);
                 </div>
                 <div class="text-right">
                   <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Assessment Score</p>
-                  <p class="font-bold text-slate-800 text-sm"><?php echo ($has_intern && $intern['test_score'] !== null) ? intval($intern['test_score']) . '/4 — ' . round(intval($intern['test_score'])/4*100) . '%' : 'N/A'; ?></p>
+                  <p class="font-bold text-slate-800 text-sm"><?php echo ($has_intern && $intern['test_score'] !== null) ? intval($intern['test_score']) . '/30 — ' . round(intval($intern['test_score'])/30*100) . '%' : 'N/A'; ?></p>
                 </div>
               </div>
 
@@ -328,7 +328,7 @@ $unread_count = intval($unread_row['c'] ?? 0);
               </div>
               <div class="bg-slate-50 rounded-xl p-3 text-center">
                 <p class="text-[10px] text-slate-400 font-bold uppercase">Test Score</p>
-                <p class="text-base font-black text-slate-800 mt-0.5"><?php echo ($has_intern && $intern['test_score'] !== null) ? intval($intern['test_score']) . '/4' : '—'; ?></p>
+                <p class="text-base font-black text-slate-800 mt-0.5"><?php echo ($has_intern && $intern['test_score'] !== null) ? intval($intern['test_score']) . '/30' : '—'; ?></p>
               </div>
             </div>
           </div>

@@ -139,6 +139,18 @@ if (mysqli_query($conn, $insert_sql)) {
     mysqli_query($conn, "INSERT INTO student_notifications (user_id, type, message)
                          VALUES ('$user_id', 'application', '$notif_msg')");
 
+    // Send email notification for internship application
+    $app_subject = "IMP Application Submitted: $internship_name";
+    $app_message = "Dear " . $_POST['full_name'] . ",\n\nYour application for the \"$internship_name\" internship has been successfully submitted to the platform.\n\nYour current application status is: **$app_status**.\n\nPlease remember that you are required to complete your skills assessment test (if applicable) within 48 hours of application submission.\n\nThank you for choosing IMP!";
+    sendEmailNotification($user_id, $app_subject, $app_message, [
+        'event' => 'Internship Application',
+        'internship_position' => $internship_name,
+        'education_status' => $education_status,
+        'current_status' => $app_status,
+        'action_url' => 'http://localhost/IMP/student_applications.php',
+        'action_label' => 'View Application Status'
+    ]);
+
     header("Location: student_dashboard.php?msg=" . urlencode("Application Submitted Successfully!"));
     exit();
 

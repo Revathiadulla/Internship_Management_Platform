@@ -1,6 +1,7 @@
 <?php
 session_start();
 include "db.php";
+include "questions_pool.php";
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: login.html");
@@ -486,38 +487,7 @@ $has_active = mysqli_num_rows($active_result) > 0;
   </div>
 
   <script>
-    const domainQuestions = {
-        "Frontend Development": [
-            {"q": "Which HTML5 tag is used to embed a self-contained content wrapper like an illustration or photo?", "options": ["&lt;section&gt;", "&lt;figure&gt;", "&lt;aside&gt;", "&lt;img&gt;"], "correct": 1},
-            {"q": "What does the CSS property 'box-sizing: border-box' do?", "options": ["Includes padding and border in the element's total width and height", "Excludes padding and border from width/height", "Forces elements into a border grid", "Adds borders automatically to all margins"], "correct": 0},
-            {"q": "What is the primary state hook in React called?", "options": ["useEffect", "useContext", "useState", "useReducer"], "correct": 2},
-            {"q": "Which JavaScript array method returns a new array with all elements that pass a test?", "options": ["map()", "filter()", "forEach()", "reduce()"], "correct": 1}
-        ],
-        "Data Science": [
-            {"q": "Which Python library is primarily used for high-performance data manipulation and analysis?", "options": ["Matplotlib", "NumPy", "Pandas", "Scikit-Learn"], "correct": 2},
-            {"q": "What SQL clause is used to filter group results after an aggregation has been performed?", "options": ["WHERE", "HAVING", "GROUP BY", "ORDER BY"], "correct": 1},
-            {"q": "Which SQL command is used to remove all records from a table without logging individual row deletions?", "options": ["DELETE", "DROP", "TRUNCATE", "REMOVE"], "correct": 2},
-            {"q": "What is the default behavior of the pandas.dropna() function?", "options": ["Fills missing values with 0", "Drops columns containing NaNs", "Drops rows containing NaNs", "Interpolates missing values"], "correct": 2}
-        ],
-        "UI/UX Design": [
-            {"q": "What does the acronym 'UX' stand for in product design?", "options": ["User Experience", "User Extension", "Universal Experience", "User Expansion"], "correct": 0},
-            {"q": "Which design principle refers to the arrangement of elements to imply importance or visual order?", "options": ["Contrast", "Alignment", "Hierarchy", "Repetition"], "correct": 2},
-            {"q": "What is a wireframe in user interface design?", "options": ["A high-fidelity colored mockup", "A basic visual guide representing the skeletal framework", "A functional interactive prototype", "A database schema diagram"], "correct": 1},
-            {"q": "What is Figma primarily used for by product teams?", "options": ["Backend development", "Interface design and collaborative prototyping", "Video editing", "Database queries"], "correct": 1}
-        ],
-        "Backend Development": [
-            {"q": "Which HTTP status code represents a successful resource creation on the server?", "options": ["200 OK", "201 Created", "302 Found", "400 Bad Request"], "correct": 1},
-            {"q": "What is the primary security advantage of using a prepared statement in SQL?", "options": ["Speeds up database connection", "Prevents SQL injection attacks", "Reduces server CPU load", "Automatically indexes tables"], "correct": 1},
-            {"q": "In Node.js, what is 'npm' primarily used for?", "options": ["Node Process Monitor", "Node Package Manager", "Node Protocol Method", "Node Path Module"], "correct": 1},
-            {"q": "Which database type is non-relational and document-oriented?", "options": ["PostgreSQL", "MySQL", "MongoDB", "SQLite"], "correct": 2}
-        ],
-        "General Aptitude": [
-            {"q": "What is the time complexity of searching in a balanced Binary Search Tree (BST)?", "options": ["O(1)", "O(log n)", "O(n)", "O(n log n)"], "correct": 1},
-            {"q": "Which protocol is used for secure encrypted communication over a computer network?", "options": ["HTTP", "HTTPS", "FTP", "SMTP"], "correct": 1},
-            {"q": "What is the primary role of an Operating System's Kernel?", "options": ["Displaying user interfaces", "Managing system hardware and software resources", "Compiling source code", "Encrypting user passwords"], "correct": 1},
-            {"q": "Which data structure operates on a Last-In, First-Out (LIFO) basis?", "options": ["Queue", "Stack", "Linked List", "Tree"], "correct": 1}
-        ]
-    };
+    const domainQuestions = <?php echo json_encode($all_questions); ?>;
 
     function getDomainFromTitle(title) {
         const t = title.toLowerCase();
@@ -537,13 +507,14 @@ $has_active = mysqli_num_rows($active_result) > 0;
         const questionsContainer = document.getElementById("result-modal-questions");
 
         modalTitle.textContent = title;
-        scoreCircle.textContent = score + "/4";
+        scoreCircle.textContent = score + "/30";
         
-        let comment = "";
-        if (score === 4) comment = "Perfect score! Outstanding grasp of the subject matter. Hiring managers have been notified of your exceptional performance.";
-        else if (score === 3) comment = "Excellent job! You demonstrated strong foundational knowledge in this domain. Your response has been saved.";
-        else if (score === 2) comment = "Good attempt. You have solid basics but there is room for improvement. The review committee will review your profile shortly.";
-        else comment = "Test completed. Your scores have been submitted. Focus on key core concepts to build your confidence.";
+        const percentage = Math.round((score / 30) * 100);
+        let comment = `You scored ${score}/30 (${percentage}%). `;
+        if (score === 30) comment += "Perfect score! Outstanding grasp of the subject matter. Hiring managers have been notified of your exceptional performance.";
+        else if (score >= 25) comment += "Excellent job! You demonstrated strong foundational knowledge in this domain. Your response has been saved.";
+        else if (score >= 18) comment += "Good attempt. You have solid basics but there is room for improvement. The review committee will review your profile shortly.";
+        else comment += "Test completed. Your scores have been submitted. Focus on key core concepts to build your confidence.";
 
         scoreComment.textContent = comment;
 

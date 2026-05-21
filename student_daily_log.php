@@ -90,6 +90,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_log'])) {
         $insert_sql = "INSERT INTO daily_logs (user_id, internship_id, tasks_completed, time_spent, focus_level, issues_faced, next_plan, log_date) 
                        VALUES ('$user_id', '$intern_id', '$tasks', '$hours', '$focus', '$issues', '$next_plan', '$log_date')";
         if (mysqli_query($conn, $insert_sql)) {
+            // Send email notification for daily progress log
+            $log_subject = "IMP Daily Progress Log Submitted - " . date('M d, Y', strtotime($log_date));
+            $log_message = "Dear " . ($profile['full_name'] ?? 'Student') . ",\n\nYour daily activity log for **$log_date** has been successfully recorded under the internship \"" . $active_intern['title'] . "\".\n\nLog Details:\n- Time Spent: **$hours hours**\n- Focus Level: **$focus**\n- Milestones Completed:\n$tasks\n\n" . 
+                           (!empty($issues) ? "- Reported Blockers/Issues:\n$issues\n\n" : "") . 
+                           "Your mentors have been notified to review your logs. Keep up the consistent work!";
+            sendEmailNotification($user_id, $log_subject, $log_message, [
+                'event' => 'Daily Progress Log',
+                'internship_title' => $active_intern['title'],
+                'log_date' => $log_date,
+                'hours_spent' => "$hours hrs",
+                'focus_level' => $focus,
+                'action_url' => 'http://localhost/IMP/student_daily_log.php',
+                'action_label' => 'View Activity Timeline'
+            ]);
+
             header("Location: student_daily_log.php?msg=" . urlencode("Daily log submitted successfully!"));
             exit();
         } else {

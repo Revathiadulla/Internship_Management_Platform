@@ -1,4 +1,3 @@
-
 <?php
 
 $host = getenv("MYSQLHOST") ?: "localhost";
@@ -66,5 +65,22 @@ $test_date_check = mysqli_query($conn, "SHOW COLUMNS FROM internship_application
 if (mysqli_num_rows($test_date_check) == 0) {
     mysqli_query($conn, "ALTER TABLE internship_applications ADD COLUMN test_submitted_date TIMESTAMP NULL DEFAULT NULL AFTER test_status");
 }
+
+// Create email_notifications_log table for tracking sent emails
+$email_log_table = "CREATE TABLE IF NOT EXISTS email_notifications_log (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT DEFAULT NULL,
+    recipient_email VARCHAR(255) NOT NULL,
+    recipient_name VARCHAR(255) DEFAULT NULL,
+    subject VARCHAR(255) NOT NULL,
+    message_text TEXT NOT NULL,
+    html_body LONGTEXT NOT NULL,
+    status VARCHAR(50) DEFAULT 'Sent',
+    sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)";
+mysqli_query($conn, $email_log_table);
+
+// Include email helper utility
+include_once __DIR__ . "/includes/mail_helper.php";
 
 ?>

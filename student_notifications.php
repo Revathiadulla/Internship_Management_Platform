@@ -263,11 +263,16 @@ $has_active = mysqli_num_rows($active_result) > 0;
               </div>
               <p class="text-slate-500 mt-1 text-sm">Stay updated on your application status, assessment schedules, and validations.</p>
           </div>
-          <?php if ($unread_count > 0): ?>
-              <button id="btn-mark-all-read" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm flex items-center gap-1.5">
-                  <span class="material-symbols-outlined text-[16px]">done_all</span> Mark All as Read
-              </button>
-          <?php endif; ?>
+          <div class="flex items-center gap-2">
+              <a href="student_email_logs.php" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all shadow-sm flex items-center gap-1.5 border border-slate-200">
+                  <span class="material-symbols-outlined text-[16px]">mail</span> Email Sandbox Logs
+              </a>
+              <?php if ($unread_count > 0): ?>
+                  <button id="btn-mark-all-read" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm flex items-center gap-1.5">
+                      <span class="material-symbols-outlined text-[16px]">done_all</span> Mark All as Read
+                  </button>
+              <?php endif; ?>
+          </div>
       </div>
 
       <!-- Filter Categories -->
