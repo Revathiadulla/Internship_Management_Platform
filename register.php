@@ -2,6 +2,7 @@
 ob_start();
 session_start();
 include "db.php";
+include_once __DIR__ . "/includes/mail_helper.php";
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
 

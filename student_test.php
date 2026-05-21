@@ -1,6 +1,7 @@
 <?php
 session_start();
 include "db.php";
+include_once __DIR__ . "/includes/mail_helper.php";
 include "questions_pool.php";
 
 if (!isset($_SESSION['user_id'])) {
