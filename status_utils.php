@@ -108,4 +108,3 @@ function formatTimestamp($timestamp) {
         return $date->format('M d, Y \a\t g:i A');
     }
 }
-?>

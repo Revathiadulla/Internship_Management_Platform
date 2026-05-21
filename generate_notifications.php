@@ -150,4 +150,3 @@ echo json_encode([
     'notifications' => $notifs,
     'unread_count' => $unread_count,
 ]);
-?>

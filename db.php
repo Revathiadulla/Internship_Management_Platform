@@ -82,5 +82,3 @@ mysqli_query($conn, $email_log_table);
 
 // Include email helper utility
 include_once __DIR__ . "/includes/mail_helper.php";
-
-?>

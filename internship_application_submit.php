@@ -170,4 +170,3 @@ if (mysqli_query($conn, $insert_sql)) {
         <a href='javascript:history.back()' class='px-6 py-2.5 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition-colors'>Go Back</a>
     </div></body></html>";
 }
-?>

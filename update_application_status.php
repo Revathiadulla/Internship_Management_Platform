@@ -113,4 +113,3 @@ if (mysqli_query($conn, $update_sql)) {
 } else {
     echo json_encode(['success' => false, 'message' => 'Failed to update status: ' . mysqli_error($conn)]);
 }
-?>

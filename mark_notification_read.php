@@ -47,4 +47,3 @@ if ($action === 'delete_all') {
 }
 
 echo json_encode(['success' => false, 'message' => 'Invalid parameters']);
-?>

@@ -64,4 +64,3 @@ function isStatusActive($current_status, $step_status, $all_history) {
     
     return 'pending';
 }
-?>

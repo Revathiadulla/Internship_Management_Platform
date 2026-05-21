@@ -80,4 +80,3 @@ if (mysqli_query($conn, $update_sql)) {
 
 header("Location: student_applications.php?err=" . urlencode("Unable to start internship. Please try again."));
 exit();
-?>
