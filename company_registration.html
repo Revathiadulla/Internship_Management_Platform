@@ -312,7 +312,7 @@
             <p class="text-sm text-gray-600 mb-6">Welcome to InternshipHub! Your application and subscription plan choice have been successfully recorded.</p>
             
             <div class="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden mb-4">
-                <div class="bg-blue-600 h-full w-full rounded-full animate-[shrink_1.5s_linear_forwards]"></div>
+                <div class="bg-blue-600 h-full w-full rounded-full animate-[shrink_0.3s_linear_forwards]"></div>
             </div>
             <p class="text-xs text-gray-400 font-medium animate-pulse">Redirecting to login page...</p>
         </div>
@@ -356,12 +356,12 @@
             modal.classList.remove('opacity-0', 'pointer-events-none', 'scale-95');
             modal.classList.add('opacity-100', 'scale-100');
             setTimeout(() => {
-                document.body.style.transition = 'opacity 0.3s ease';
+                document.body.style.transition = 'opacity 0.1s ease';
                 document.body.style.opacity = '0';
                 setTimeout(() => {
                     window.location.href = 'login.html';
-                }, 300);
-            }, 1200);
+                }, 100);
+            }, 300);
         }
         function selectPlan(card) {
             // Remove active class from all cards

@@ -252,7 +252,7 @@ if (isset($_GET['success'])) $success_msg = htmlspecialchars(urldecode($_GET['su
     <span><?php echo $success_msg; ?></span>
 </div>
 <?php endif; ?>
-<form class="space-y-6" action="login.php" method="POST">
+<form id="login-form" class="space-y-6" action="login.php" method="POST">
 <div class="space-y-4">
 <div>
 <label class="block font-label-md text-label-md text-on-surface-variant mb-1.5">Email Address</label>
@@ -283,7 +283,7 @@ if (isset($_GET['success'])) $success_msg = htmlspecialchars(urldecode($_GET['su
     <span><?php echo $error_msg; ?></span>
 </div>
 <?php endif; ?>
-<button type="submit" class="w-full py-3 bg-primary-container hover:bg-primary text-on-primary font-label-md text-label-md rounded-lg shadow-sm transition-colors flex items-center justify-center gap-2"><span class="">Sign In</span><span class="material-symbols-outlined text-lg" data-icon="arrow_forward">arrow_forward</span></button><p class="mt-4 text-center font-body-md text-body-md text-on-surface-variant opacity-75">Login for Students, HR, Mentors, and Companies</p>
+<button type="submit" id="login-submit-btn" class="w-full py-3 bg-primary-container hover:bg-primary text-on-primary font-label-md text-label-md rounded-lg shadow-sm transition-colors flex items-center justify-center gap-2"><span class="btn-text">Sign In</span><span class="material-symbols-outlined text-lg" data-icon="arrow_forward">arrow_forward</span></button><p class="mt-4 text-center font-body-md text-body-md text-on-surface-variant opacity-75">Login for Students, HR, Mentors, and Companies</p>
 </form>
 <div class="flex items-center justify-center gap-1.5 mt-10 mb-2 text-on-surface-variant opacity-60">
 <span class="material-symbols-outlined text-sm" data-icon="lock">lock</span>
@@ -315,5 +315,23 @@ if (document.getElementById('login-error-banner')) {
         });
     });
 }
+document.getElementById('login-form').addEventListener('submit', function(e) {
+    const btn = document.getElementById('login-submit-btn');
+    if (btn) {
+        btn.style.pointerEvents = 'none';
+        const textSpan = btn.querySelector('.btn-text');
+        if (textSpan) {
+            textSpan.textContent = 'Please wait...';
+        }
+        const iconSpan = btn.querySelector('.material-symbols-outlined');
+        if (iconSpan) {
+            iconSpan.textContent = 'sync';
+            iconSpan.classList.add('animate-spin');
+        }
+        setTimeout(() => {
+            btn.disabled = true;
+        }, 10);
+    }
+});
 </script>
 </body></html>

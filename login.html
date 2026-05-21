@@ -160,7 +160,7 @@
 <h2 class="font-h2 text-h2 text-on-background">Welcome to IMP</h2>
 <p class="font-body-md text-body-md text-on-surface-variant mt-2">Access your internship dashboard</p>
 </div>
-<form class="space-y-6" action="login.php" method="POST">
+<form id="login-form" class="space-y-6" action="login.php" method="POST">
 <div class="space-y-4">
 <div>
 <label class="block font-label-md text-label-md text-on-surface-variant mb-1.5">Email Address</label>
@@ -185,8 +185,28 @@
 <input class="w-4 h-4 rounded border-outline text-primary focus:ring-primary/20" id="remember" type="checkbox">
 <label class="ml-2 font-body-md text-body-md text-on-surface-variant" for="remember">Keep me logged in for 30 days</label>
 </div>
-<button type="submit" class="w-full py-3 bg-primary-container hover:bg-primary text-on-primary font-label-md text-label-md rounded-lg shadow-sm transition-colors flex items-center justify-center gap-2"><span class="">Sign In</span><span class="material-symbols-outlined text-lg" data-icon="arrow_forward">arrow_forward</span></button><p class="mt-4 text-center font-body-md text-body-md text-on-surface-variant opacity-75">Login for Students, HR, Mentors, and Companies</p>
+<button type="submit" id="login-submit-btn" class="w-full py-3 bg-primary-container hover:bg-primary text-on-primary font-label-md text-label-md rounded-lg shadow-sm transition-colors flex items-center justify-center gap-2"><span class="btn-text">Sign In</span><span class="material-symbols-outlined text-lg" data-icon="arrow_forward">arrow_forward</span></button><p class="mt-4 text-center font-body-md text-body-md text-on-surface-variant opacity-75">Login for Students, HR, Mentors, and Companies</p>
 </form>
+<script>
+document.getElementById('login-form').addEventListener('submit', function(e) {
+    const btn = document.getElementById('login-submit-btn');
+    if (btn) {
+        btn.style.pointerEvents = 'none';
+        const textSpan = btn.querySelector('.btn-text');
+        if (textSpan) {
+            textSpan.textContent = 'Please wait...';
+        }
+        const iconSpan = btn.querySelector('.material-symbols-outlined');
+        if (iconSpan) {
+            iconSpan.textContent = 'sync';
+            iconSpan.classList.add('animate-spin');
+        }
+        setTimeout(() => {
+            btn.disabled = true;
+        }, 10);
+    }
+});
+</script>
 <div class="flex items-center justify-center gap-1.5 mt-10 mb-2 text-on-surface-variant opacity-60">
 <span class="material-symbols-outlined text-sm" data-icon="lock">lock</span>
 <span class="font-label-sm text-label-sm">Your data is securely protected</span>

@@ -58,20 +58,6 @@ if (!$has_active) {
     exit();
 }
 
-// Ensure daily_logs table exists
-$log_table_sql = "CREATE TABLE IF NOT EXISTS daily_logs (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT NOT NULL,
-    internship_id INT NOT NULL,
-    tasks_completed TEXT NOT NULL,
-    time_spent DECIMAL(4,2) NOT NULL,
-    focus_level VARCHAR(50) NOT NULL,
-    issues_faced TEXT DEFAULT NULL,
-    next_plan TEXT DEFAULT NULL,
-    log_date DATE NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-)";
-mysqli_query($conn, $log_table_sql);
 
 // Handle Log Submission
 $success_msg = "";

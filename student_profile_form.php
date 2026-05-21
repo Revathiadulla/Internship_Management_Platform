@@ -105,7 +105,7 @@ if (empty($session_email) && $profile && isset($profile['email'])) {
     <!-- Minimal Navbar -->
     <header class="bg-white border-b border-slate-200 sticky top-0 z-50">
         <div class="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
-            <div class="flex items-center gap-2">
+            <a href="student_dashboard.php" class="flex items-center gap-2 hover:opacity-90 transition-opacity">
                 <svg class="w-8 h-8 text-blue-600 shrink-0" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <rect width="32" height="32" rx="8" fill="currentColor"/>
                     <circle cx="16" cy="16" r="3" fill="white"/>
@@ -121,7 +121,7 @@ if (empty($session_email) && $profile && isset($profile['email'])) {
                     <circle cx="8.5" cy="13.5" r="1.5" fill="white"/>
                 </svg>
                 <span class="text-xl font-bold text-blue-600 tracking-tight">IMP</span>
-            </div>
+            </a>
             <a href="login.php" class="text-sm font-medium text-slate-500 hover:text-slate-800 transition-colors">Save & Exit</a>
         </div>
     </header>
@@ -392,7 +392,7 @@ if (empty($session_email) && $profile && isset($profile['email'])) {
 
                 <!-- Actions -->
                 <div class="pt-6 border-t border-slate-200 flex flex-col-reverse sm:flex-row items-center justify-between gap-4">
-                    <button type="button" class="w-full sm:w-auto px-6 py-2.5 border border-slate-300 text-slate-700 font-medium rounded-lg hover:bg-slate-50 transition-colors">
+                    <button type="button" onclick="window.history.back();" class="w-full sm:w-auto px-6 py-2.5 border border-slate-300 text-slate-700 font-medium rounded-lg hover:bg-slate-50 transition-colors">
                         Back
                     </button>
                     <button type="submit" class="w-full sm:w-auto px-8 py-2.5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 shadow-sm shadow-blue-600/20 hover:shadow-md transition-all">

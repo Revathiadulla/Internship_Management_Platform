@@ -20,6 +20,7 @@ if (!$profile) {
 
 // Fetch student applications
 $app_sql = "SELECT a.id as app_id,
+                   a.internship_id,
                    COALESCE(i.title, a.internship_name) as title,
                    COALESCE(i.duration, '') as duration,
                    COALESCE(i.mode, '') as mode,
@@ -30,30 +31,38 @@ $app_sql = "SELECT a.id as app_id,
             WHERE a.user_id = '$user_id'
             ORDER BY a.applied_date DESC";
 $app_result = mysqli_query($conn, $app_sql);
-$app_count = mysqli_num_rows($app_result);
+$app_rows = [];
+$app_count = 0;
+$shortlist_count = 0;
+$has_active = false;
+$active_intern = null;
 
-// Fetch shortlisted count
-$shortlist_sql = "SELECT COUNT(*) as count FROM internship_applications WHERE user_id = '$user_id' AND (status = 'Shortlisted' OR status = 'Approved' OR status = 'Accepted' OR status = 'Started')";
-$shortlist_result = mysqli_query($conn, $shortlist_sql);
-$shortlist_row = mysqli_fetch_assoc($shortlist_result);
-$shortlist_count = $shortlist_row['count'];
+if ($app_result) {
+    while ($row = mysqli_fetch_assoc($app_result)) {
+        $app_rows[] = $row;
+        $st = $row['status'];
+        if ($st === 'Shortlisted' || $st === 'Approved' || $st === 'Accepted' || $st === 'Started' || $st === 'Internship Started' || $st === 'Active Intern') {
+            $shortlist_count++;
+        }
+        if (!$has_active && ($st === 'Started' || $st === 'Internship Started' || $st === 'Active Intern')) {
+            $has_active = true;
+            $active_intern = [
+                'app_id' => $row['app_id'],
+                'internship_id' => $row['internship_id'] ?: 0,
+                'title' => $row['title'],
+                'duration' => $row['duration'],
+                'mode' => $row['mode'],
+                'status' => $row['status'],
+                'applied_date' => $row['applied_date'],
+                'test_score' => $row['test_score'],
+                'education_status' => $row['education_status']
+            ];
+        }
+    }
+    $app_count = count($app_rows);
+}
 
 $total_logs = 0;
-
-// Fetch active started internship (Started status)
-$active_sql = "SELECT a.id as app_id,
-                      COALESCE(i.id, 0) as internship_id,
-                      COALESCE(i.title, a.internship_name) as title,
-                      COALESCE(i.duration, '') as duration,
-                      COALESCE(i.mode, '') as mode,
-                      a.status, a.applied_date, a.test_score, a.education_status
-               FROM internship_applications a
-               LEFT JOIN internships i ON a.internship_id = i.id AND a.internship_id > 0
-               WHERE a.user_id = '$user_id' AND (a.status = 'Started' OR a.status = 'Internship Started' OR a.status = 'Active Intern')
-               LIMIT 1";
-$active_result = mysqli_query($conn, $active_sql);
-$has_active = mysqli_num_rows($active_result) > 0;
-$active_intern = mysqli_fetch_assoc($active_result);
 
 // Derive company name and domain dynamically if active
 if ($has_active) {
@@ -121,19 +130,7 @@ if ($has_active) {
     $active_intern['current_phase_label'] = $phases[$current_phase_num]['label'];
 }
 
-// Ensure daily_logs table exists
-mysqli_query($conn, "CREATE TABLE IF NOT EXISTS daily_logs (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT NOT NULL,
-    internship_id INT NOT NULL,
-    tasks_completed TEXT NOT NULL,
-    time_spent DECIMAL(4,2) NOT NULL,
-    focus_level VARCHAR(50) NOT NULL,
-    issues_faced TEXT DEFAULT NULL,
-    next_plan TEXT DEFAULT NULL,
-    log_date DATE NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-)");
+
 
 $weekly_hours = 0.0;
 $recent_logs  = [];
@@ -155,15 +152,7 @@ if ($has_active) {
     $days_active = $date_start->diff($date_today)->days + 1;
 }
 
-// Ensure student_notifications table exists
-mysqli_query($conn, "CREATE TABLE IF NOT EXISTS student_notifications (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT NOT NULL,
-    type VARCHAR(50) NOT NULL,
-    message TEXT NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    is_read TINYINT(1) DEFAULT 0
-)");
+
 
 // Fetch unread notifications count
 $unread_sql   = "SELECT COUNT(*) as count FROM student_notifications WHERE user_id = '$user_id' AND is_read = 0";
@@ -196,16 +185,7 @@ if ($timeline_app) {
     }
 }
 
-// Ensure mentor_feedback table exists
-mysqli_query($conn, "CREATE TABLE IF NOT EXISTS mentor_feedback (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT NOT NULL,
-    feedback_title VARCHAR(200) DEFAULT NULL,
-    given_by VARCHAR(100) DEFAULT NULL,
-    comments TEXT DEFAULT NULL,
-    rating INT DEFAULT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-)");
+
 $feedback_sql    = "SELECT * FROM mentor_feedback WHERE user_id = '$user_id' ORDER BY created_at DESC";
 $feedback_result = mysqli_query($conn, $feedback_sql);
 $feedback_count  = mysqli_num_rows($feedback_result);
@@ -793,7 +773,7 @@ if ($has_active) {
             <h3 class="font-bold text-slate-800 text-sm">Recent Applications</h3>
             <a href="student_applications.php" class="text-blue-600 text-xs font-bold hover:underline">View All →</a>
           </div>
-          <?php mysqli_data_seek($app_result,0); $app_rows=[]; while($r=mysqli_fetch_assoc($app_result)) $app_rows[]=$r; ?>
+          <?php // $app_rows is already populated at the top of the file ?>
           <?php if(count($app_rows)===0): ?>
           <div class="text-center py-8 bg-slate-50 rounded-xl border border-dashed border-slate-200">
             <span class="material-symbols-outlined text-[32px] text-slate-300 block mb-2">assignment_late</span>

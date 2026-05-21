@@ -208,7 +208,7 @@ $old_role     = isset($_GET['role'])      ? htmlspecialchars($_GET['role'])     
                 <p class="font-body-md text-body-md text-on-surface-variant mt-2">Start your journey with the world's
                     most trusted internship ecosystem.</p>
             </div>
-            <form class="space-y-6" action="register.php" method="POST">
+            <form id="register-form" class="space-y-6" action="register.php" method="POST">
                 <!-- Name & Credentials -->
                 <div class="space-y-4">
                     <div class="space-y-2">
@@ -361,9 +361,10 @@ $old_role     = isset($_GET['role'])      ? htmlspecialchars($_GET['role'])     
                     </div>
                     <?php endif; ?>
                     <button
-                        class="w-full bg-primary text-on-primary py-4 rounded-lg font-label-md text-label-md hover:bg-primary-container hover:shadow-lg transition-all active:scale-[0.98] shadow-md"
+                        id="register-submit-btn"
+                        class="w-full bg-primary text-on-primary py-4 rounded-lg font-label-md text-label-md hover:bg-primary-container hover:shadow-lg transition-all active:scale-[0.98] shadow-md flex items-center justify-center gap-2"
                         type="submit">
-                        Create Account
+                        <span class="btn-text">Create Account</span>
                     </button>
                 </div>
             </form>
@@ -416,6 +417,25 @@ $old_role     = isset($_GET['role'])      ? htmlspecialchars($_GET['role'])     
 
 
 
+    <script>
+    document.getElementById('register-form').addEventListener('submit', function(e) {
+        const btn = document.getElementById('register-submit-btn');
+        if (btn) {
+            btn.style.pointerEvents = 'none';
+            const textSpan = btn.querySelector('.btn-text');
+            if (textSpan) {
+                textSpan.textContent = 'Creating account...';
+            }
+            const spinner = document.createElement('span');
+            spinner.className = 'material-symbols-outlined text-lg animate-spin';
+            spinner.textContent = 'sync';
+            btn.appendChild(spinner);
+            setTimeout(() => {
+                btn.disabled = true;
+            }, 10);
+        }
+    });
+    </script>
 </body>
 
 </html>

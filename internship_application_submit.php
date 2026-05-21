@@ -105,15 +105,6 @@ $update_profile_sql = "UPDATE student_profiles SET
     WHERE id = '$profile_id' AND user_id = '$user_id'";
 mysqli_query($conn, $update_profile_sql);
 
-// ── Ensure new columns exist in internship_applications ──
-// (db.php handles most, but pan_number / pan_masked may need adding)
-$pan_cols = ['pan_number' => "VARCHAR(10) DEFAULT NULL", 'pan_masked' => "VARCHAR(15) DEFAULT NULL", 'pan_file' => "VARCHAR(255) DEFAULT NULL"];
-foreach ($pan_cols as $col => $def) {
-    $chk = mysqli_query($conn, "SHOW COLUMNS FROM internship_applications LIKE '$col'");
-    if (mysqli_num_rows($chk) == 0) {
-        mysqli_query($conn, "ALTER TABLE internship_applications ADD COLUMN $col $def");
-    }
-}
 
 // ── Insert application ──
 $insert_sql = "INSERT INTO internship_applications (

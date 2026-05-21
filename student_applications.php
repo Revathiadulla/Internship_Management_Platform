@@ -33,16 +33,6 @@ $app_sql = "SELECT a.id as app_id,
             ORDER BY a.applied_date DESC";
 $app_result = mysqli_query($conn, $app_sql);
 $app_count = mysqli_num_rows($app_result);
-// Ensure student_notifications table exists
-$table_check_sql = "CREATE TABLE IF NOT EXISTS student_notifications (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT NOT NULL,
-    type VARCHAR(50) NOT NULL,
-    message TEXT NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    is_read TINYINT(1) DEFAULT 0
-)";
-mysqli_query($conn, $table_check_sql);
 
 // Fetch unread notifications count
 $unread_sql = "SELECT COUNT(*) as count FROM student_notifications WHERE user_id = '$user_id' AND is_read = 0";

@@ -80,21 +80,26 @@ if (mysqli_num_rows($check_cols) == 0) {
 
 // 2. Check/Add smart-form columns in internship_applications
 $new_cols = [
-    "education_status"   => "VARCHAR(20) DEFAULT NULL",
-    "department"         => "VARCHAR(100) DEFAULT NULL",
-    "hod_name"           => "VARCHAR(100) DEFAULT NULL",
-    "hod_email"          => "VARCHAR(100) DEFAULT NULL",
-    "graduation_year"    => "VARCHAR(10) DEFAULT NULL",
-    "prev_college_name"  => "VARCHAR(150) DEFAULT NULL",
-    "aadhaar_number"     => "VARCHAR(20) DEFAULT NULL",
-    "resume_file"        => "VARCHAR(255) DEFAULT NULL",
-    "preferred_domain"   => "VARCHAR(100) DEFAULT NULL",
-    "project_interests"  => "TEXT DEFAULT NULL",
-    "pan_number"         => "VARCHAR(10) DEFAULT NULL",
-    "pan_masked"         => "VARCHAR(15) DEFAULT NULL",
-    "pan_file"           => "VARCHAR(255) DEFAULT NULL",
-    "college_name"       => "VARCHAR(150) DEFAULT NULL",
-    "year_of_study"      => "VARCHAR(30) DEFAULT NULL",
+    "education_status"    => "VARCHAR(20) DEFAULT NULL",
+    "department"          => "VARCHAR(100) DEFAULT NULL",
+    "hod_name"            => "VARCHAR(100) DEFAULT NULL",
+    "hod_email"           => "VARCHAR(100) DEFAULT NULL",
+    "graduation_year"     => "VARCHAR(10) DEFAULT NULL",
+    "prev_college_name"   => "VARCHAR(150) DEFAULT NULL",
+    "aadhaar_number"      => "VARCHAR(20) DEFAULT NULL",
+    "resume_file"         => "VARCHAR(255) DEFAULT NULL",
+    "preferred_domain"    => "VARCHAR(100) DEFAULT NULL",
+    "project_interests"   => "TEXT DEFAULT NULL",
+    "pan_number"          => "VARCHAR(10) DEFAULT NULL",
+    "pan_masked"          => "VARCHAR(15) DEFAULT NULL",
+    "pan_file"            => "VARCHAR(255) DEFAULT NULL",
+    "college_name"        => "VARCHAR(150) DEFAULT NULL",
+    "year_of_study"       => "VARCHAR(30) DEFAULT NULL",
+    "status"              => "VARCHAR(50) DEFAULT 'Applied'",
+    "internship_name"     => "VARCHAR(255) DEFAULT NULL",
+    "preferred_duration"  => "VARCHAR(100) DEFAULT NULL",
+    "reason_for_applying" => "TEXT DEFAULT NULL",
+    "relevant_skills"     => "TEXT DEFAULT NULL",
 ];
 foreach ($new_cols as $col => $definition) {
     $chk = mysqli_query($conn, "SHOW COLUMNS FROM internship_applications LIKE '$col'");
@@ -154,6 +159,44 @@ $email_log_table = "CREATE TABLE IF NOT EXISTS email_notifications_log (
     sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )";
 executeSetupQuery($conn, $email_log_table, "Creating email_notifications_log table", $errors, $is_cli);
+
+// 6. Create daily_logs table
+$daily_logs_table = "CREATE TABLE IF NOT EXISTS daily_logs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    internship_id INT NOT NULL,
+    tasks_completed TEXT NOT NULL,
+    time_spent DECIMAL(4,2) NOT NULL,
+    focus_level VARCHAR(50) NOT NULL,
+    issues_faced TEXT DEFAULT NULL,
+    next_plan TEXT DEFAULT NULL,
+    log_date DATE NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)";
+executeSetupQuery($conn, $daily_logs_table, "Creating daily_logs table", $errors, $is_cli);
+
+// 7. Create student_notifications table
+$student_notif_table = "CREATE TABLE IF NOT EXISTS student_notifications (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    type VARCHAR(50) NOT NULL,
+    message TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    is_read TINYINT(1) DEFAULT 0
+)";
+executeSetupQuery($conn, $student_notif_table, "Creating student_notifications table", $errors, $is_cli);
+
+// 8. Create mentor_feedback table
+$mentor_feedback_table = "CREATE TABLE IF NOT EXISTS mentor_feedback (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    feedback_title VARCHAR(200) DEFAULT NULL,
+    given_by VARCHAR(100) DEFAULT NULL,
+    comments TEXT DEFAULT NULL,
+    rating INT DEFAULT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)";
+executeSetupQuery($conn, $mentor_feedback_table, "Creating mentor_feedback table", $errors, $is_cli);
 
 if (!$is_cli) {
     echo "</div>";
