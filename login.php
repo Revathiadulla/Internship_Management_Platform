@@ -1,6 +1,7 @@
-﻿<?php
+<?php
+ob_start();
 session_start();
-include "db.php";
+include 'db.php';
 
 // ── POST: process login ──
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
