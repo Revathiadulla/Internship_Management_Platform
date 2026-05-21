@@ -4,6 +4,13 @@
  * Centralized email sending and logging engine for IMP.
  */
 
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception;
+
+require_once __DIR__ . '/PHPMailer/Exception.php';
+require_once __DIR__ . '/PHPMailer/PHPMailer.php';
+require_once __DIR__ . '/PHPMailer/SMTP.php';
+
 if (!class_exists('SimpleSMTP')) {
     class SimpleSMTP {
         private $host;
@@ -200,6 +207,48 @@ if (!class_exists('SimpleSMTP')) {
 
         private function encodeHeader($str) {
             return "=?UTF-8?B?" . base64_encode($str) . "?=";
+        }
+    }
+}
+
+if (!function_exists('sendEmail')) {
+    /**
+     * Reusable email sending function using PHPMailer SMTP.
+     *
+     * @param string $toEmail
+     * @param string $toName
+     * @param string $subject
+     * @param string $body
+     * @return bool True on success, false on failure
+     */
+    function sendEmail($toEmail, $toName, $subject, $body) {
+        $mail = new PHPMailer(true);
+        try {
+            $mail->isSMTP();
+            $mail->Host       = 'smtp.gmail.com';
+            $mail->SMTPAuth   = true;
+            $mail->Username   = getenv("MAIL_USERNAME");
+            $mail->Password   = getenv("MAIL_PASSWORD");
+            $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+            $mail->Port       = 587;
+
+            $mail->CharSet = 'UTF-8';
+
+            $fromName = getenv("MAIL_FROM_NAME") ?: "IMP";
+            $mail->setFrom(getenv("MAIL_USERNAME"), $fromName);
+            $mail->addAddress($toEmail, $toName);
+
+            $mail->isHTML(true);
+            $mail->Subject = $subject;
+            $mail->Body    = $body;
+
+            $mail->send();
+            return true;
+        } catch (Exception $e) {
+            $logPath = __DIR__ . "/../email_notifications.log";
+            $errorMessage = "[" . date('Y-m-d H:i:s') . "] PHPMailer sending failed to $toEmail. Error: " . $mail->ErrorInfo . "\n";
+            @file_put_contents($logPath, $errorMessage, FILE_APPEND);
+            return false;
         }
     }
 }
@@ -435,45 +484,10 @@ if (!function_exists('sendEmailNotification')) {
 </body>
 </html>';
 
-        // Read SMTP environment variables
-        $smtp_host = getenv('SMTP_HOST') ?: ($_ENV['SMTP_HOST'] ?? ($_SERVER['SMTP_HOST'] ?? ''));
-        $smtp_port = getenv('SMTP_PORT') ?: ($_ENV['SMTP_PORT'] ?? ($_SERVER['SMTP_PORT'] ?? ''));
-        $smtp_user = getenv('SMTP_USER') ?: ($_ENV['SMTP_USER'] ?? ($_SERVER['SMTP_USER'] ?? ''));
-        $smtp_pass = getenv('SMTP_PASSWORD') ?: ($_ENV['SMTP_PASSWORD'] ?? ($_SERVER['SMTP_PASSWORD'] ?? ''));
-        $smtp_secure = getenv('SMTP_SECURE') ?: ($_ENV['SMTP_SECURE'] ?? ($_SERVER['SMTP_SECURE'] ?? ''));
-        $smtp_from_email = getenv('SMTP_FROM_EMAIL') ?: ($_ENV['SMTP_FROM_EMAIL'] ?? ($_SERVER['SMTP_FROM_EMAIL'] ?? 'no-reply@imp-platform.com'));
-        $smtp_from_name = getenv('SMTP_FROM_NAME') ?: ($_ENV['SMTP_FROM_NAME'] ?? ($_SERVER['SMTP_FROM_NAME'] ?? 'IMP'));
-
-        if (empty($smtp_port)) {
-            $smtp_port = (strtolower($smtp_secure) === 'ssl') ? 465 : 587;
-        }
-
-        $final_status = 'Sent';
-        $smtp_logs = '';
-        $engine_info = '';
-
-        if (!empty($smtp_host)) {
-            $smtp = new SimpleSMTP($smtp_host, $smtp_port, $smtp_user, $smtp_pass, $smtp_secure);
-            $sent = $smtp->send($email, $smtp_from_email, $smtp_from_name, $subject, $htmlBody);
-            if ($sent) {
-                $final_status = 'Sent';
-                $engine_info = "Sent via SMTP ({$smtp_host}:{$smtp_port})";
-            } else {
-                $final_status = 'Failed';
-                $engine_info = "Failed via SMTP ({$smtp_host}:{$smtp_port})";
-            }
-            $smtp_logs = $smtp->getLogs();
-        } else {
-            // Fall back to native mail
-            $headers = "MIME-Version: 1.0" . "\r\n";
-            $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
-            $headers .= "From: IMP <" . $smtp_from_email . ">" . "\r\n";
-            
-            $sent = @mail($email, $subject, $htmlBody, $headers);
-            $final_status = $sent ? 'Sent' : 'Failed';
-            $engine_info = "Sent via native PHP mail()";
-            $smtp_logs = "No SMTP Host configured. Fell back to native mail().";
-        }
+        $sent = sendEmail($email, $fullName, $subject, $htmlBody);
+        $final_status = $sent ? 'Sent' : 'Failed';
+        $engine_info = "Sent via PHPMailer SMTP (smtp.gmail.com:587)";
+        $smtp_logs = $sent ? "PHPMailer sent successfully." : "PHPMailer sending failed. Check email_notifications.log.";
 
         // 3. Log to Database
         $esc_user_id = $user_id !== null ? $user_id : 'NULL';
