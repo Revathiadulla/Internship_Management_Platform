@@ -145,8 +145,23 @@ $old_role     = isset($_GET['role'])      ? htmlspecialchars($_GET['role'])     
         class="hidden md:flex md:w-5/12 lg:w-1/2 bg-primary relative overflow-hidden flex-col justify-between p-12">
         <div class="relative z-10">
             <div class="mb-12">
-                <a href="index.html"
-                    class="font-h1 text-h1 text-on-primary tracking-tighter hover:opacity-80 transition-opacity cursor-pointer">IMP</a>
+                <a href="index.html" class="flex items-center gap-2 hover:opacity-95 transition-opacity">
+                    <svg class="w-8 h-8 text-white shrink-0" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect width="32" height="32" rx="8" fill="currentColor"/>
+                        <circle cx="16" cy="16" r="3" fill="#003594"/>
+                        <line x1="16" y1="13" x2="16" y2="9" stroke="#003594" stroke-width="1.5"/>
+                        <circle cx="16" cy="8" r="1.5" fill="#003594"/>
+                        <line x1="18.5" y1="15.1" x2="22.5" y2="13.8" stroke="#003594" stroke-width="1.5"/>
+                        <circle cx="23.5" cy="13.5" r="1.5" fill="#003594"/>
+                        <line x1="17.8" y1="18.4" x2="20.0" y2="21.5" stroke="#003594" stroke-width="1.5"/>
+                        <circle cx="20.7" cy="22.5" r="1.5" fill="#003594"/>
+                        <line x1="14.2" y1="18.4" x2="12.0" y2="21.5" stroke="#003594" stroke-width="1.5"/>
+                        <circle cx="11.3" cy="22.5" r="1.5" fill="#003594"/>
+                        <line x1="13.5" y1="15.1" x2="9.5" y2="13.8" stroke="#003594" stroke-width="1.5"/>
+                        <circle cx="8.5" cy="13.5" r="1.5" fill="#003594"/>
+                    </svg>
+                    <span class="text-2xl font-bold text-white tracking-tight">IMP</span>
+                </a>
                 <p class="font-body-lg text-body-lg text-primary-fixed-dim mt-2 max-w-md">Bridging the gap between
                     academic ambition and corporate professionalism with structured opportunity.</p>
             </div>

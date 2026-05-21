@@ -109,14 +109,25 @@
 <body class="bg-surface text-on-surface font-body-md overflow-x-hidden">
 <!-- SideNavBar -->
 <aside class="fixed left-0 top-0 h-screen w-60 z-50 bg-gray-50 border-r border-gray-200 flex flex-col h-full py-6 font-sans text-sm font-medium">
-<div class="px-6 mb-8 flex items-center gap-3">
-<div class="w-10 h-10 bg-primary-container rounded-lg flex items-center justify-center">
-<span class="material-symbols-outlined text-on-primary-container" data-icon="school">school</span>
-</div>
-<div>
-<h2 class="text-lg font-black tracking-tight text-blue-600 leading-tight">Admin Panel</h2>
-<p class="text-[10px] uppercase tracking-widest text-secondary font-bold">Management Console</p>
-</div>
+<div class="px-6 mb-8">
+    <a href="index.html" class="flex items-center gap-2 hover:opacity-95 transition-opacity">
+        <svg class="w-8 h-8 text-blue-600 shrink-0" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect width="32" height="32" rx="8" fill="currentColor"/>
+            <circle cx="16" cy="16" r="3" fill="white"/>
+            <line x1="16" y1="13" x2="16" y2="9" stroke="white" stroke-width="1.5"/>
+            <circle cx="16" cy="8" r="1.5" fill="white"/>
+            <line x1="18.5" y1="15.1" x2="22.5" y2="13.8" stroke="white" stroke-width="1.5"/>
+            <circle cx="23.5" cy="13.5" r="1.5" fill="white"/>
+            <line x1="17.8" y1="18.4" x2="20.0" y2="21.5" stroke="white" stroke-width="1.5"/>
+            <circle cx="20.7" cy="22.5" r="1.5" fill="white"/>
+            <line x1="14.2" y1="18.4" x2="12.0" y2="21.5" stroke="white" stroke-width="1.5"/>
+            <circle cx="11.3" cy="22.5" r="1.5" fill="white"/>
+            <line x1="13.5" y1="15.1" x2="9.5" y2="13.8" stroke="white" stroke-width="1.5"/>
+            <circle cx="8.5" cy="13.5" r="1.5" fill="white"/>
+        </svg>
+        <span class="text-xl font-bold text-blue-600 tracking-tight">IMP</span>
+    </a>
+    <p class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-2 ml-1">HR Portal</p>
 </div>
 <nav class="flex-1 flex flex-col gap-1">
 <div class="flex items-center gap-3 bg-blue-50 text-blue-700 border-l-4 border-blue-600 px-4 py-3 cursor-pointer duration-200 ease-in-out">
@@ -160,7 +171,23 @@
 <!-- TopNavBar -->
 <header class="w-full sticky top-0 z-40 bg-white border-b border-gray-200 shadow-sm flex items-center justify-between px-6 py-3 font-sans antialiased text-sm">
 <div class="flex items-center gap-8">
-<a href="index.html" class="text-xl font-bold text-blue-600 hover:opacity-80 transition-opacity cursor-pointer block">IMP</a>
+<a href="index.html" class="flex items-center gap-2 hover:opacity-95 transition-opacity">
+    <svg class="w-8 h-8 text-blue-600 shrink-0" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="32" height="32" rx="8" fill="currentColor"/>
+        <circle cx="16" cy="16" r="3" fill="white"/>
+        <line x1="16" y1="13" x2="16" y2="9" stroke="white" stroke-width="1.5"/>
+        <circle cx="16" cy="8" r="1.5" fill="white"/>
+        <line x1="18.5" y1="15.1" x2="22.5" y2="13.8" stroke="white" stroke-width="1.5"/>
+        <circle cx="23.5" cy="13.5" r="1.5" fill="white"/>
+        <line x1="17.8" y1="18.4" x2="20.0" y2="21.5" stroke="white" stroke-width="1.5"/>
+        <circle cx="20.7" cy="22.5" r="1.5" fill="white"/>
+        <line x1="14.2" y1="18.4" x2="12.0" y2="21.5" stroke="white" stroke-width="1.5"/>
+        <circle cx="11.3" cy="22.5" r="1.5" fill="white"/>
+        <line x1="13.5" y1="15.1" x2="9.5" y2="13.8" stroke="white" stroke-width="1.5"/>
+        <circle cx="8.5" cy="13.5" r="1.5" fill="white"/>
+    </svg>
+    <span class="text-xl font-bold text-blue-600 tracking-tight">IMP</span>
+</a>
 <div class="relative w-80">
 <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-lg" data-icon="search">search</span>
 <input class="w-full bg-gray-50 border border-gray-200 rounded-lg pl-10 pr-4 py-2 focus:ring-2 focus:ring-primary-container focus:border-transparent outline-none transition-all text-body-md" placeholder="Search candidates, skills, or colleges..." type="text">

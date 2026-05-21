@@ -4,6 +4,206 @@
  * Centralized email sending and logging engine for IMP.
  */
 
+if (!class_exists('SimpleSMTP')) {
+    class SimpleSMTP {
+        private $host;
+        private $port;
+        private $user;
+        private $password;
+        private $secure; // 'tls', 'ssl', or ''
+        private $timeout = 10;
+        private $logs = [];
+
+        public function __construct($host, $port, $user, $password, $secure = '') {
+            $this->host = $host;
+            $this->port = $port;
+            $this->user = $user;
+            $this->password = $password;
+            $this->secure = strtolower($secure);
+        }
+
+        public function getLogs() {
+            return implode("\n", $this->logs);
+        }
+
+        private function log($message) {
+            $this->logs[] = $message;
+        }
+
+        public function send($to, $fromEmail, $fromName, $subject, $htmlBody, $plainText = '') {
+            $host = $this->host;
+            if ($this->secure === 'ssl') {
+                $host = 'ssl://' . $host;
+            }
+
+            $socket = @fsockopen($host, $this->port, $errno, $errstr, $this->timeout);
+            if (!$socket) {
+                $this->log("Failed to connect to $host:{$this->port}. Error: $errstr ($errno)");
+                return false;
+            }
+
+            $this->log("Connected to $host:{$this->port}");
+
+            if (!$this->expect($socket, 220)) {
+                fclose($socket);
+                return false;
+            }
+
+            $hello = 'EHLO ' . (isset($_SERVER['SERVER_NAME']) ? $_SERVER['SERVER_NAME'] : 'localhost');
+            fwrite($socket, $hello . "\r\n");
+            $this->log("> " . $hello);
+            if (!$this->expect($socket, 250)) {
+                fclose($socket);
+                return false;
+            }
+
+            // Handle STARTTLS
+            if ($this->secure === 'tls') {
+                fwrite($socket, "STARTTLS\r\n");
+                $this->log("> STARTTLS");
+                if (!$this->expect($socket, 220)) {
+                    fclose($socket);
+                    return false;
+                }
+
+                // Enable crypto
+                $crypto_method = STREAM_CRYPTO_METHOD_TLS_CLIENT;
+                if (defined('STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT')) {
+                    $crypto_method |= STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT;
+                }
+                if (defined('STREAM_CRYPTO_METHOD_TLSv1_1_CLIENT')) {
+                    $crypto_method |= STREAM_CRYPTO_METHOD_TLSv1_1_CLIENT;
+                }
+
+                if (!@stream_socket_enable_crypto($socket, true, $crypto_method)) {
+                    $this->log("Failed to enable crypto/STARTTLS");
+                    fclose($socket);
+                    return false;
+                }
+
+                // EHLO again after TLS started
+                fwrite($socket, $hello . "\r\n");
+                $this->log("> " . $hello);
+                if (!$this->expect($socket, 250)) {
+                    fclose($socket);
+                    return false;
+                }
+            }
+
+            // Authenticate
+            if ($this->user && $this->password) {
+                fwrite($socket, "AUTH LOGIN\r\n");
+                $this->log("> AUTH LOGIN");
+                if (!$this->expect($socket, 334)) {
+                    fclose($socket);
+                    return false;
+                }
+
+                $user64 = base64_encode($this->user);
+                fwrite($socket, $user64 . "\r\n");
+                $this->log("> [username encoded]");
+                if (!$this->expect($socket, 334)) {
+                    fclose($socket);
+                    return false;
+                }
+
+                $pass64 = base64_encode($this->password);
+                fwrite($socket, $pass64 . "\r\n");
+                $this->log("> [password encoded]");
+                if (!$this->expect($socket, 235)) {
+                    fclose($socket);
+                    return false;
+                }
+            }
+
+            // MAIL FROM
+            fwrite($socket, "MAIL FROM:<" . $fromEmail . ">\r\n");
+            $this->log("> MAIL FROM:<" . $fromEmail . ">");
+            if (!$this->expect($socket, 250)) {
+                fclose($socket);
+                return false;
+            }
+
+            // RCPT TO
+            fwrite($socket, "RCPT TO:<" . $to . ">\r\n");
+            $this->log("> RCPT TO:<" . $to . ">");
+            if (!$this->expect($socket, 250)) {
+                fclose($socket);
+                return false;
+            }
+
+            // DATA
+            fwrite($socket, "DATA\r\n");
+            $this->log("> DATA");
+            if (!$this->expect($socket, 354)) {
+                fclose($socket);
+                return false;
+            }
+
+            // Prepare MIME Content
+            $boundary = 'imp_mail_boundary_' . md5(uniqid(time()));
+            
+            $headers = [];
+            $headers[] = "MIME-Version: 1.0";
+            $headers[] = "From: " . $this->encodeHeader($fromName) . " <" . $fromEmail . ">";
+            $headers[] = "To: <" . $to . ">";
+            $headers[] = "Subject: " . $this->encodeHeader($subject);
+            $headers[] = "Date: " . date('r');
+            $headers[] = "Content-Type: multipart/alternative; boundary=\"" . $boundary . "\"";
+            $headers[] = "X-Mailer: IMP PHP Mailer";
+            
+            if (empty($plainText)) {
+                $plainText = strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $htmlBody));
+            }
+
+            $bodyContent = "--" . $boundary . "\r\n";
+            $bodyContent .= "Content-Type: text/plain; charset=UTF-8\r\n";
+            $bodyContent .= "Content-Transfer-Encoding: 7bit\r\n\r\n";
+            $bodyContent .= $plainText . "\r\n\r\n";
+            
+            $bodyContent .= "--" . $boundary . "\r\n";
+            $bodyContent .= "Content-Type: text/html; charset=UTF-8\r\n";
+            $bodyContent .= "Content-Transfer-Encoding: 8bit\r\n\r\n";
+            $bodyContent .= $htmlBody . "\r\n\r\n";
+            $bodyContent .= "--" . $boundary . "--\r\n";
+
+            $fullPayload = implode("\r\n", $headers) . "\r\n\r\n" . $bodyContent . "\r\n.\r\n";
+
+            fwrite($socket, $fullPayload);
+            $this->log("> [Sent Data Payload]");
+
+            if (!$this->expect($socket, 250)) {
+                fclose($socket);
+                return false;
+            }
+
+            fwrite($socket, "QUIT\r\n");
+            $this->log("> QUIT");
+            $this->expect($socket, 221);
+
+            fclose($socket);
+            return true;
+        }
+
+        private function expect($socket, $expectedCode) {
+            $response = '';
+            while ($line = fgets($socket, 512)) {
+                $response .= $line;
+                $this->log("< " . trim($line));
+                if (substr($line, 3, 1) === ' ') {
+                    break;
+                }
+            }
+            $code = intval(substr($response, 0, 3));
+            return $code === $expectedCode;
+        }
+
+        private function encodeHeader($str) {
+            return "=?UTF-8?B?" . base64_encode($str) . "?=";
+        }
+    }
+}
+
 if (!function_exists('sendEmailNotification')) {
     /**
      * Sends a premium HTML email notification and logs it to db/file system.
@@ -83,7 +283,7 @@ if (!function_exists('sendEmailNotification')) {
             border-radius: 16px;
             overflow: hidden;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
-            border: 1px border #e2e8f0;
+            border: 1px solid #e2e8f0;
         }
         .header {
             background-color: #0f172a;
@@ -235,6 +435,46 @@ if (!function_exists('sendEmailNotification')) {
 </body>
 </html>';
 
+        // Read SMTP environment variables
+        $smtp_host = getenv('SMTP_HOST') ?: ($_ENV['SMTP_HOST'] ?? ($_SERVER['SMTP_HOST'] ?? ''));
+        $smtp_port = getenv('SMTP_PORT') ?: ($_ENV['SMTP_PORT'] ?? ($_SERVER['SMTP_PORT'] ?? ''));
+        $smtp_user = getenv('SMTP_USER') ?: ($_ENV['SMTP_USER'] ?? ($_SERVER['SMTP_USER'] ?? ''));
+        $smtp_pass = getenv('SMTP_PASSWORD') ?: ($_ENV['SMTP_PASSWORD'] ?? ($_SERVER['SMTP_PASSWORD'] ?? ''));
+        $smtp_secure = getenv('SMTP_SECURE') ?: ($_ENV['SMTP_SECURE'] ?? ($_SERVER['SMTP_SECURE'] ?? ''));
+        $smtp_from_email = getenv('SMTP_FROM_EMAIL') ?: ($_ENV['SMTP_FROM_EMAIL'] ?? ($_SERVER['SMTP_FROM_EMAIL'] ?? 'no-reply@imp-platform.com'));
+        $smtp_from_name = getenv('SMTP_FROM_NAME') ?: ($_ENV['SMTP_FROM_NAME'] ?? ($_SERVER['SMTP_FROM_NAME'] ?? 'IMP'));
+
+        if (empty($smtp_port)) {
+            $smtp_port = (strtolower($smtp_secure) === 'ssl') ? 465 : 587;
+        }
+
+        $final_status = 'Sent';
+        $smtp_logs = '';
+        $engine_info = '';
+
+        if (!empty($smtp_host)) {
+            $smtp = new SimpleSMTP($smtp_host, $smtp_port, $smtp_user, $smtp_pass, $smtp_secure);
+            $sent = $smtp->send($email, $smtp_from_email, $smtp_from_name, $subject, $htmlBody);
+            if ($sent) {
+                $final_status = 'Sent';
+                $engine_info = "Sent via SMTP ({$smtp_host}:{$smtp_port})";
+            } else {
+                $final_status = 'Failed';
+                $engine_info = "Failed via SMTP ({$smtp_host}:{$smtp_port})";
+            }
+            $smtp_logs = $smtp->getLogs();
+        } else {
+            // Fall back to native mail
+            $headers = "MIME-Version: 1.0" . "\r\n";
+            $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
+            $headers .= "From: IMP <" . $smtp_from_email . ">" . "\r\n";
+            
+            $sent = @mail($email, $subject, $htmlBody, $headers);
+            $final_status = $sent ? 'Sent' : 'Failed';
+            $engine_info = "Sent via native PHP mail()";
+            $smtp_logs = "No SMTP Host configured. Fell back to native mail().";
+        }
+
         // 3. Log to Database
         $esc_user_id = $user_id !== null ? $user_id : 'NULL';
         $esc_email = mysqli_real_escape_string($conn, $email);
@@ -242,33 +482,29 @@ if (!function_exists('sendEmailNotification')) {
         $esc_subject = mysqli_real_escape_string($conn, $subject);
         $esc_msg = mysqli_real_escape_string($conn, $messageText);
         $esc_html = mysqli_real_escape_string($conn, $htmlBody);
+        $esc_status = mysqli_real_escape_string($conn, $final_status);
 
         $log_sql = "INSERT INTO email_notifications_log 
                     (user_id, recipient_email, recipient_name, subject, message_text, html_body, status) 
-                    VALUES ($esc_user_id, '$esc_email', '$esc_name', '$esc_subject', '$esc_msg', '$esc_html', 'Sent')";
+                    VALUES ($esc_user_id, '$esc_email', '$esc_name', '$esc_subject', '$esc_msg', '$esc_html', '$esc_status')";
         mysqli_query($conn, $log_sql);
 
         // 4. Log to File System for easy sandbox verification
         $log_file = __DIR__ . "/../email_notifications.log";
         $file_log = "========================================================================\n";
-        $file_log .= "[" . date('Y-m-d H:i:s') . "] OUTGOING EMAIL\n";
+        $file_log .= "[" . date('Y-m-d H:i:s') . "] OUTGOING EMAIL - STATUS: " . $final_status . "\n";
+        $file_log .= "ENGINE: " . $engine_info . "\n";
         $file_log .= "TO: " . $email . " (" . $fullName . ") [ID: " . ($user_id ?: 'N/A') . "]\n";
         $file_log .= "SUBJECT: " . $subject . "\n";
         $file_log .= "MESSAGE TEXT: " . $messageText . "\n";
         $file_log .= "METADATA: " . json_encode($metadata) . "\n";
         $file_log .= "------------------------------------------------------------------------\n";
+        $file_log .= "SMTP LOGS:\n" . $smtp_logs . "\n";
+        $file_log .= "------------------------------------------------------------------------\n";
         $file_log .= "HTML body generated (" . strlen($htmlBody) . " bytes).\n";
         $file_log .= "========================================================================\n\n";
         @file_put_contents($log_file, $file_log, FILE_APPEND);
 
-        // 5. Send via native PHP mail function
-        $headers = "MIME-Version: 1.0" . "\r\n";
-        $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
-        $headers .= "From: IMP Notifications <no-reply@imp-platform.com>" . "\r\n";
-        
-        // Suppress warning in case sendmail is not set up on local Windows/XAMPP
-        @mail($email, $subject, $htmlBody, $headers);
-
-        return true;
+        return $sent;
     }
 }

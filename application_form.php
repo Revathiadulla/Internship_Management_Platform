@@ -27,8 +27,21 @@ $session_email = isset($_SESSION['email']) ? $_SESSION['email'] : "";
     <header class="bg-white border-b border-slate-200 sticky top-0 z-50">
         <div class="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
             <div class="flex items-center gap-2">
-                <div class="w-8 h-8 bg-blue-600 rounded flex items-center justify-center text-white font-bold text-xl shadow-sm">I</div>
-                <span class="text-xl font-bold text-slate-800 tracking-tight">IMP</span>
+                <svg class="w-8 h-8 text-blue-600 shrink-0" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect width="32" height="32" rx="8" fill="currentColor"/>
+                    <circle cx="16" cy="16" r="3" fill="white"/>
+                    <line x1="16" y1="13" x2="16" y2="9" stroke="white" stroke-width="1.5"/>
+                    <circle cx="16" cy="8" r="1.5" fill="white"/>
+                    <line x1="18.5" y1="15.1" x2="22.5" y2="13.8" stroke="white" stroke-width="1.5"/>
+                    <circle cx="23.5" cy="13.5" r="1.5" fill="white"/>
+                    <line x1="17.8" y1="18.4" x2="20.0" y2="21.5" stroke="white" stroke-width="1.5"/>
+                    <circle cx="20.7" cy="22.5" r="1.5" fill="white"/>
+                    <line x1="14.2" y1="18.4" x2="12.0" y2="21.5" stroke="white" stroke-width="1.5"/>
+                    <circle cx="11.3" cy="22.5" r="1.5" fill="white"/>
+                    <line x1="13.5" y1="15.1" x2="9.5" y2="13.8" stroke="white" stroke-width="1.5"/>
+                    <circle cx="8.5" cy="13.5" r="1.5" fill="white"/>
+                </svg>
+                <span class="text-xl font-bold text-blue-600 tracking-tight">IMP</span>
             </div>
             <a href="login.php" class="text-sm font-medium text-slate-500 hover:text-slate-800 transition-colors">Save & Exit</a>
         </div>

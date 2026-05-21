@@ -28,7 +28,23 @@ tailwind.config = {
   <!-- Top Nav -->
   <header class="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
     <div class="flex items-center gap-8">
-      <h1 class="text-xl font-bold text-blue-700">InternshipHub</h1>
+      <a href="index.html" class="flex items-center gap-2 hover:opacity-95 transition-opacity">
+        <svg class="w-8 h-8 text-blue-600 shrink-0" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect width="32" height="32" rx="8" fill="currentColor"/>
+          <circle cx="16" cy="16" r="3" fill="white"/>
+          <line x1="16" y1="13" x2="16" y2="9" stroke="white" stroke-width="1.5"/>
+          <circle cx="16" cy="8" r="1.5" fill="white"/>
+          <line x1="18.5" y1="15.1" x2="22.5" y2="13.8" stroke="white" stroke-width="1.5"/>
+          <circle cx="23.5" cy="13.5" r="1.5" fill="white"/>
+          <line x1="17.8" y1="18.4" x2="20.0" y2="21.5" stroke="white" stroke-width="1.5"/>
+          <circle cx="20.7" cy="22.5" r="1.5" fill="white"/>
+          <line x1="14.2" y1="18.4" x2="12.0" y2="21.5" stroke="white" stroke-width="1.5"/>
+          <circle cx="11.3" cy="22.5" r="1.5" fill="white"/>
+          <line x1="13.5" y1="15.1" x2="9.5" y2="13.8" stroke="white" stroke-width="1.5"/>
+          <circle cx="8.5" cy="13.5" r="1.5" fill="white"/>
+        </svg>
+        <span class="text-xl font-bold text-blue-600 tracking-tight">IMP</span>
+      </a>
       <div class="hidden md:flex gap-2 text-xs font-bold text-gray-400 uppercase tracking-widest border-l border-gray-200 pl-6">
         Platform Administration
       </div>

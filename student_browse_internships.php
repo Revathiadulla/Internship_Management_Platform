@@ -78,9 +78,22 @@ while ($row = mysqli_fetch_assoc($result_internships)) {
   <!-- SideNavBar -->
   <aside class="fixed left-0 top-0 h-screen w-64 z-40 bg-white border-r border-gray-200 flex flex-col py-6 shadow-sm">
     <div class="px-6 mb-8">
-      <a href="index.html" class="flex items-center gap-2">
-        <div class="w-8 h-8 bg-blue-600 rounded flex items-center justify-center text-white font-bold text-xl shadow-sm">I</div>
-        <span class="text-xl font-bold text-slate-800 tracking-tight">IMP</span>
+      <a href="index.html" class="flex items-center gap-2 hover:opacity-95 transition-opacity">
+        <svg class="w-8 h-8 text-blue-600 shrink-0" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect width="32" height="32" rx="8" fill="currentColor"/>
+          <circle cx="16" cy="16" r="3" fill="white"/>
+          <line x1="16" y1="13" x2="16" y2="9" stroke="white" stroke-width="1.5"/>
+          <circle cx="16" cy="8" r="1.5" fill="white"/>
+          <line x1="18.5" y1="15.1" x2="22.5" y2="13.8" stroke="white" stroke-width="1.5"/>
+          <circle cx="23.5" cy="13.5" r="1.5" fill="white"/>
+          <line x1="17.8" y1="18.4" x2="20.0" y2="21.5" stroke="white" stroke-width="1.5"/>
+          <circle cx="20.7" cy="22.5" r="1.5" fill="white"/>
+          <line x1="14.2" y1="18.4" x2="12.0" y2="21.5" stroke="white" stroke-width="1.5"/>
+          <circle cx="11.3" cy="22.5" r="1.5" fill="white"/>
+          <line x1="13.5" y1="15.1" x2="9.5" y2="13.8" stroke="white" stroke-width="1.5"/>
+          <circle cx="8.5" cy="13.5" r="1.5" fill="white"/>
+        </svg>
+        <span class="text-xl font-bold text-blue-600 tracking-tight">IMP</span>
       </a>
       <p class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-2 ml-1">Student Portal</p>
     </div>
