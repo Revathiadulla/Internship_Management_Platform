@@ -249,7 +249,7 @@ if (!function_exists('sendEmailNotification')) {
         mysqli_query($conn, $log_sql);
 
         // 4. Log to File System for easy sandbox verification
-        $log_file = "c:/xampp/htdocs/IMP/email_notifications.log";
+        $log_file = __DIR__ . "/../email_notifications.log";
         $file_log = "========================================================================\n";
         $file_log .= "[" . date('Y-m-d H:i:s') . "] OUTGOING EMAIL\n";
         $file_log .= "TO: " . $email . " (" . $fullName . ") [ID: " . ($user_id ?: 'N/A') . "]\n";
@@ -259,7 +259,7 @@ if (!function_exists('sendEmailNotification')) {
         $file_log .= "------------------------------------------------------------------------\n";
         $file_log .= "HTML body generated (" . strlen($htmlBody) . " bytes).\n";
         $file_log .= "========================================================================\n\n";
-        file_put_contents($log_file, $file_log, FILE_APPEND);
+        @file_put_contents($log_file, $file_log, FILE_APPEND);
 
         // 5. Send via native PHP mail function
         $headers = "MIME-Version: 1.0" . "\r\n";
