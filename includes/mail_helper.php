@@ -227,15 +227,24 @@ if (!function_exists('sendEmail')) {
             $mail->isSMTP();
             $mail->Host       = 'smtp.gmail.com';
             $mail->SMTPAuth   = true;
-            $mail->Username   = getenv("MAIL_USERNAME");
-            $mail->Password   = getenv("MAIL_PASSWORD");
+            
+            // Set SMTP credentials (use environment variables if available, otherwise fallback to admin credentials)
+            $smtpUser = getenv("MAIL_USERNAME") ?: 'imp.webprotal2026@gmail.com';
+            $smtpPass = getenv("MAIL_PASSWORD") ?: 'Imp@2026';
+            
+            $mail->Username   = $smtpUser;
+            $mail->Password   = $smtpPass;
             $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
             $mail->Port       = 587;
 
+            // Timeout and connection settings to prevent blocking
+            $mail->Timeout       = 10;
+            $mail->SMTPKeepAlive = false;
+
             $mail->CharSet = 'UTF-8';
 
-            $fromName = getenv("MAIL_FROM_NAME") ?: "IMP";
-            $mail->setFrom(getenv("MAIL_USERNAME"), $fromName);
+            $fromName = getenv("MAIL_FROM_NAME") ?: "IMP Admin";
+            $mail->setFrom($smtpUser, $fromName);
             $mail->addAddress($toEmail, $toName);
 
             $mail->isHTML(true);
@@ -244,9 +253,9 @@ if (!function_exists('sendEmail')) {
 
             $mail->send();
             return true;
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             $logPath = __DIR__ . "/../email_notifications.log";
-            $errorMessage = "[" . date('Y-m-d H:i:s') . "] PHPMailer sending failed to $toEmail. Error: " . $mail->ErrorInfo . "\n";
+            $errorMessage = "[" . date('Y-m-d H:i:s') . "] PHPMailer sending failed to $toEmail. Error: " . $e->getMessage() . " (" . $mail->ErrorInfo . ")\n";
             @file_put_contents($logPath, $errorMessage, FILE_APPEND);
             return false;
         }

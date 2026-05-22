@@ -198,6 +198,77 @@ $mentor_feedback_table = "CREATE TABLE IF NOT EXISTS mentor_feedback (
 )";
 executeSetupQuery($conn, $mentor_feedback_table, "Creating mentor_feedback table", $errors, $is_cli);
 
+// 9. Create users table and default admin user
+$users_table = "CREATE TABLE IF NOT EXISTS users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    full_name VARCHAR(100) NOT NULL,
+    email VARCHAR(100) UNIQUE NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    role ENUM('student', 'hr', 'coordinator', 'mentor', 'company', 'admin') NOT NULL,
+    phone VARCHAR(15) DEFAULT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)";
+executeSetupQuery($conn, $users_table, "Creating users table", $errors, $is_cli);
+
+// Check if phone column needs to be added dynamically to users table (if users table already existed)
+$chk_phone = mysqli_query($conn, "SHOW COLUMNS FROM users LIKE 'phone'");
+if (mysqli_num_rows($chk_phone) == 0) {
+    executeSetupQuery($conn, "ALTER TABLE users ADD COLUMN phone VARCHAR(15) DEFAULT NULL AFTER role", "Adding phone column to users table", $errors, $is_cli);
+}
+
+// 10. Create password_resets table
+$password_resets_table = "CREATE TABLE IF NOT EXISTS password_resets (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    email VARCHAR(100) NOT NULL,
+    code VARCHAR(10) NOT NULL,
+    send_method VARCHAR(10) NOT NULL,
+    expires_at DATETIME NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)";
+executeSetupQuery($conn, $password_resets_table, "Creating password_resets table", $errors, $is_cli);
+
+
+$admin_email = 'imp.webprotal2026@gmail.com';
+$check_admin = mysqli_query($conn, "SELECT id FROM users WHERE email = '" . mysqli_real_escape_string($conn, $admin_email) . "'");
+if ($check_admin) {
+    if (mysqli_num_rows($check_admin) == 0) {
+        $admin_password = password_hash('Imp@2026', PASSWORD_DEFAULT);
+        $admin_full_name = 'Admin';
+        $admin_role = 'admin';
+        $insert_admin_query = "INSERT INTO users (full_name, email, password, role) VALUES (
+            '" . mysqli_real_escape_string($conn, $admin_full_name) . "',
+            '" . mysqli_real_escape_string($conn, $admin_email) . "',
+            '" . mysqli_real_escape_string($conn, $admin_password) . "',
+            '" . mysqli_real_escape_string($conn, $admin_role) . "'
+        )";
+        executeSetupQuery($conn, $insert_admin_query, "Inserting default admin user", $errors, $is_cli);
+    } else {
+        $admin_password = password_hash('Imp@2026', PASSWORD_DEFAULT);
+        $admin_full_name = 'Admin';
+        $admin_role = 'admin';
+        $update_admin_query = "UPDATE users SET 
+            full_name = '" . mysqli_real_escape_string($conn, $admin_full_name) . "',
+            password = '" . mysqli_real_escape_string($conn, $admin_password) . "',
+            role = '" . mysqli_real_escape_string($conn, $admin_role) . "'
+            WHERE email = '" . mysqli_real_escape_string($conn, $admin_email) . "'";
+        executeSetupQuery($conn, $update_admin_query, "Updating default admin user credentials", $errors, $is_cli);
+    }
+} else {
+    $err = mysqli_error($conn);
+    $errors[] = "Checking admin user existence: $err";
+    if ($is_cli) {
+        echo "[FAILED] Checking admin user existence - Error: $err\n";
+    } else {
+        echo "<div class='p-3 bg-red-50 text-red-800 border border-red-200 rounded-lg flex flex-col'>
+                <div class='flex justify-between font-bold'>
+                    <span>Checking admin user existence</span>
+                    <span>[Failed]</span>
+                </div>
+                <span class='text-xs text-red-600 mt-1'>" . htmlspecialchars($err) . "</span>
+              </div>";
+    }
+}
+
 if (!$is_cli) {
     echo "</div>";
 

@@ -44,7 +44,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $reg_subject = "Welcome to IMP - Account Registration Successful";
         $reg_message = "Dear $full_name,\n\nWelcome to the Internship Management Platform (IMP)!\n\nYour account has been registered successfully as a " . ucfirst($role) . " with the email address: $email.\n\n" . 
                        ($role !== 'student' ? "Note: Your account is currently pending administrator approval. You will receive another notification once your account has been approved and activated." : "You can now log in to your student dashboard to complete your profile, browse available internships, and track applications.");
-        sendEmailNotification($email, $reg_subject, $reg_message, [
+        $email_sent = sendEmailNotification($email, $reg_subject, $reg_message, [
             'event' => 'Account Registration',
             'registered_name' => $full_name,
             'registered_email' => $email,
@@ -55,10 +55,18 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         ]);
 
         if ($role === 'student') {
-            header("Location: login.php?success=" . urlencode("Account created! Please log in to continue."));
+            $msg = "Account created! Please log in to continue.";
+            if (!$email_sent) {
+                $msg .= " (Note: Welcome email could not be sent due to SMTP configuration, see email_notifications.log)";
+            }
+            header("Location: login.php?success=" . urlencode($msg));
             exit();
         } else {
-            header("Location: login.php?success=" . urlencode("Account created! Please wait for admin approval, then log in."));
+            $msg = "Account created! Please wait for admin approval, then log in.";
+            if (!$email_sent) {
+                $msg .= " (Note: Welcome email could not be sent due to SMTP configuration, see email_notifications.log)";
+            }
+            header("Location: login.php?success=" . urlencode($msg));
             exit();
         }
     } else {
@@ -471,9 +479,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             spinner.className = 'material-symbols-outlined text-lg animate-spin';
             spinner.textContent = 'sync';
             btn.appendChild(spinner);
-            setTimeout(() => {
-                btn.disabled = true;
-            }, 10);
         }
     });
     </script>
