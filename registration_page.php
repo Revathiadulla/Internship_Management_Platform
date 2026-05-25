@@ -238,9 +238,12 @@ $old_role     = isset($_GET['role'])      ? htmlspecialchars($_GET['role'])     
                     <div class="space-y-2">
                         <label class="font-label-md text-label-md text-on-surface-variant"
                             for="password">Password</label>
-                        <input
-                            class="w-full px-4 py-3 border border-outline-variant rounded-lg bg-surface-container-lowest focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all placeholder:text-outline/50"
-                            id="password" name="password" placeholder="••••••••" required="" type="password">
+                        <div class="relative">
+                            <input
+                                class="w-full px-4 pr-10 py-3 border border-outline-variant rounded-lg bg-surface-container-lowest focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all placeholder:text-outline/50"
+                                id="password" name="password" placeholder="••••••••" required="" type="password">
+                            <span id="toggle-password" class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-outline text-lg cursor-pointer">visibility</span>
+                        </div>
                         <div class="flex flex-col gap-2 mt-2">
                             <p class="font-label-sm text-label-sm text-outline">Minimum 8 characters, at least 1 special
                                 character</p>
@@ -261,10 +264,13 @@ $old_role     = isset($_GET['role'])      ? htmlspecialchars($_GET['role'])     
                     <div class="space-y-2">
                         <label class="font-label-md text-label-md text-on-surface-variant"
                             for="confirm-password">Confirm Password</label>
-                        <input
-                            class="w-full px-4 py-3 border border-outline-variant rounded-lg bg-surface-container-lowest focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all placeholder:text-outline/50"
-                            id="confirm-password" name="confirm_password" placeholder="••••••••" required=""
-                            type="password">
+                        <div class="relative">
+                            <input
+                                class="w-full px-4 pr-10 py-3 border border-outline-variant rounded-lg bg-surface-container-lowest focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all placeholder:text-outline/50"
+                                id="confirm-password" name="confirm_password" placeholder="••••••••" required=""
+                                type="password">
+                            <span id="toggle-confirm-password" class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-outline text-lg cursor-pointer">visibility</span>
+                        </div>
                     </div>
                 </div>
                 <!-- Role Selection -->
@@ -426,6 +432,27 @@ $old_role     = isset($_GET['role'])      ? htmlspecialchars($_GET['role'])     
 
 
     <script>
+    // Password Visibility Toggles
+    const togglePassword = document.getElementById('toggle-password');
+    const passwordInput = document.getElementById('password');
+    if (togglePassword && passwordInput) {
+        togglePassword.addEventListener('click', function() {
+            const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+            passwordInput.setAttribute('type', type);
+            this.textContent = type === 'password' ? 'visibility' : 'visibility_off';
+        });
+    }
+
+    const toggleConfirmPassword = document.getElementById('toggle-confirm-password');
+    const confirmPasswordInput = document.getElementById('confirm-password');
+    if (toggleConfirmPassword && confirmPasswordInput) {
+        toggleConfirmPassword.addEventListener('click', function() {
+            const type = confirmPasswordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+            confirmPasswordInput.setAttribute('type', type);
+            this.textContent = type === 'password' ? 'visibility' : 'visibility_off';
+        });
+    }
+
     const phoneInput = document.getElementById('phone');
     if (phoneInput) {
         phoneInput.addEventListener('input', function(e) {
