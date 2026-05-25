@@ -241,16 +241,41 @@ if (isset($_GET['success'])) {
 }
 
 // Fetch all internships
-$internships_res = mysqli_query($conn, "
+$search = isset($_GET['search']) ? trim($_GET['search']) : '';
+$where_clauses = [];
+$types = "";
+$params = [];
+
+if (!empty($search)) {
+    $where_clauses[] = "(i.title LIKE ? OR i.project_type LIKE ? OR i.project_subtype LIKE ? OR i.technology_stack LIKE ? OR m.full_name LIKE ?)";
+    $search_param = "%" . $search . "%";
+    $types = "sssss";
+    $params = [$search_param, $search_param, $search_param, $search_param, $search_param];
+}
+
+$sql = "
     SELECT i.*, m.full_name as mentor_name 
     FROM internships i 
     LEFT JOIN users m ON i.assigned_mentor = m.id 
-    ORDER BY i.project_type ASC, i.project_subtype ASC, i.project_title ASC, i.id DESC
-");
+";
+
+if (count($where_clauses) > 0) {
+    $sql .= " WHERE " . implode(" AND ", $where_clauses);
+}
+
+$sql .= " ORDER BY i.project_type ASC, i.project_subtype ASC, i.project_title ASC, i.id DESC";
+
+$stmt = mysqli_prepare($conn, $sql);
+if (!empty($search)) {
+    mysqli_stmt_bind_param($stmt, $types, ...$params);
+}
+mysqli_stmt_execute($stmt);
+$internships_res = mysqli_stmt_get_result($stmt);
 $internships = [];
 while ($row = mysqli_fetch_assoc($internships_res)) {
     $internships[] = $row;
 }
+mysqli_stmt_close($stmt);
 ?>
 <!DOCTYPE html>
 <html class="light" lang="en">
@@ -462,6 +487,20 @@ while ($row = mysqli_fetch_assoc($internships_res)) {
                                         <span class="material-symbols-outlined text-md">add</span>
                                         New Project Posting
                                 </button>
+                        </div>
+
+                        <!-- Search Bar -->
+                        <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                            <form method="GET" action="coordinator_internships.php" class="flex gap-2 max-w-md">
+                                <div class="relative flex-grow">
+                                    <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">search</span>
+                                    <input type="text" name="search" value="<?php echo htmlspecialchars($search); ?>" placeholder="Search postings, type, tech stack..." class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2 pl-9 pr-3 text-xs focus:ring-2 focus:ring-blue-500 outline-none">
+                                </div>
+                                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-xs font-bold transition-all">Search</button>
+                                <?php if (!empty($search)): ?>
+                                    <a href="coordinator_internships.php" class="bg-gray-100 hover:bg-gray-200 border border-gray-200 text-gray-700 px-3 py-2 rounded-lg text-xs font-bold flex items-center justify-center">Reset</a>
+                                <?php endif; ?>
+                            </form>
                         </div>
 
                         <!-- Postings List Table -->

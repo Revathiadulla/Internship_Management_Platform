@@ -17,9 +17,25 @@ if (isset($_GET['success'])) {
 
 // Filtering
 $status_filter = isset($_GET['status']) ? trim($_GET['status']) : '';
-$where_clause = "";
+$search = isset($_GET['search']) ? trim($_GET['search']) : '';
+$where_clauses = [];
+$types = "";
+$params = [];
+
 if (!empty($status_filter)) {
-    $where_clause = " WHERE a.status = ? ";
+    $where_clauses[] = "a.status = ?";
+    $types .= "s";
+    $params[] = $status_filter;
+}
+
+if (!empty($search)) {
+    $where_clauses[] = "(u.full_name LIKE ? OR u.email LIKE ? OR sp.college_name LIKE ? OR COALESCE(i.title, a.internship_name) LIKE ?)";
+    $search_param = "%" . $search . "%";
+    $types .= "ssss";
+    $params[] = $search_param;
+    $params[] = $search_param;
+    $params[] = $search_param;
+    $params[] = $search_param;
 }
 
 $sql = "SELECT a.id as app_id, a.status, a.applied_date, a.reason_for_applying, a.relevant_skills, a.education_status,
@@ -29,14 +45,14 @@ $sql = "SELECT a.id as app_id, a.status, a.applied_date, a.reason_for_applying, 
         LEFT JOIN student_profiles sp ON u.id = sp.user_id
         LEFT JOIN internships i ON a.internship_id = i.id AND a.internship_id > 0";
 
-if (!empty($where_clause)) {
-    $sql .= $where_clause;
+if (count($where_clauses) > 0) {
+    $sql .= " WHERE " . implode(" AND ", $where_clauses);
 }
 $sql .= " ORDER BY a.applied_date DESC";
 
 $stmt = mysqli_prepare($conn, $sql);
-if (!empty($status_filter)) {
-    mysqli_stmt_bind_param($stmt, "s", $status_filter);
+if (count($where_clauses) > 0) {
+    mysqli_stmt_bind_param($stmt, $types, ...$params);
 }
 mysqli_stmt_execute($stmt);
 $result = mysqli_stmt_get_result($stmt);
@@ -252,18 +268,31 @@ mysqli_stmt_close($stmt);
                                         <h1 class="text-2xl font-bold text-gray-900">Student Applications</h1>
                                         <p class="text-gray-500 text-sm mt-1">Review applicant profiles and coordinate hiring rounds.</p>
                                 </div>
-                                <div class="flex items-center gap-3 w-full md:w-auto">
-                                        <label class="text-xs font-bold text-gray-500 uppercase shrink-0">Filter Status:</label>
-                                        <select onchange="window.location.href='coordinator_candidates.php?status='+this.value" class="rounded-xl border-gray-200 text-xs py-2 px-3 focus:border-blue-600 focus:ring-blue-600/10 cursor-pointer w-full md:w-48 bg-white">
-                                                <option value="">All Statuses</option>
-                                                <option value="Applied" <?php echo $status_filter === 'Applied' ? 'selected' : ''; ?>>Applied</option>
-                                                <option value="Test Completed" <?php echo $status_filter === 'Test Completed' ? 'selected' : ''; ?>>Test Completed</option>
-                                                <option value="HR Round" <?php echo $status_filter === 'HR Round' ? 'selected' : ''; ?>>HR Round</option>
-                                                <option value="HOD Approved" <?php echo $status_filter === 'HOD Approved' ? 'selected' : ''; ?>>HOD Approved</option>
-                                                <option value="Selected" <?php echo $status_filter === 'Selected' ? 'selected' : ''; ?>>Selected</option>
-                                                <option value="Rejected" <?php echo $status_filter === 'Rejected' ? 'selected' : ''; ?>>Rejected</option>
-                                        </select>
+                        </div>
+
+                        <!-- Search and Filters -->
+                        <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                            <form method="GET" action="coordinator_candidates.php" class="flex flex-col md:flex-row gap-3 items-stretch md:items-center">
+                                <div class="relative flex-grow max-w-md">
+                                    <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">search</span>
+                                    <input type="text" name="search" value="<?php echo htmlspecialchars($search); ?>" placeholder="Search student name, email, college..." class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2 pl-9 pr-3 text-xs focus:ring-2 focus:ring-blue-500 outline-none">
                                 </div>
+                                <div class="flex items-center gap-2">
+                                    <select name="status" class="rounded-lg border-gray-200 text-xs py-2 px-3 focus:border-blue-600 focus:ring-blue-600/10 cursor-pointer bg-gray-50">
+                                        <option value="">All Statuses</option>
+                                        <option value="Applied" <?php echo $status_filter === 'Applied' ? 'selected' : ''; ?>>Applied</option>
+                                        <option value="Test Completed" <?php echo $status_filter === 'Test Completed' ? 'selected' : ''; ?>>Test Completed</option>
+                                        <option value="HR Round" <?php echo $status_filter === 'HR Round' ? 'selected' : ''; ?>>HR Round</option>
+                                        <option value="HOD Approved" <?php echo $status_filter === 'HOD Approved' ? 'selected' : ''; ?>>HOD Approved</option>
+                                        <option value="Selected" <?php echo $status_filter === 'Selected' ? 'selected' : ''; ?>>Selected</option>
+                                        <option value="Rejected" <?php echo $status_filter === 'Rejected' ? 'selected' : ''; ?>>Rejected</option>
+                                    </select>
+                                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-xs font-bold transition-all">Search & Filter</button>
+                                    <?php if (!empty($search) || !empty($status_filter)): ?>
+                                        <a href="coordinator_candidates.php" class="bg-gray-100 hover:bg-gray-200 border border-gray-200 text-gray-700 px-3 py-2 rounded-lg text-xs font-bold flex items-center justify-center">Reset</a>
+                                    <?php endif; ?>
+                                </div>
+                            </form>
                         </div>
 
                         <!-- Candidates List -->
