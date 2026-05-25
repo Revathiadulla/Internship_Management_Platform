@@ -269,7 +269,7 @@ if (isset($_GET['success'])) $success_msg = htmlspecialchars(urldecode($_GET['su
 <div class="relative">
 <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-lg" data-icon="lock">lock</span>
 <input id="login-password" name="password" class="w-full pl-10 pr-10 py-2.5 rounded-lg border border-outline outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all font-body-md text-body-md" placeholder="••••••••" type="password" required>
-<span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-outline text-lg cursor-pointer" data-icon="visibility">visibility</span>
+<span id="toggle-password" class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-outline text-lg cursor-pointer" data-icon="visibility">visibility</span>
 </div>
 </div>
 </div>
@@ -305,6 +305,17 @@ if (isset($_GET['success'])) $success_msg = htmlspecialchars(urldecode($_GET['su
 </footer>
 
 <script>
+// Password Visibility Toggle
+const togglePassword = document.getElementById('toggle-password');
+const passwordInput = document.getElementById('login-password');
+if (togglePassword && passwordInput) {
+    togglePassword.addEventListener('click', function() {
+        const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+        passwordInput.setAttribute('type', type);
+        this.textContent = type === 'password' ? 'visibility' : 'visibility_off';
+    });
+}
+
 if (document.getElementById('login-error-banner')) {
     document.getElementById('login-email').classList.add('border-red-400', 'bg-red-50/30');
     document.getElementById('login-password').classList.add('border-red-400', 'bg-red-50/30');
