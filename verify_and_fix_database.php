@@ -187,7 +187,9 @@ echo "<h2 class='text-lg font-bold text-slate-800 mb-3'>7. Checking team assignm
 $team_cols = [
     'team_name' => "VARCHAR(100) DEFAULT NULL",
     'mentor_id' => "INT DEFAULT NULL",
-    'team_status' => "VARCHAR(50) DEFAULT 'Active'"
+    'team_status' => "VARCHAR(50) DEFAULT 'Active'",
+    'project_type' => "VARCHAR(100) DEFAULT NULL",
+    'project_subtype' => "VARCHAR(100) DEFAULT NULL"
 ];
 foreach ($team_cols as $col => $def) {
     $check_col = mysqli_query($conn, "SHOW COLUMNS FROM internship_applications LIKE '$col'");

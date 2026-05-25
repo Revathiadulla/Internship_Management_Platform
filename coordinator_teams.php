@@ -24,6 +24,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         mysqli_begin_transaction($conn);
         $success = true;
 
+        $project_type = isset($_POST['project_type']) ? trim($_POST['project_type']) : '';
+        $project_subtype = isset($_POST['project_subtype']) ? trim($_POST['project_subtype']) : '';
+
+        if ($action !== 'delete_team' && (empty($project_type) || empty($project_subtype))) {
+            $proj_stmt = mysqli_prepare($conn, "SELECT project_type, project_subtype FROM internships WHERE id = ?");
+            mysqli_stmt_bind_param($proj_stmt, "i", $internship_id);
+            mysqli_stmt_execute($proj_stmt);
+            mysqli_stmt_bind_result($proj_stmt, $db_type, $db_subtype);
+            if (mysqli_stmt_fetch($proj_stmt)) {
+                $project_type = $db_type ?: '';
+                $project_subtype = $db_subtype ?: '';
+            }
+            mysqli_stmt_close($proj_stmt);
+        }
+
         if ($action === 'create_team') {
             // Check if team name already exists
             $check_team_sql = "SELECT id FROM internship_applications WHERE team_name = ? LIMIT 1";
@@ -50,18 +65,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     
                     if ($app_row = mysqli_fetch_assoc($app_chk_res)) {
                         // Update existing application
-                        $update_sql = "UPDATE internship_applications SET team_name = ?, mentor_id = ?, team_status = ? WHERE user_id = ? AND internship_id = ?";
+                        $update_sql = "UPDATE internship_applications SET team_name = ?, mentor_id = ?, team_status = ?, project_type = ?, project_subtype = ? WHERE user_id = ? AND internship_id = ?";
                         $update_stmt = mysqli_prepare($conn, $update_sql);
-                        mysqli_stmt_bind_param($update_stmt, "sisii", $team_name, $mentor_id, $team_status, $student_id, $internship_id);
+                        mysqli_stmt_bind_param($update_stmt, "sisssii", $team_name, $mentor_id, $team_status, $project_type, $project_subtype, $student_id, $internship_id);
                         if (!mysqli_stmt_execute($update_stmt)) {
                             $success = false;
                         }
                         mysqli_stmt_close($update_stmt);
                     } else {
                         // Insert new application with 'Started' status (active intern)
-                        $insert_sql = "INSERT INTO internship_applications (user_id, internship_id, status, team_name, mentor_id, team_status) VALUES (?, ?, 'Started', ?, ?, ?)";
+                        $insert_sql = "INSERT INTO internship_applications (user_id, internship_id, status, team_name, mentor_id, team_status, project_type, project_subtype) VALUES (?, ?, 'Started', ?, ?, ?, ?, ?)";
                         $insert_stmt = mysqli_prepare($conn, $insert_sql);
-                        mysqli_stmt_bind_param($insert_stmt, "iisiss", $student_id, $internship_id, $team_name, $mentor_id, $team_status);
+                        mysqli_stmt_bind_param($insert_stmt, "iisissss", $student_id, $internship_id, $team_name, $mentor_id, $team_status, $project_type, $project_subtype);
                         if (!mysqli_stmt_execute($insert_stmt)) {
                             $success = false;
                         }
@@ -95,17 +110,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     $app_chk_res = mysqli_stmt_get_result($app_chk_stmt);
                     
                     if ($app_row = mysqli_fetch_assoc($app_chk_res)) {
-                        $update_sql = "UPDATE internship_applications SET team_name = ?, mentor_id = ?, team_status = ? WHERE user_id = ? AND internship_id = ?";
+                        $update_sql = "UPDATE internship_applications SET team_name = ?, mentor_id = ?, team_status = ?, project_type = ?, project_subtype = ? WHERE user_id = ? AND internship_id = ?";
                         $update_stmt = mysqli_prepare($conn, $update_sql);
-                        mysqli_stmt_bind_param($update_stmt, "sisii", $team_name, $mentor_id, $team_status, $student_id, $internship_id);
+                        mysqli_stmt_bind_param($update_stmt, "sisssii", $team_name, $mentor_id, $team_status, $project_type, $project_subtype, $student_id, $internship_id);
                         if (!mysqli_stmt_execute($update_stmt)) {
                             $success = false;
                         }
                         mysqli_stmt_close($update_stmt);
                     } else {
-                        $insert_sql = "INSERT INTO internship_applications (user_id, internship_id, status, team_name, mentor_id, team_status) VALUES (?, ?, 'Started', ?, ?, ?)";
+                        $insert_sql = "INSERT INTO internship_applications (user_id, internship_id, status, team_name, mentor_id, team_status, project_type, project_subtype) VALUES (?, ?, 'Started', ?, ?, ?, ?, ?)";
                         $insert_stmt = mysqli_prepare($conn, $insert_sql);
-                        mysqli_stmt_bind_param($insert_stmt, "iisiss", $student_id, $internship_id, $team_name, $mentor_id, $team_status);
+                        mysqli_stmt_bind_param($insert_stmt, "iisissss", $student_id, $internship_id, $team_name, $mentor_id, $team_status, $project_type, $project_subtype);
                         if (!mysqli_stmt_execute($insert_stmt)) {
                             $success = false;
                         }
@@ -580,6 +595,21 @@ while ($row = mysqli_fetch_assoc($assigned_res)) {
 
                 <div class="grid grid-cols-2 gap-4">
                     <div class="space-y-1">
+                        <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Project Type</label>
+                        <select name="project_type" id="form-project-type" onchange="onProjectTypeChange()" required class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer">
+                            <option value="">Select Type...</option>
+                        </select>
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Project Subtype</label>
+                        <select name="project_subtype" id="form-project-subtype" onchange="onProjectSubtypeChange()" required class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer">
+                            <option value="">Select Subtype...</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="space-y-1">
                         <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Project / Internship</label>
                         <select name="internship_id" id="form-project-id" onchange="updateProjectDetails()" required class="w-full bg-gray-50 border border-gray-200 rounded-lg py-2 px-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer">
                             <option value="">Select Project...</option>
@@ -655,28 +685,108 @@ while ($row = mysqli_fetch_assoc($assigned_res)) {
         const formMentorId = document.getElementById('form-mentor-id');
         const formTeamStatus = document.getElementById('form-team-status');
 
-        function updateProjectDropdown(currentInternshipId = null) {
-            // Keep the first default option
+        const defaultTypesMap = {
+            "Web Development": ["Frontend", "Backend", "Full Stack"],
+            "Data Analytics": ["Excel Dashboard", "Power BI", "SQL Analysis"],
+            "AI / ML": ["Machine Learning", "Deep Learning", "NLP"]
+        };
+
+        function populateProjectTypeDropdown(selectedType = '') {
+            const typeSelect = document.getElementById('form-project-type');
+            while (typeSelect.options.length > 1) {
+                typeSelect.remove(1);
+            }
+            
+            const types = new Set();
+            projectsData.forEach(p => {
+                if (p.project_type) {
+                    types.add(p.project_type);
+                }
+            });
+            
+            Object.keys(defaultTypesMap).forEach(t => types.add(t));
+            
+            types.forEach(type => {
+                const opt = document.createElement('option');
+                opt.value = type;
+                opt.textContent = type;
+                if (type === selectedType) {
+                    opt.selected = true;
+                }
+                typeSelect.appendChild(opt);
+            });
+        }
+
+        function populateProjectSubtypeDropdown(type, selectedSubtype = '') {
+            const subtypeSelect = document.getElementById('form-project-subtype');
+            while (subtypeSelect.options.length > 1) {
+                subtypeSelect.remove(1);
+            }
+            
+            if (!type) return;
+            
+            const subtypes = new Set();
+            projectsData.forEach(p => {
+                if (p.project_type === type && p.project_subtype) {
+                    subtypes.add(p.project_subtype);
+                }
+            });
+            
+            if (defaultTypesMap[type]) {
+                defaultTypesMap[type].forEach(s => subtypes.add(s));
+            }
+            
+            subtypes.forEach(sub => {
+                const opt = document.createElement('option');
+                opt.value = sub;
+                opt.textContent = sub;
+                if (sub === selectedSubtype) {
+                    opt.selected = true;
+                }
+                subtypeSelect.appendChild(opt);
+            });
+        }
+
+        function populateProjectDropdown(subtype, currentInternshipId = null) {
             while (formProjectId.options.length > 1) {
                 formProjectId.remove(1);
             }
+            
+            if (!subtype) return;
             
             projectsData.forEach(proj => {
                 const pId = parseInt(proj.id);
                 const isAssigned = assignedProjectIds.includes(pId);
                 
-                // Show if unassigned OR if it matches the current team's assigned project
-                if (!isAssigned || pId === currentInternshipId) {
-                    const opt = document.createElement('option');
-                    opt.value = pId;
-                    let displayTitle = proj.project_title || proj.title || 'Untitled Project';
-                    if (proj.task_title && proj.task_title !== proj.project_title) {
-                        displayTitle += ' - ' + proj.task_title;
+                if (proj.project_subtype === subtype) {
+                    if (!isAssigned || pId === currentInternshipId) {
+                        const opt = document.createElement('option');
+                        opt.value = pId;
+                        let displayTitle = proj.project_title || proj.title || 'Untitled Project';
+                        if (proj.task_title && proj.task_title !== proj.project_title) {
+                            displayTitle += ' - ' + proj.task_title;
+                        }
+                        opt.textContent = displayTitle;
+                        if (pId === currentInternshipId) {
+                            opt.selected = true;
+                        }
+                        formProjectId.appendChild(opt);
                     }
-                    opt.textContent = displayTitle;
-                    formProjectId.appendChild(opt);
                 }
             });
+        }
+
+        function onProjectTypeChange() {
+            const type = document.getElementById('form-project-type').value;
+            populateProjectSubtypeDropdown(type);
+            populateProjectDropdown('');
+            updateProjectDetails();
+        }
+
+        function onProjectSubtypeChange() {
+            const subtype = document.getElementById('form-project-subtype').value;
+            populateProjectDropdown(subtype);
+            updateProjectDetails();
         }
 
         function renderStudentChecklist(internshipId) {
@@ -743,8 +853,11 @@ while ($row = mysqli_fetch_assoc($assigned_res)) {
             formOldTeamName.value = "";
             formTeamName.value = "";
             formTeamName.readOnly = false;
-            updateProjectDropdown(null);
-            formProjectId.value = "";
+
+            populateProjectTypeDropdown('');
+            populateProjectSubtypeDropdown('');
+            populateProjectDropdown('');
+
             formMentorId.value = "";
             formTeamStatus.value = "Active";
 
@@ -758,8 +871,15 @@ while ($row = mysqli_fetch_assoc($assigned_res)) {
             formAction.value = "edit_team";
             formOldTeamName.value = team.team_name;
             formTeamName.value = team.team_name;
-            updateProjectDropdown(parseInt(team.internship_id));
-            formProjectId.value = team.internship_id;
+
+            const project = projectsData.find(p => parseInt(p.id) === parseInt(team.internship_id));
+            const type = project ? (project.project_type || '') : '';
+            const subtype = project ? (project.project_subtype || '') : '';
+
+            populateProjectTypeDropdown(type);
+            populateProjectSubtypeDropdown(type, subtype);
+            populateProjectDropdown(subtype, parseInt(team.internship_id));
+
             formMentorId.value = team.mentor_id;
             formTeamStatus.value = team.team_status || "Active";
 
