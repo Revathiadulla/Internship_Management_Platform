@@ -1,3 +1,14 @@
+<?php
+$reg_error   = '';
+$reg_success = '';
+if (isset($_GET['error']))   $reg_error   = htmlspecialchars(urldecode($_GET['error']));
+if (isset($_GET['success'])) $reg_success = htmlspecialchars(urldecode($_GET['success']));
+// Preserve submitted values to re-fill form on error
+$old_fullname = isset($_GET['full_name']) ? htmlspecialchars($_GET['full_name']) : '';
+$old_email    = isset($_GET['email'])     ? htmlspecialchars($_GET['email'])     : '';
+$old_phone    = isset($_GET['phone'])     ? htmlspecialchars($_GET['phone'])     : '';
+$old_role     = isset($_GET['role'])      ? htmlspecialchars($_GET['role'])      : 'student';
+?>
 <!DOCTYPE html>
 <html class="light" lang="en">
 
@@ -117,6 +128,15 @@
         .role-card-radio:checked+.role-card-content .role-icon {
             color: #003594;
         }
+
+        @keyframes shake {
+            0%,100%{transform:translateX(0)}
+            20%{transform:translateX(-6px)}
+            40%{transform:translateX(6px)}
+            60%{transform:translateX(-4px)}
+            80%{transform:translateX(4px)}
+        }
+        .animate-shake { animation: shake .4s ease; }
     </style>
 </head>
 
@@ -126,8 +146,23 @@
         class="hidden md:flex md:w-5/12 lg:w-1/2 bg-primary relative overflow-hidden flex-col justify-between p-12">
         <div class="relative z-10">
             <div class="mb-12">
-                <a href="index.html"
-                    class="font-h1 text-h1 text-on-primary tracking-tighter hover:opacity-80 transition-opacity cursor-pointer">IMP</a>
+                <a href="index.html" class="flex items-center gap-2 hover:opacity-95 transition-opacity">
+                    <svg class="w-8 h-8 text-white shrink-0" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect width="32" height="32" rx="8" fill="currentColor"/>
+                        <circle cx="16" cy="16" r="3" fill="#003594"/>
+                        <line x1="16" y1="13" x2="16" y2="9" stroke="#003594" stroke-width="1.5"/>
+                        <circle cx="16" cy="8" r="1.5" fill="#003594"/>
+                        <line x1="18.5" y1="15.1" x2="22.5" y2="13.8" stroke="#003594" stroke-width="1.5"/>
+                        <circle cx="23.5" cy="13.5" r="1.5" fill="#003594"/>
+                        <line x1="17.8" y1="18.4" x2="20.0" y2="21.5" stroke="#003594" stroke-width="1.5"/>
+                        <circle cx="20.7" cy="22.5" r="1.5" fill="#003594"/>
+                        <line x1="14.2" y1="18.4" x2="12.0" y2="21.5" stroke="#003594" stroke-width="1.5"/>
+                        <circle cx="11.3" cy="22.5" r="1.5" fill="#003594"/>
+                        <line x1="13.5" y1="15.1" x2="9.5" y2="13.8" stroke="#003594" stroke-width="1.5"/>
+                        <circle cx="8.5" cy="13.5" r="1.5" fill="#003594"/>
+                    </svg>
+                    <span class="text-2xl font-bold text-white tracking-tight">IMP</span>
+                </a>
                 <p class="font-body-lg text-body-lg text-primary-fixed-dim mt-2 max-w-md">Bridging the gap between
                     academic ambition and corporate professionalism with structured opportunity.</p>
             </div>
@@ -182,14 +217,23 @@
                             Name</label>
                         <input
                             class="w-full px-4 py-3 border border-outline-variant rounded-lg bg-surface-container-lowest focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all placeholder:text-outline/50"
-                            id="fullname" name="full_name" placeholder="John Doe" required="" type="text">
+                            id="fullname" name="full_name" placeholder="John Doe" required="" type="text"
+                            value="<?php echo $old_fullname; ?>">
                     </div>
                     <div class="space-y-2">
                         <label class="font-label-md text-label-md text-on-surface-variant" for="email">Email
                             Address</label>
                         <input
                             class="w-full px-4 py-3 border border-outline-variant rounded-lg bg-surface-container-lowest focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all placeholder:text-outline/50"
-                            id="email" name="email" placeholder="name@organization.com" required="" type="email">
+                            id="email" name="email" placeholder="name@organization.com" required="" type="email"
+                            value="<?php echo $old_email; ?>">
+                    </div>
+                    <div class="space-y-2">
+                        <label class="font-label-md text-label-md text-on-surface-variant" for="phone">Phone Number</label>
+                        <input
+                            class="w-full px-4 py-3 border border-outline-variant rounded-lg bg-surface-container-lowest focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all placeholder:text-outline/50"
+                            id="phone" name="phone" placeholder="10-digit number" required="" type="tel" pattern="[0-9]{10}" maxlength="10"
+                            value="<?php echo $old_phone; ?>">
                     </div>
                     <div class="space-y-2">
                         <label class="font-label-md text-label-md text-on-surface-variant"
@@ -234,7 +278,7 @@
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                         <!-- Student (Highlighted by default) -->
                         <label class="cursor-pointer group">
-                            <input checked="" class="role-card-radio hidden" name="role" type="radio" value="student">
+                            <input <?php echo ($old_role === 'student' || $old_role === '') ? 'checked=""' : ''; ?> class="role-card-radio hidden" name="role" type="radio" value="student">
                             <div
                                 class="role-card-content h-full border border-outline-variant rounded-lg p-4 transition-all hover:bg-surface-container-low flex flex-col gap-2 shadow-sm">
                                 <span class="material-symbols-outlined role-icon text-secondary"
@@ -248,7 +292,7 @@
                         </label>
                         <!-- HR Manager -->
                         <label class="cursor-pointer group">
-                            <input class="role-card-radio hidden" name="role" type="radio" value="hr">
+                            <input <?php echo ($old_role === 'hr') ? 'checked=""' : ''; ?> class="role-card-radio hidden" name="role" type="radio" value="hr">
                             <div
                                 class="role-card-content h-full border border-outline-variant rounded-lg p-4 transition-all hover:bg-surface-container-low flex flex-col gap-2 shadow-sm">
                                 <span class="material-symbols-outlined role-icon text-secondary"
@@ -262,7 +306,7 @@
                         </label>
                         <!-- Coordinator -->
                         <label class="cursor-pointer group">
-                            <input class="role-card-radio hidden" name="role" type="radio" value="coordinator">
+                            <input <?php echo ($old_role === 'coordinator') ? 'checked=""' : ''; ?> class="role-card-radio hidden" name="role" type="radio" value="coordinator">
                             <div
                                 class="role-card-content h-full border border-outline-variant rounded-lg p-4 transition-all hover:bg-surface-container-low flex flex-col gap-2 shadow-sm">
                                 <span class="material-symbols-outlined role-icon text-secondary"
@@ -276,7 +320,7 @@
                         </label>
                         <!-- Mentor/Guide -->
                         <label class="cursor-pointer group">
-                            <input class="role-card-radio hidden" name="role" type="radio" value="mentor">
+                            <input <?php echo ($old_role === 'mentor') ? 'checked=""' : ''; ?> class="role-card-radio hidden" name="role" type="radio" value="mentor">
                             <div
                                 class="role-card-content h-full border border-outline-variant rounded-lg p-4 transition-all hover:bg-surface-container-low flex flex-col gap-2 shadow-sm">
                                 <span class="material-symbols-outlined role-icon text-secondary"
@@ -290,7 +334,7 @@
                         </label>
                         <!-- Company -->
                         <label class="cursor-pointer group">
-                            <input class="role-card-radio hidden" name="role" type="radio" value="company">
+                            <input <?php echo ($old_role === 'company') ? 'checked=""' : ''; ?> class="role-card-radio hidden" name="role" type="radio" value="company">
                             <div
                                 class="role-card-content h-full border border-outline-variant rounded-lg p-4 transition-all hover:bg-surface-container-low flex flex-col gap-2 shadow-sm">
                                 <span class="material-symbols-outlined role-icon text-secondary"
@@ -318,6 +362,12 @@
                 </div>
                 <!-- Action -->
                 <div class="pt-6">
+                    <?php if ($reg_error): ?>
+                    <div class="flex items-center gap-3 p-3.5 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 font-medium animate-shake mb-4">
+                        <span class="material-symbols-outlined text-red-500 text-[20px] flex-shrink-0">error</span>
+                        <span><?php echo $reg_error; ?></span>
+                    </div>
+                    <?php endif; ?>
                     <button
                         id="register-submit-btn"
                         class="w-full bg-primary text-on-primary py-4 rounded-lg font-label-md text-label-md hover:bg-primary-container hover:shadow-lg transition-all active:scale-[0.98] shadow-md flex items-center justify-center gap-2"
@@ -329,7 +379,7 @@
             <footer class="mt-10 pt-8 border-t border-surface-container-highest">
                 <p class="text-center font-body-md text-body-md text-on-surface-variant mb-6">
                     Already have an account?
-                    <a class="text-primary font-semibold hover:underline decoration-primary" href="login.html">Log
+                    <a class="text-primary font-semibold hover:underline decoration-primary" href="login.php">Log
                         In</a>
                 </p>
                 <p class="text-center font-label-sm text-label-sm text-outline">
@@ -373,8 +423,30 @@
         }
     </style>
 
+
+
     <script>
+    const phoneInput = document.getElementById('phone');
+    if (phoneInput) {
+        phoneInput.addEventListener('input', function(e) {
+            this.value = this.value.replace(/[^0-9]/g, '');
+            if (this.value.length !== 10) {
+                this.setCustomValidity('Phone number must be exactly 10 digits.');
+            } else {
+                this.setCustomValidity('');
+            }
+        });
+    }
+
     document.getElementById('register-form').addEventListener('submit', function(e) {
+        const phoneInput = document.getElementById('phone');
+        if (phoneInput && !/^[0-9]{10}$/.test(phoneInput.value)) {
+            e.preventDefault();
+            phoneInput.setCustomValidity('Phone number must be exactly 10 digits.');
+            phoneInput.reportValidity();
+            return false;
+        }
+
         const btn = document.getElementById('register-submit-btn');
         if (btn) {
             btn.style.pointerEvents = 'none';
@@ -389,7 +461,6 @@
         }
     });
     </script>
-
 </body>
 
 </html>
