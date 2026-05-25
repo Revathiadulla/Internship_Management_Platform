@@ -9,17 +9,65 @@ include "db.php";
 $success_msg = "";
 $error_msg = "";
 
-// Status updates are disabled in the coordinator module (read-only)
+$stages = ['Applied', 'Screening', 'Test Completed', 'HR Round', 'HOD Approved', 'Selected', 'Rejected'];
+
+// Candidate stage transitions are disabled in the coordinator module (read-only)
 
 if (isset($_GET['success'])) {
     $success_msg = htmlspecialchars($_GET['success']);
 }
 
-// Filtering
-$status_filter = isset($_GET['status']) ? trim($_GET['status']) : '';
-$where_clause = "";
-if (!empty($status_filter)) {
-    $where_clause = " WHERE a.status = ? ";
+// Fetch unique internships for the filter dropdown
+$internships_list = [];
+$int_res = mysqli_query($conn, "SELECT DISTINCT COALESCE(i.title, a.internship_name) as title FROM internship_applications a LEFT JOIN internships i ON a.internship_id = i.id AND a.internship_id > 0 ORDER BY title ASC");
+while ($ir = mysqli_fetch_assoc($int_res)) {
+    if (!empty($ir['title'])) {
+        $internships_list[] = $ir['title'];
+    }
+}
+
+// Get filter inputs
+$search_query = isset($_GET['search']) ? trim($_GET['search']) : '';
+$filter_internship = isset($_GET['internship']) ? trim($_GET['internship']) : '';
+$filter_status = isset($_GET['status']) ? trim($_GET['status']) : '';
+
+// Build dynamic query
+$where_clauses = [];
+$params = [];
+$types = "";
+
+if (!empty($search_query)) {
+    $where_clauses[] = "(u.full_name LIKE ? OR sp.college_name LIKE ? OR COALESCE(i.title, a.internship_name) LIKE ?)";
+    $search_param = "%" . $search_query . "%";
+    $params[] = $search_param;
+    $params[] = $search_param;
+    $params[] = $search_param;
+    $types .= "sss";
+}
+
+if (!empty($filter_internship)) {
+    $where_clauses[] = "COALESCE(i.title, a.internship_name) = ?";
+    $params[] = $filter_internship;
+    $types .= "s";
+}
+
+if (!empty($filter_status)) {
+    if ($filter_status === 'Selected') {
+        $where_clauses[] = "a.status IN ('Selected', 'Started', 'Internship Started', 'Active Intern', 'Completed')";
+    } else if ($filter_status === 'Applied') {
+        // Find Applied or anything not in standard stages
+        $stage_placeholders = implode("', '", array_diff($stages, ['Applied']));
+        $where_clauses[] = "(a.status = 'Applied' OR a.status NOT IN ('$stage_placeholders', 'Started', 'Internship Started', 'Active Intern', 'Completed'))";
+    } else {
+        $where_clauses[] = "a.status = ?";
+        $params[] = $filter_status;
+        $types .= "s";
+    }
+}
+
+$where_sql = "";
+if (count($where_clauses) > 0) {
+    $where_sql = " WHERE " . implode(" AND ", $where_clauses);
 }
 
 $sql = "SELECT a.id as app_id, a.status, a.applied_date, a.reason_for_applying, a.relevant_skills, a.education_status,
@@ -27,66 +75,83 @@ $sql = "SELECT a.id as app_id, a.status, a.applied_date, a.reason_for_applying, 
         FROM internship_applications a
         JOIN users u ON a.user_id = u.id
         LEFT JOIN student_profiles sp ON u.id = sp.user_id
-        LEFT JOIN internships i ON a.internship_id = i.id AND a.internship_id > 0";
-
-if (!empty($where_clause)) {
-    $sql .= $where_clause;
-}
-$sql .= " ORDER BY a.applied_date DESC";
+        LEFT JOIN internships i ON a.internship_id = i.id AND a.internship_id > 0
+        $where_sql
+        ORDER BY a.applied_date DESC";
 
 $stmt = mysqli_prepare($conn, $sql);
-if (!empty($status_filter)) {
-    mysqli_stmt_bind_param($stmt, "s", $status_filter);
+if ($stmt) {
+    if (!empty($types)) {
+        mysqli_stmt_bind_param($stmt, $types, ...$params);
+    }
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+} else {
+    $res = mysqli_query($conn, $sql);
 }
-mysqli_stmt_execute($stmt);
-$result = mysqli_stmt_get_result($stmt);
-$applications = [];
-while ($row = mysqli_fetch_assoc($result)) {
-    $applications[] = $row;
+
+$applications_by_stage = [];
+foreach ($stages as $stage) {
+    $applications_by_stage[$stage] = [];
 }
-mysqli_stmt_close($stmt);
+if ($res) {
+    while ($row = mysqli_fetch_assoc($res)) {
+        $status = $row['status'];
+        // Handle student active states mapping to Selected
+        if ($status === 'Started' || $status === 'Internship Started' || $status === 'Active Intern' || $status === 'Completed') {
+            $applications_by_stage['Selected'][] = $row;
+        } else if (!in_array($status, $stages)) {
+            $applications_by_stage['Applied'][] = $row;
+        } else {
+            $applications_by_stage[$status][] = $row;
+        }
+    }
+}
 ?>
 <!DOCTYPE html>
 <html class="light" lang="en">
 <head>
         <meta charset="utf-8" />
         <meta content="width=device-width, initial-scale=1.0" name="viewport" />
-        <title>Candidates - Coordinator</title>
+        <title>Workflows - Coordinator</title>
         <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet" />
         <style>
-                 body { font-family: 'Inter', sans-serif; }
-                 .material-symbols-outlined {
-                         font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-                         vertical-align: middle;
-                 }
-                 aside {
-                         transition: transform 0.3s ease-in-out;
-                 }
-                  main {
-                          transition: margin-left 0.3s ease-in-out;
-                          min-width: 0;
-                          overflow-x: hidden;
-                  }
-                 @media (max-width: 767px) {
-                         aside {
-                                 transform: translateX(-100%);
-                         }
-                         main {
-                                 margin-left: 0 !important;
-                         }
-                         body.sidebar-open aside {
-                                 transform: translateX(0);
-                         }
-                 }
-                 @media (min-width: 768px) {
-                         body.sidebar-closed aside {
-                                 transform: translateX(-100%);
-                         }
-                         body.sidebar-closed main {
-                                 margin-left: 0 !important;
-                         }
-                 }
+                body { font-family: 'Inter', sans-serif; }
+                .material-symbols-outlined {
+                        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+                        vertical-align: middle;
+                }
+                .kanban-board {
+                        height: calc(100vh - 140px);
+                }
+                aside {
+                        transition: transform 0.3s ease-in-out;
+                }
+                main {
+                        transition: margin-left 0.3s ease-in-out;
+                        min-width: 0;
+                        overflow-x: hidden;
+                }
+                @media (max-width: 767px) {
+                        aside {
+                                transform: translateX(-100%);
+                        }
+                        main {
+                                margin-left: 0 !important;
+                        }
+                        body.sidebar-open aside {
+                                transform: translateX(0);
+                        }
+                }
+                @media (min-width: 768px) {
+                        body.sidebar-closed aside {
+                                transform: translateX(-100%);
+                        }
+                        body.sidebar-closed main {
+                                margin-left: 0 !important;
+                        }
+                }
         </style>
 </head>
 <body class="bg-gray-100 text-gray-800">
@@ -123,12 +188,16 @@ mysqli_stmt_close($stmt);
                                 <span class="material-symbols-outlined">work</span>
                                 <span>Postings</span>
                         </a>
-                        <a class="flex items-center gap-3 bg-blue-50 text-blue-700 border-l-4 border-blue-600 px-4 py-3 duration-200 ease-in-out"
+                        <a class="flex items-center gap-3 text-gray-600 px-4 py-3 hover:bg-gray-100 duration-200 ease-in-out"
                                 href="coordinator_candidates.php">
                                 <span class="material-symbols-outlined">group</span>
                                 <span>Candidates</span>
                         </a>
-
+                        <a class="flex items-center gap-3 bg-blue-50 text-blue-700 border-l-4 border-blue-600 px-4 py-3 duration-200 ease-in-out"
+                                href="coordinator_workflows.php">
+                                <span class="material-symbols-outlined">account_tree</span>
+                                <span>Workflows</span>
+                        </a>
                         <a class="flex items-center gap-3 text-gray-600 px-4 py-3 hover:bg-gray-100 duration-200 ease-in-out"
                                 href="coordinator_daily_logs.php">
                                 <span class="material-symbols-outlined">monitoring</span>
@@ -174,7 +243,7 @@ mysqli_stmt_close($stmt);
                                 <button id="sidebar-toggle" class="p-1 hover:bg-gray-100 rounded-lg transition-colors focus:outline-none cursor-pointer">
                                         <span class="material-symbols-outlined text-gray-600 text-2xl">menu</span>
                                 </button>
-                                <h2 class="text-lg font-bold text-gray-800">Candidates</h2>
+                                <h2 class="text-lg font-bold text-gray-800">Workflows</h2>
                         </div>
                         
                         <!-- Profile Dropdown Section -->
@@ -231,110 +300,131 @@ mysqli_stmt_close($stmt);
                 </script>
 
 
-                <div class="flex-1 p-8 space-y-6">
+                <div class="flex-1 p-6 flex flex-col space-y-4">
                         <?php if ($success_msg): ?>
-                            <div class="p-4 mb-4 text-sm text-green-800 rounded-lg bg-green-50 border border-green-200 flex items-center gap-2">
+                            <div class="p-4 text-sm text-green-800 rounded-lg bg-green-50 border border-green-200 flex items-center gap-2 max-w-4xl">
                                 <span class="material-symbols-outlined text-green-500">check_circle</span>
                                 <span><?php echo $success_msg; ?></span>
                             </div>
                         <?php endif; ?>
 
                         <?php if ($error_msg): ?>
-                            <div class="p-4 mb-4 text-sm text-red-800 rounded-lg bg-red-50 border border-red-200 flex items-center gap-2">
+                            <div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 border border-red-200 flex items-center gap-2 max-w-4xl">
                                 <span class="material-symbols-outlined text-red-500">error</span>
                                 <span><?php echo $error_msg; ?></span>
                             </div>
                         <?php endif; ?>
 
-                        <!-- Title and filters -->
-                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                                <div>
-                                        <h1 class="text-2xl font-bold text-gray-900">Student Applications</h1>
-                                        <p class="text-gray-500 text-sm mt-1">Review applicant profiles and coordinate hiring rounds.</p>
-                                </div>
-                                <div class="flex items-center gap-3 w-full md:w-auto">
-                                        <label class="text-xs font-bold text-gray-500 uppercase shrink-0">Filter Status:</label>
-                                        <select onchange="window.location.href='coordinator_candidates.php?status='+this.value" class="rounded-xl border-gray-200 text-xs py-2 px-3 focus:border-blue-600 focus:ring-blue-600/10 cursor-pointer w-full md:w-48 bg-white">
-                                                <option value="">All Statuses</option>
-                                                <option value="Applied" <?php echo $status_filter === 'Applied' ? 'selected' : ''; ?>>Applied</option>
-                                                <option value="Test Completed" <?php echo $status_filter === 'Test Completed' ? 'selected' : ''; ?>>Test Completed</option>
-                                                <option value="HR Round" <?php echo $status_filter === 'HR Round' ? 'selected' : ''; ?>>HR Round</option>
-                                                <option value="HOD Approved" <?php echo $status_filter === 'HOD Approved' ? 'selected' : ''; ?>>HOD Approved</option>
-                                                <option value="Selected" <?php echo $status_filter === 'Selected' ? 'selected' : ''; ?>>Selected</option>
-                                                <option value="Rejected" <?php echo $status_filter === 'Rejected' ? 'selected' : ''; ?>>Rejected</option>
-                                        </select>
-                                </div>
+                        <!-- Title Info -->
+                        <div>
+                                <h1 class="text-2xl font-bold text-gray-900 font-h1">Pipeline Board</h1>
+                                <p class="text-gray-500 text-sm mt-1">Manage candidate hiring stages using quick status progression controls.</p>
                         </div>
 
-                        <!-- Candidates List -->
-                        <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                                <div class="overflow-x-auto">
-                                        <table class="w-full text-left text-sm">
-                                        <thead class="bg-gray-50 text-gray-500 uppercase font-bold text-[10px] tracking-wider border-b border-gray-100">
-                                                <tr>
-                                                        <th class="px-6 py-4">Student</th>
-                                                        <th class="px-6 py-4">Applied Position</th>
-                                                        <th class="px-6 py-4">Applied Date</th>
-                                                        <th class="px-6 py-4">Education / College</th>
-                                                        <th class="px-6 py-4">Status</th>
-                                                        <th class="px-6 py-4 text-right">Actions</th>
-                                                </tr>
-                                        </thead>
-                                        <tbody class="divide-y divide-gray-100 text-gray-600">
-                                                <?php if (empty($applications)): ?>
-                                                    <tr>
-                                                        <td colspan="6" class="px-6 py-10 text-center text-gray-400">No student applications found.</td>
-                                                    </tr>
-                                                <?php else: ?>
-                                                    <?php foreach ($applications as $app): 
-                                                        $badge_cls = match($app['status']) {
-                                                            'Applied' => 'bg-blue-50 text-blue-700 border-blue-100',
-                                                            'Test Completed' => 'bg-indigo-50 text-indigo-700 border-indigo-100',
-                                                            'HR Round' => 'bg-amber-50 text-amber-700 border-amber-100',
-                                                            'HOD Approved' => 'bg-purple-50 text-purple-700 border-purple-100',
-                                                            'Selected' => 'bg-green-50 text-green-700 border-green-100',
-                                                            'Rejected' => 'bg-red-50 text-red-700 border-red-100',
-                                                            default => 'bg-slate-50 text-slate-700 border-slate-100'
-                                                        };
-                                                    ?>
-                                                        <tr class="hover:bg-gray-50 transition-colors">
-                                                                <td class="px-6 py-4">
-                                                                        <div>
-                                                                                <p class="font-bold text-gray-900"><?php echo htmlspecialchars($app['student_name']); ?></p>
-                                                                                <p class="text-[11px] text-gray-400"><?php echo htmlspecialchars($app['student_email']); ?> • <?php echo htmlspecialchars($app['phone'] ?? 'N/A'); ?></p>
-                                                                        </div>
-                                                                </td>
-                                                                <td class="px-6 py-4 font-semibold text-gray-700"><?php echo htmlspecialchars($app['title'] ?: 'General Placement'); ?></td>
-                                                                <td class="px-6 py-4"><?php echo date('M d, Y', strtotime($app['applied_date'])); ?></td>
-                                                                <td class="px-6 py-4">
-                                                                        <p class="text-xs"><?php echo htmlspecialchars($app['education_status'] ?? 'Undergrad'); ?></p>
-                                                                        <p class="text-[11px] text-gray-400"><?php echo htmlspecialchars($app['college_name'] ?? 'N/A'); ?></p>
-                                                                </td>
-                                                                <td class="px-6 py-4">
-                                                                        <span class="px-2.5 py-0.5 border rounded-full text-xs font-bold <?php echo $badge_cls; ?>"><?php echo htmlspecialchars($app['status']); ?></span>
-                                                                </td>
-                                                                 <td class="px-6 py-4 text-right space-x-2 whitespace-nowrap">
-                                                                         <button onclick='openDetailsModal(<?php echo json_encode($app); ?>)' class="text-blue-600 hover:text-blue-800 font-bold text-xs bg-blue-50 px-2.5 py-1.5 rounded-lg border border-blue-200 hover:bg-blue-100 transition-colors cursor-pointer">View Details</button>
-                                                                         <?php if (in_array($app['status'], ['Selected', 'Started', 'Internship Started', 'Active Intern', 'Completed'])): ?>
-                                                                             <a href="coordinator_daily_logs.php?search=<?php echo urlencode($app['student_name']); ?>" class="inline-block text-emerald-600 hover:text-emerald-800 font-bold text-xs bg-emerald-50 px-2.5 py-1.5 rounded-lg border border-emerald-200 hover:bg-emerald-100 transition-colors">Monitor Progress</a>
-                                                                         <?php endif; ?>
-                                                                         <?php if (in_array($app['status'], ['Selected', 'HOD Approved'])): ?>
-                                                                             <a href="coordinator_teams.php?student_id=<?php echo $app['user_id']; ?>" class="inline-block text-indigo-600 hover:text-indigo-800 font-bold text-xs bg-indigo-50 px-2.5 py-1.5 rounded-lg border border-indigo-200 hover:bg-indigo-100 transition-colors">Assign Project</a>
-                                                                         <?php endif; ?>
-                                                                 </td>
-                                                        </tr>
-                                                    <?php endforeach; ?>
-                                                <?php endif; ?>
-                                        </tbody>
-                                </table>
+                        <!-- Search & Filter Bar -->
+                        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                            <form method="GET" action="coordinator_workflows.php" class="flex flex-col md:flex-row gap-4 items-center justify-between">
+                                <div class="relative w-full md:max-w-xs">
+                                    <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-[18px]">search</span>
+                                    <input type="text" name="search" value="<?php echo htmlspecialchars($search_query); ?>" placeholder="Search candidate, college..." 
+                                           class="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-blue-600 focus:ring-blue-600/10 transition-colors">
                                 </div>
+                                <div class="flex flex-wrap gap-3 w-full md:w-auto">
+                                    <select name="internship" class="rounded-xl border-gray-200 text-xs py-2 focus:border-blue-600 focus:ring-blue-600/10 cursor-pointer">
+                                        <option value="">All Internships</option>
+                                        <?php foreach ($internships_list as $title_option): ?>
+                                            <option value="<?php echo htmlspecialchars($title_option); ?>" <?php echo ($filter_internship === $title_option) ? 'selected' : ''; ?>>
+                                                <?php echo htmlspecialchars($title_option); ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                    <select name="status" class="rounded-xl border-gray-200 text-xs py-2 focus:border-blue-600 focus:ring-blue-600/10 cursor-pointer">
+                                        <option value="">All Statuses</option>
+                                        <?php foreach ($stages as $stage_option): ?>
+                                            <option value="<?php echo htmlspecialchars($stage_option); ?>" <?php echo ($filter_status === $stage_option) ? 'selected' : ''; ?>>
+                                                <?php echo htmlspecialchars($stage_option); ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                    <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-colors shadow-sm cursor-pointer">
+                                        Apply Filters
+                                    </button>
+                                    <?php if (!empty($search_query) || !empty($filter_internship) || !empty($filter_status)): ?>
+                                        <a href="coordinator_workflows.php" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition-colors text-center">
+                                            Clear
+                                        </a>
+                                    <?php endif; ?>
+                                </div>
+                            </form>
+                        </div>
+
+                        <!-- Kanban Board columns container -->
+                        <div class="kanban-board flex gap-4 overflow-x-auto pb-4 select-none items-start">
+                                <?php foreach ($stages as $stage_index => $stage): 
+                                        $stage_count = count($applications_by_stage[$stage]);
+                                        $header_cls = match($stage) {
+                                            'Applied' => 'border-t-4 border-blue-500',
+                                            'Screening' => 'border-t-4 border-cyan-500',
+                                            'Test Completed' => 'border-t-4 border-indigo-500',
+                                            'HR Round' => 'border-t-4 border-amber-500',
+                                            'HOD Approved' => 'border-t-4 border-purple-500',
+                                            'Selected' => 'border-t-4 border-green-500',
+                                            'Rejected' => 'border-t-4 border-red-500',
+                                            default => 'border-t-4 border-slate-500'
+                                        };
+                                ?>
+                                        <!-- Column -->
+                                        <div class="bg-white rounded-xl shadow-sm border border-gray-200 w-80 shrink-0 flex flex-col max-h-full <?php echo $header_cls; ?>">
+                                                <!-- Column Header -->
+                                                <div class="p-4 flex justify-between items-center bg-gray-55 border-b border-gray-100 rounded-t-xl">
+                                                        <h3 class="font-bold text-gray-900 text-sm flex items-center gap-2">
+                                                            <span><?php echo htmlspecialchars($stage); ?></span>
+                                                            <span class="px-2 py-0.5 bg-gray-100 text-gray-500 text-[11px] rounded-full font-bold"><?php echo $stage_count; ?></span>
+                                                        </h3>
+                                                </div>
+
+                                                <!-- Cards Area -->
+                                                <div class="p-3 overflow-y-auto space-y-3 flex-1 min-h-[200px]">
+                                                        <?php if ($stage_count === 0): ?>
+                                                            <div class="text-center py-8 text-gray-300 text-xs italic">No candidates</div>
+                                                        <?php else: ?>
+                                                            <?php foreach ($applications_by_stage[$stage] as $app): ?>
+                                                                <!-- Card -->
+                                                                <div class="bg-slate-50/50 hover:bg-slate-50 border border-gray-200 rounded-xl p-4 transition-all shadow-inner space-y-2.5">
+                                                                        <div>
+                                                                                <h4 class="font-bold text-gray-900 text-sm"><?php echo htmlspecialchars($app['student_name']); ?></h4>
+                                                                                <p class="text-[11px] text-gray-400 mt-0.5"><?php echo htmlspecialchars($app['college_name'] ?? 'N/A'); ?></p>
+                                                                        </div>
+                                                                        <div class="bg-white border border-gray-200/50 rounded-lg p-2 text-xs space-y-1">
+                                                                                <p class="font-semibold text-gray-700 truncate"><?php echo htmlspecialchars($app['title'] ?: 'General Placement'); ?></p>
+                                                                                <p class="text-[9px] text-gray-400 uppercase font-bold">Applied: <?php echo date('M d, Y', strtotime($app['applied_date'])); ?></p>
+                                                                                <p class="text-[10px] text-slate-500 font-semibold">Status: <span class="text-blue-600 font-bold"><?php echo htmlspecialchars($app['status']); ?></span></p>
+                                                                        </div>
+                                                                        
+                                                                        <!-- Card Action Buttons -->
+                                                                        <div class="flex justify-end items-center pt-2 border-t border-gray-100/50 gap-1.5">
+                                                                                <button onclick='openDetailsModal(<?php echo json_encode($app); ?>)' class="text-blue-600 hover:text-blue-800 font-bold text-[10px] bg-blue-50/50 border border-blue-100 px-2 py-1 rounded transition-colors cursor-pointer" title="View Candidate Profile">Details</button>
+                                                                                <?php if (in_array($app['status'], ['Selected', 'Started', 'Internship Started', 'Active Intern', 'Completed'])): ?>
+                                                                                    <a href="coordinator_daily_logs.php?search=<?php echo urlencode($app['student_name']); ?>" class="inline-block text-emerald-600 hover:text-emerald-800 font-bold text-[10px] bg-emerald-50/50 border border-emerald-100 px-2 py-1 rounded transition-colors" title="Monitor Internship Logs">Monitor</a>
+                                                                                <?php endif; ?>
+                                                                                <?php if (in_array($app['status'], ['Selected', 'HOD Approved'])): ?>
+                                                                                    <a href="coordinator_teams.php?student_id=<?php echo $app['user_id']; ?>" class="inline-block text-indigo-600 hover:text-indigo-800 font-bold text-[10px] bg-indigo-50/50 border border-indigo-100 px-2 py-1 rounded transition-colors" title="Assign to Project/Team">Assign</a>
+                                                                                <?php endif; ?>
+                                                                        </div>
+                                                                </div>
+                                                            <?php endforeach; ?>
+                                                        <?php endif; ?>
+                                                </div>
+                                        </div>
+                                <?php endforeach; ?>
                         </div>
                 </div>
         </main>
+
         <!-- View Details Modal -->
         <div id="details-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
                 <div class="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
-                        <div class="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                        <div class="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-55/50">
                                 <h3 class="text-lg font-bold text-gray-900 font-sans">Candidate Details</h3>
                                 <button onclick="closeDetailsModal()" class="text-gray-400 hover:text-gray-600 transition-colors cursor-pointer">
                                         <span class="material-symbols-outlined">close</span>
@@ -436,7 +526,7 @@ mysqli_stmt_close($stmt);
                 }
 
                 function closeDetailsModal() {
-                         detailsModal.classList.add('hidden');
+                        detailsModal.classList.add('hidden');
                 }
 
                 // Sidebar Toggle Handler

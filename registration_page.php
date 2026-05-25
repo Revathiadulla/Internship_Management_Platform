@@ -6,6 +6,7 @@ if (isset($_GET['success'])) $reg_success = htmlspecialchars(urldecode($_GET['su
 // Preserve submitted values to re-fill form on error
 $old_fullname = isset($_GET['full_name']) ? htmlspecialchars($_GET['full_name']) : '';
 $old_email    = isset($_GET['email'])     ? htmlspecialchars($_GET['email'])     : '';
+$old_phone    = isset($_GET['phone'])     ? htmlspecialchars($_GET['phone'])     : '';
 $old_role     = isset($_GET['role'])      ? htmlspecialchars($_GET['role'])      : 'student';
 ?>
 <!DOCTYPE html>
@@ -228,6 +229,13 @@ $old_role     = isset($_GET['role'])      ? htmlspecialchars($_GET['role'])     
                             value="<?php echo $old_email; ?>">
                     </div>
                     <div class="space-y-2">
+                        <label class="font-label-md text-label-md text-on-surface-variant" for="phone">Phone Number</label>
+                        <input
+                            class="w-full px-4 py-3 border border-outline-variant rounded-lg bg-surface-container-lowest focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all placeholder:text-outline/50"
+                            id="phone" name="phone" placeholder="10-digit number" required="" type="tel" pattern="[0-9]{10}" maxlength="10"
+                            value="<?php echo $old_phone; ?>">
+                    </div>
+                    <div class="space-y-2">
                         <label class="font-label-md text-label-md text-on-surface-variant"
                             for="password">Password</label>
                         <input
@@ -418,7 +426,27 @@ $old_role     = isset($_GET['role'])      ? htmlspecialchars($_GET['role'])     
 
 
     <script>
+    const phoneInput = document.getElementById('phone');
+    if (phoneInput) {
+        phoneInput.addEventListener('input', function(e) {
+            this.value = this.value.replace(/[^0-9]/g, '');
+            if (this.value.length !== 10) {
+                this.setCustomValidity('Phone number must be exactly 10 digits.');
+            } else {
+                this.setCustomValidity('');
+            }
+        });
+    }
+
     document.getElementById('register-form').addEventListener('submit', function(e) {
+        const phoneInput = document.getElementById('phone');
+        if (phoneInput && !/^[0-9]{10}$/.test(phoneInput.value)) {
+            e.preventDefault();
+            phoneInput.setCustomValidity('Phone number must be exactly 10 digits.');
+            phoneInput.reportValidity();
+            return false;
+        }
+
         const btn = document.getElementById('register-submit-btn');
         if (btn) {
             btn.style.pointerEvents = 'none';
@@ -430,9 +458,6 @@ $old_role     = isset($_GET['role'])      ? htmlspecialchars($_GET['role'])     
             spinner.className = 'material-symbols-outlined text-lg animate-spin';
             spinner.textContent = 'sync';
             btn.appendChild(spinner);
-            setTimeout(() => {
-                btn.disabled = true;
-            }, 10);
         }
     });
     </script>

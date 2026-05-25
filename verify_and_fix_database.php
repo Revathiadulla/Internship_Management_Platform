@@ -162,6 +162,117 @@ if (mysqli_num_rows($status_result) > 0) {
 }
 echo "</div>";
 
+// Check 6: Check/Add status column in daily_logs
+echo "<div class='mb-6'>";
+echo "<h2 class='text-lg font-bold text-slate-800 mb-3'>6. Checking daily_logs status column</h2>";
+$check_dl = mysqli_query($conn, "SHOW COLUMNS FROM daily_logs LIKE 'status'");
+if (mysqli_num_rows($check_dl) == 0) {
+    echo "<p class='text-orange-600 text-sm ml-4'>⚠ Adding missing column: status in daily_logs</p>";
+    if (mysqli_query($conn, "ALTER TABLE daily_logs ADD COLUMN status VARCHAR(50) DEFAULT 'Submitted'")) {
+        echo "<p class='text-emerald-600 text-sm ml-4'>✓ Column status added successfully</p>";
+        $fixes_applied++;
+    } else {
+        echo "<p class='text-red-600 text-sm ml-4'>✗ Failed to add status column: " . mysqli_error($conn) . "</p>";
+        $checks_failed++;
+    }
+} else {
+    echo "<p class='text-emerald-600 font-semibold'>✓ Column status exists in daily_logs</p>";
+    $checks_passed++;
+}
+echo "</div>";
+
+// Check 7: Check/Add team columns in internship_applications
+echo "<div class='mb-6'>";
+echo "<h2 class='text-lg font-bold text-slate-800 mb-3'>7. Checking team assignment columns in internship_applications</h2>";
+$team_cols = [
+    'team_name' => "VARCHAR(100) DEFAULT NULL",
+    'mentor_id' => "INT DEFAULT NULL",
+    'team_status' => "VARCHAR(50) DEFAULT 'Active'"
+];
+foreach ($team_cols as $col => $def) {
+    $check_col = mysqli_query($conn, "SHOW COLUMNS FROM internship_applications LIKE '$col'");
+    if (mysqli_num_rows($check_col) == 0) {
+        echo "<p class='text-orange-600 text-sm ml-4'>⚠ Adding missing column: $col</p>";
+        if (mysqli_query($conn, "ALTER TABLE internship_applications ADD COLUMN $col $def")) {
+            echo "<p class='text-emerald-600 text-sm ml-4'>✓ Column $col added successfully</p>";
+            $fixes_applied++;
+        } else {
+            echo "<p class='text-red-600 text-sm ml-4'>✗ Failed to add column $col: " . mysqli_error($conn) . "</p>";
+            $checks_failed++;
+        }
+    } else {
+        echo "<p class='text-emerald-600 font-semibold ml-4'>✓ Column $col exists</p>";
+        $checks_passed++;
+    }
+}
+echo "</div>";
+
+// Check 8: Check/Add project posting columns in internships
+echo "<div class='mb-6'>";
+echo "<h2 class='text-lg font-bold text-slate-800 mb-3'>8. Checking project posting columns in internships</h2>";
+$internship_cols = [
+    'project_title' => "VARCHAR(255) DEFAULT NULL",
+    'task_title' => "VARCHAR(255) DEFAULT NULL",
+    'description' => "TEXT DEFAULT NULL",
+    'project_type' => "VARCHAR(100) DEFAULT NULL",
+    'project_subtype' => "VARCHAR(100) DEFAULT NULL",
+    'technology_stack' => "TEXT DEFAULT NULL",
+    'difficulty_level' => "VARCHAR(50) DEFAULT 'Medium'",
+    'assigned_mentor' => "INT DEFAULT NULL",
+    'openings' => "INT DEFAULT 1",
+    'start_date' => "DATE DEFAULT NULL",
+    'end_date' => "DATE DEFAULT NULL"
+];
+foreach ($internship_cols as $col => $def) {
+    $check_col = mysqli_query($conn, "SHOW COLUMNS FROM internships LIKE '$col'");
+    if (mysqli_num_rows($check_col) == 0) {
+        echo "<p class='text-orange-600 text-sm ml-4'>⚠ Adding missing column: $col</p>";
+        if (mysqli_query($conn, "ALTER TABLE internships ADD COLUMN $col $def")) {
+            echo "<p class='text-emerald-600 text-sm ml-4'>✓ Column $col added successfully</p>";
+            $fixes_applied++;
+        } else {
+            echo "<p class='text-red-600 text-sm ml-4'>✗ Failed to add column $col: " . mysqli_error($conn) . "</p>";
+            $checks_failed++;
+        }
+    } else {
+        echo "<p class='text-emerald-600 font-semibold ml-4'>✓ Column $col exists</p>";
+        $checks_passed++;
+    }
+}
+echo "</div>";
+
+// Check 9: internship_phases table
+echo "<div class='mb-6'>";
+echo "<h2 class='text-lg font-bold text-slate-800 mb-3'>9. Checking internship_phases table</h2>";
+$check = mysqli_query($conn, "SHOW TABLES LIKE 'internship_phases'");
+if (mysqli_num_rows($check) > 0) {
+    echo "<p class='text-emerald-600 font-semibold'>✓ Table exists</p>";
+    $checks_passed++;
+} else {
+    echo "<p class='text-orange-600 font-semibold'>⚠ Creating table internship_phases...</p>";
+    $create_sql = "CREATE TABLE internship_phases (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        internship_id INT NOT NULL,
+        phase_number INT NOT NULL,
+        phase_name VARCHAR(100) NOT NULL,
+        start_date DATE NOT NULL,
+        end_date DATE NOT NULL,
+        status VARCHAR(50) DEFAULT 'Pending',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_internship (internship_id),
+        INDEX idx_phase (phase_number)
+    )";
+    if (mysqli_query($conn, $create_sql)) {
+        echo "<p class='text-emerald-600 text-sm ml-4'>✓ Table created successfully</p>";
+        $fixes_applied++;
+    } else {
+        echo "<p class='text-red-600 text-sm ml-4'>✗ Failed to create table: " . mysqli_error($conn) . "</p>";
+        $checks_failed++;
+    }
+}
+echo "</div>";
+
+
 // Summary
 echo "<div class='mt-8 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200'>";
 echo "<h2 class='text-xl font-bold text-slate-900 mb-4'>Summary</h2>";

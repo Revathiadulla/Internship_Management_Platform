@@ -223,14 +223,20 @@ if (!function_exists('sendEmail')) {
      */
     function sendEmail($toEmail, $toName, $subject, $body) {
         $mail = new PHPMailer(true);
+        $debugOutput = '';
         try {
+            $mail->SMTPDebug  = 3; // Enable detailed debug output
+            $mail->Debugoutput = function($str, $level) use (&$debugOutput) {
+                $debugOutput .= "[$level] " . trim($str) . "\n";
+            };
+
             $mail->isSMTP();
             $mail->Host       = 'smtp.gmail.com';
             $mail->SMTPAuth   = true;
             
             // Set SMTP credentials (use environment variables if available, otherwise fallback to admin credentials)
-            $smtpUser = getenv("MAIL_USERNAME") ?: 'imp.webprotal2026@gmail.com';
-            $smtpPass = getenv("MAIL_PASSWORD") ?: 'Imp@2026';
+            $smtpUser = getenv("MAIL_USERNAME") ?: 'imp.webportal2026@gmail.com';
+            $smtpPass = getenv("MAIL_PASSWORD") ?: 'qpnnwehjawuxcvob';
             
             $mail->Username   = $smtpUser;
             $mail->Password   = $smtpPass;
@@ -243,7 +249,7 @@ if (!function_exists('sendEmail')) {
 
             $mail->CharSet = 'UTF-8';
 
-            $fromName = getenv("MAIL_FROM_NAME") ?: "IMP Admin";
+            $fromName = getenv("MAIL_FROM_NAME") ?: "Internship Management Platform";
             $mail->setFrom($smtpUser, $fromName);
             $mail->addAddress($toEmail, $toName);
 
@@ -255,7 +261,8 @@ if (!function_exists('sendEmail')) {
             return true;
         } catch (\Throwable $e) {
             $logPath = __DIR__ . "/../email_notifications.log";
-            $errorMessage = "[" . date('Y-m-d H:i:s') . "] PHPMailer sending failed to $toEmail. Error: " . $e->getMessage() . " (" . $mail->ErrorInfo . ")\n";
+            $errorMessage = "[" . date('Y-m-d H:i:s') . "] PHPMailer sending failed to $toEmail. Error: " . $e->getMessage() . " (" . $mail->ErrorInfo . ")\n" .
+                            "SMTP Debug Logs:\n" . $debugOutput . "\n";
             @file_put_contents($logPath, $errorMessage, FILE_APPEND);
             return false;
         }
@@ -277,35 +284,75 @@ if (!function_exists('sendEmailNotification')) {
 
         $user_id = null;
         $email = '';
-        $fullName = 'User';
+        $fullName = '';
 
-        // 1. Resolve recipient details
+        // 1. Check metadata first for recipient_name, full_name, or registered_name
+        if (!empty($metadata)) {
+            if (isset($metadata['recipient_name']) && trim($metadata['recipient_name']) !== '') {
+                $fullName = trim($metadata['recipient_name']);
+            } elseif (isset($metadata['full_name']) && trim($metadata['full_name']) !== '') {
+                $fullName = trim($metadata['full_name']);
+            } elseif (isset($metadata['registered_name']) && trim($metadata['registered_name']) !== '') {
+                $fullName = trim($metadata['registered_name']);
+            }
+        }
+
+        // 2. Resolve recipient details
         if (is_numeric($recipient)) {
             $user_id = intval($recipient);
             $user_sql = "SELECT email, full_name FROM users WHERE id = $user_id LIMIT 1";
             $res = mysqli_query($conn, $user_sql);
             if ($res && $row = mysqli_fetch_assoc($res)) {
-                $email = $row['email'];
-                $fullName = $row['full_name'] ?: 'User';
-            } else {
-                // If not found in users, check student profiles
+                $email = trim($row['email']);
+                if (empty($fullName) && !empty($row['full_name'])) {
+                    $fullName = trim($row['full_name']);
+                }
+            }
+            // Fall back to student_profiles if name or email is empty
+            if (empty($fullName) || empty($email)) {
                 $prof_sql = "SELECT email, full_name FROM student_profiles WHERE user_id = $user_id LIMIT 1";
                 $prof_res = mysqli_query($conn, $prof_sql);
                 if ($prof_res && $prof_row = mysqli_fetch_assoc($prof_res)) {
-                    $email = $prof_row['email'];
-                    $fullName = $prof_row['full_name'] ?: 'User';
+                    if (empty($email)) {
+                        $email = trim($prof_row['email']);
+                    }
+                    if (empty($fullName) && !empty($prof_row['full_name'])) {
+                        $fullName = trim($prof_row['full_name']);
+                    }
                 }
             }
         } elseif (is_string($recipient) && filter_var($recipient, FILTER_VALIDATE_EMAIL)) {
             $email = trim($recipient);
-            // Look up user_id and full_name in users table
             $esc_email = mysqli_real_escape_string($conn, $email);
             $user_sql = "SELECT id, full_name FROM users WHERE email = '$esc_email' LIMIT 1";
             $res = mysqli_query($conn, $user_sql);
             if ($res && $row = mysqli_fetch_assoc($res)) {
                 $user_id = intval($row['id']);
-                $fullName = $row['full_name'] ?: 'User';
+                if (empty($fullName) && !empty($row['full_name'])) {
+                    $fullName = trim($row['full_name']);
+                }
             }
+            // Fall back to student profiles using user_id if we have it, or email otherwise
+            if (empty($fullName)) {
+                if ($user_id) {
+                    $prof_sql = "SELECT full_name FROM student_profiles WHERE user_id = $user_id LIMIT 1";
+                } else {
+                    $prof_sql = "SELECT user_id, full_name FROM student_profiles WHERE email = '$esc_email' LIMIT 1";
+                }
+                $prof_res = mysqli_query($conn, $prof_sql);
+                if ($prof_res && $prof_row = mysqli_fetch_assoc($prof_res)) {
+                    if (empty($user_id) && !empty($prof_row['user_id'])) {
+                        $user_id = intval($prof_row['user_id']);
+                    }
+                    if (empty($fullName) && !empty($prof_row['full_name'])) {
+                        $fullName = trim($prof_row['full_name']);
+                    }
+                }
+            }
+        }
+
+        if (empty($fullName)) {
+            $fullName = 'User';
         }
 
         if (empty($email)) {
@@ -512,21 +559,23 @@ if (!function_exists('sendEmailNotification')) {
                     VALUES ($esc_user_id, '$esc_email', '$esc_name', '$esc_subject', '$esc_msg', '$esc_html', '$esc_status')";
         mysqli_query($conn, $log_sql);
 
-        // 4. Log to File System for easy sandbox verification
-        $log_file = __DIR__ . "/../email_notifications.log";
-        $file_log = "========================================================================\n";
-        $file_log .= "[" . date('Y-m-d H:i:s') . "] OUTGOING EMAIL - STATUS: " . $final_status . "\n";
-        $file_log .= "ENGINE: " . $engine_info . "\n";
-        $file_log .= "TO: " . $email . " (" . $fullName . ") [ID: " . ($user_id ?: 'N/A') . "]\n";
-        $file_log .= "SUBJECT: " . $subject . "\n";
-        $file_log .= "MESSAGE TEXT: " . $messageText . "\n";
-        $file_log .= "METADATA: " . json_encode($metadata) . "\n";
-        $file_log .= "------------------------------------------------------------------------\n";
-        $file_log .= "SMTP LOGS:\n" . $smtp_logs . "\n";
-        $file_log .= "------------------------------------------------------------------------\n";
-        $file_log .= "HTML body generated (" . strlen($htmlBody) . " bytes).\n";
-        $file_log .= "========================================================================\n\n";
-        @file_put_contents($log_file, $file_log, FILE_APPEND);
+        // 4. Log to File System for easy sandbox verification only on failure
+        if (!$sent) {
+            $log_file = __DIR__ . "/../email_notifications.log";
+            $file_log = "========================================================================\n";
+            $file_log .= "[" . date('Y-m-d H:i:s') . "] OUTGOING EMAIL - STATUS: " . $final_status . "\n";
+            $file_log .= "ENGINE: " . $engine_info . "\n";
+            $file_log .= "TO: " . $email . " (" . $fullName . ") [ID: " . ($user_id ?: 'N/A') . "]\n";
+            $file_log .= "SUBJECT: " . $subject . "\n";
+            $file_log .= "MESSAGE TEXT: " . $messageText . "\n";
+            $file_log .= "METADATA: " . json_encode($metadata) . "\n";
+            $file_log .= "------------------------------------------------------------------------\n";
+            $file_log .= "SMTP LOGS:\n" . $smtp_logs . "\n";
+            $file_log .= "------------------------------------------------------------------------\n";
+            $file_log .= "HTML body generated (" . strlen($htmlBody) . " bytes).\n";
+            $file_log .= "========================================================================\n\n";
+            @file_put_contents($log_file, $file_log, FILE_APPEND);
+        }
 
         return $sent;
     }

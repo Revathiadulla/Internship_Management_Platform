@@ -6,31 +6,61 @@ include_once __DIR__ . "/includes/mail_helper.php";
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
+    // Ensure phone column exists dynamically in users table
+    $chk_phone = mysqli_query($conn, "SHOW COLUMNS FROM users LIKE 'phone'");
+    if (!$chk_phone || mysqli_num_rows($chk_phone) == 0) {
+        mysqli_query($conn, "ALTER TABLE users ADD COLUMN phone VARCHAR(15) DEFAULT NULL AFTER role");
+    }
+
     $full_name = isset($_POST['full_name']) ? $_POST['full_name'] : (isset($_POST['fullname']) ? $_POST['fullname'] : '');
     $email = $_POST['email'];
     $password = $_POST['password'];
     $confirm_password = $_POST['confirm_password'];
     $role = $_POST['role'];
+    $phone = isset($_POST['phone']) ? trim($_POST['phone']) : '';
 
-    if ($password !== $confirm_password) {
-        $params = http_build_query(['error' => 'Passwords do not match. Please try again.', 'full_name' => $full_name, 'email' => $email]);
+    if (empty($phone)) {
+        $params = http_build_query(['error' => 'Phone number is required.', 'full_name' => $full_name, 'email' => $email, 'phone' => $phone, 'role' => $role]);
         header("Location: registration_page.php?" . $params);
         exit();
     }
 
-    $checkEmail = "SELECT * FROM users WHERE email='$email'";
+    if (!preg_match('/^[0-9]{10}$/', $phone)) {
+        $params = http_build_query(['error' => 'Phone number must be exactly 10 digits.', 'full_name' => $full_name, 'email' => $email, 'phone' => $phone, 'role' => $role]);
+        header("Location: registration_page.php?" . $params);
+        exit();
+    }
+
+    if ($password !== $confirm_password) {
+        $params = http_build_query(['error' => 'Passwords do not match. Please try again.', 'full_name' => $full_name, 'email' => $email, 'phone' => $phone, 'role' => $role]);
+        header("Location: registration_page.php?" . $params);
+        exit();
+    }
+
+    $email_escaped = mysqli_real_escape_string($conn, $email);
+    $checkEmail = "SELECT * FROM users WHERE email='$email_escaped'";
     $result = mysqli_query($conn, $checkEmail);
 
     if (mysqli_num_rows($result) > 0) {
-        $params = http_build_query(['error' => 'This email is already registered. Please log in instead.', 'full_name' => $full_name, 'email' => $email]);
+        $params = http_build_query(['error' => 'This email is already registered. Please log in instead.', 'full_name' => $full_name, 'email' => $email, 'phone' => $phone, 'role' => $role]);
+        header("Location: registration_page.php?" . $params);
+        exit();
+    }
+
+    $phone_escaped = mysqli_real_escape_string($conn, $phone);
+    $checkPhone = "SELECT * FROM users WHERE phone='$phone_escaped'";
+    $resultPhone = mysqli_query($conn, $checkPhone);
+
+    if ($resultPhone && mysqli_num_rows($resultPhone) > 0) {
+        $params = http_build_query(['error' => 'This phone number is already registered.', 'full_name' => $full_name, 'email' => $email, 'phone' => $phone, 'role' => $role]);
         header("Location: registration_page.php?" . $params);
         exit();
     }
 
     $hashed_password = password_hash($password, PASSWORD_DEFAULT);
 
-    $sql = "INSERT INTO users (full_name, email, password, role)
-            VALUES ('$full_name', '$email', '$hashed_password', '$role')";
+    $sql = "INSERT INTO users (full_name, email, password, role, phone)
+            VALUES ('" . mysqli_real_escape_string($conn, $full_name) . "', '" . mysqli_real_escape_string($conn, $email) . "', '$hashed_password', '" . mysqli_real_escape_string($conn, $role) . "', '" . mysqli_real_escape_string($conn, $phone) . "')";
 
     if (mysqli_query($conn, $sql)) {
         // Automatically log in the user after successful registration
@@ -283,6 +313,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                             id="email" name="email" placeholder="name@organization.com" required="" type="email">
                     </div>
                     <div class="space-y-2">
+                        <label class="font-label-md text-label-md text-on-surface-variant" for="phone">Phone Number</label>
+                        <input
+                            class="w-full px-4 py-3 border border-outline-variant rounded-lg bg-surface-container-lowest focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all placeholder:text-outline/50"
+                            id="phone" name="phone" placeholder="10-digit number" required="" type="tel" pattern="[0-9]{10}" maxlength="10">
+                    </div>
+                    <div class="space-y-2">
                         <label class="font-label-md text-label-md text-on-surface-variant"
                             for="password">Password</label>
                         <input
@@ -467,7 +503,27 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
 
     <script>
+    const phoneInput = document.getElementById('phone');
+    if (phoneInput) {
+        phoneInput.addEventListener('input', function(e) {
+            this.value = this.value.replace(/[^0-9]/g, '');
+            if (this.value.length !== 10) {
+                this.setCustomValidity('Phone number must be exactly 10 digits.');
+            } else {
+                this.setCustomValidity('');
+            }
+        });
+    }
+
     document.getElementById('register-form').addEventListener('submit', function(e) {
+        const phoneInput = document.getElementById('phone');
+        if (phoneInput && !/^[0-9]{10}$/.test(phoneInput.value)) {
+            e.preventDefault();
+            phoneInput.setCustomValidity('Phone number must be exactly 10 digits.');
+            phoneInput.reportValidity();
+            return false;
+        }
+
         const btn = document.getElementById('register-submit-btn');
         if (btn) {
             btn.style.pointerEvents = 'none';

@@ -216,11 +216,18 @@ if (mysqli_num_rows($chk_phone) == 0) {
     executeSetupQuery($conn, "ALTER TABLE users ADD COLUMN phone VARCHAR(15) DEFAULT NULL AFTER role", "Adding phone column to users table", $errors, $is_cli);
 }
 
+// Check if profile_photo column needs to be added dynamically to users table
+$chk_photo = mysqli_query($conn, "SHOW COLUMNS FROM users LIKE 'profile_photo'");
+if (mysqli_num_rows($chk_photo) == 0) {
+    executeSetupQuery($conn, "ALTER TABLE users ADD COLUMN profile_photo VARCHAR(255) DEFAULT NULL AFTER phone", "Adding profile_photo column to users table", $errors, $is_cli);
+}
+
+
 // 10. Create password_resets table
 $password_resets_table = "CREATE TABLE IF NOT EXISTS password_resets (
     id INT AUTO_INCREMENT PRIMARY KEY,
     email VARCHAR(100) NOT NULL,
-    code VARCHAR(10) NOT NULL,
+    code VARCHAR(255) NOT NULL,
     send_method VARCHAR(10) NOT NULL,
     expires_at DATETIME NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -228,7 +235,7 @@ $password_resets_table = "CREATE TABLE IF NOT EXISTS password_resets (
 executeSetupQuery($conn, $password_resets_table, "Creating password_resets table", $errors, $is_cli);
 
 
-$admin_email = 'imp.webprotal2026@gmail.com';
+$admin_email = 'imp.webportal2026@gmail.com';
 $check_admin = mysqli_query($conn, "SELECT id FROM users WHERE email = '" . mysqli_real_escape_string($conn, $admin_email) . "'");
 if ($check_admin) {
     if (mysqli_num_rows($check_admin) == 0) {

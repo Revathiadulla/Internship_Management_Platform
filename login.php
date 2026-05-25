@@ -264,7 +264,7 @@ if (isset($_GET['success'])) $success_msg = htmlspecialchars(urldecode($_GET['su
 <div>
 <div class="flex justify-between mb-1.5">
 <label class="block font-label-md text-label-md text-on-surface-variant">Password</label>
-<a class="font-label-sm text-label-sm text-primary hover:underline" href="#">Forgot?</a>
+<a class="font-label-sm text-label-sm text-primary hover:underline" href="forgot_password.php">Forgot?</a>
 </div>
 <div class="relative">
 <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-lg" data-icon="lock">lock</span>
@@ -328,9 +328,6 @@ document.getElementById('login-form').addEventListener('submit', function(e) {
             iconSpan.textContent = 'sync';
             iconSpan.classList.add('animate-spin');
         }
-        setTimeout(() => {
-            btn.disabled = true;
-        }, 10);
     }
 });
 </script>
