@@ -1,3 +1,10 @@
+<?php
+session_start();
+if (!isset($_SESSION['user_id']) || !isset($_SESSION['role']) || strtolower($_SESSION['role']) !== 'admin') {
+    header("Location: login.php?error=" . urlencode("Unauthorized access. Admin role required."));
+    exit();
+}
+?>
 <!DOCTYPE html><html class="light" lang="en"><head>
 <meta charset="utf-8">
 <meta content="width=device-width, initial-scale=1.0" name="viewport">
@@ -104,7 +111,7 @@ tailwind.config = {
             <span class="material-symbols-outlined text-xl">help</span>
             Help Center
           </a>
-          <a href="index.html" class="flex items-center gap-3 text-red-600 px-4 py-2.5 rounded-lg hover:bg-red-50 text-sm font-medium mt-4">
+          <a href="logout.php" class="flex items-center gap-3 text-red-600 px-4 py-2.5 rounded-lg hover:bg-red-50 text-sm font-medium mt-4">
             <span class="material-symbols-outlined text-xl">logout</span>
             Logout
           </a>

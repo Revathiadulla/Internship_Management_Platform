@@ -25,9 +25,19 @@ $app_sql = "SELECT a.id as app_id,
                    COALESCE(i.duration, '') as duration,
                    COALESCE(i.mode, '') as mode,
                    a.status, a.applied_date, a.test_status, a.test_score,
-                   a.test_answers, a.education_status, a.preferred_duration
+                   a.test_answers, a.education_status, a.preferred_duration,
+                   a.team_name, a.mentor_id, a.team_status,
+                   m.full_name as mentor_name, m.email as mentor_email,
+                   i.description as project_desc,
+                   i.project_type,
+                   i.project_subtype,
+                   i.technology_stack,
+                   i.difficulty_level,
+                   i.start_date,
+                   i.end_date
             FROM internship_applications a
             LEFT JOIN internships i ON a.internship_id = i.id AND a.internship_id > 0
+            LEFT JOIN users m ON a.mentor_id = m.id
             WHERE a.user_id = '$user_id'
             ORDER BY a.applied_date DESC";
 $app_result = mysqli_query($conn, $app_sql);
@@ -55,7 +65,18 @@ if ($app_result) {
                 'status' => $row['status'],
                 'applied_date' => $row['applied_date'],
                 'test_score' => $row['test_score'],
-                'education_status' => $row['education_status']
+                'education_status' => $row['education_status'],
+                'team_name' => $row['team_name'] ?? null,
+                'mentor_name' => $row['mentor_name'] ?? null,
+                'mentor_email' => $row['mentor_email'] ?? null,
+                'team_status' => $row['team_status'] ?? 'Active',
+                'project_desc' => $row['project_desc'] ?? null,
+                'project_type' => $row['project_type'] ?? null,
+                'project_subtype' => $row['project_subtype'] ?? null,
+                'technology_stack' => $row['technology_stack'] ?? null,
+                'difficulty_level' => $row['difficulty_level'] ?? null,
+                'start_date' => $row['start_date'] ?? null,
+                'end_date' => $row['end_date'] ?? null
             ];
         }
     }
@@ -68,36 +89,48 @@ $total_logs = 0;
 if ($has_active) {
     $active_title = strtolower($active_intern['title']);
 
-    $active_domain = "General";
-    $project_name  = "General Aptitude Research Project";
-    $project_desc  = "Research and document key concepts relevant to your internship domain. Prepare a structured report and present findings to your mentor.";
-    $project_stack = ["Research", "Documentation", "Presentation"];
+    $active_domain = !empty($active_intern['project_type']) ? $active_intern['project_type'] : "";
+    $project_name  = !empty($active_intern['title']) ? $active_intern['title'] : "General Aptitude Research Project";
+    $project_desc  = !empty($active_intern['project_desc']) ? $active_intern['project_desc'] : "";
+    $project_stack = [];
+    if (!empty($active_intern['technology_stack'])) {
+        $project_stack = array_map('trim', explode(',', $active_intern['technology_stack']));
+    }
 
-    if (strpos($active_title, 'mobile') !== false || strpos($active_title, 'android') !== false || strpos($active_title, 'ios') !== false || strpos($active_title, 'flutter') !== false || strpos($active_title, 'app developer') !== false) {
-        $active_domain = "Mobile App Development";
-        $project_name  = "Mobile App Development Project";
-        $project_desc  = "Design and build a cross-platform mobile application. Implement UI screens, navigation, API integration, and local storage. Deliver a fully functional app with documentation.";
-        $project_stack = ["Flutter", "Dart", "Firebase", "REST API", "Android Studio"];
-    } elseif (strpos($active_title, 'frontend') !== false || strpos($active_title, 'react') !== false || strpos($active_title, 'web') !== false) {
-        $active_domain = "Frontend Development";
-        $project_name  = "Responsive Web Application";
-        $project_desc  = "Design and build a fully responsive web application using React.js. Implement reusable components, state management, and integrate a REST API for dynamic data.";
-        $project_stack = ["React.js", "HTML5", "CSS3", "JavaScript", "REST API"];
-    } elseif (strpos($active_title, 'data') !== false || strpos($active_title, 'python') !== false || strpos($active_title, 'sql') !== false || strpos($active_title, 'science') !== false) {
-        $active_domain = "Data Science";
-        $project_name  = "Sales Data Analysis Dashboard";
-        $project_desc  = "Build an end-to-end data pipeline — clean raw transaction records, perform exploratory analysis using Pandas, and construct an interactive visual dashboard for executive review.";
-        $project_stack = ["Python", "SQL", "Pandas", "Matplotlib", "Tableau"];
-    } elseif (strpos($active_title, 'ui') !== false || strpos($active_title, 'ux') !== false || strpos($active_title, 'design') !== false) {
-        $active_domain = "UI/UX Design";
-        $project_name  = "Mobile App UI Redesign";
-        $project_desc  = "Conduct user research, create wireframes and high-fidelity prototypes for a mobile application redesign. Deliver a complete design system with components and interaction flows.";
-        $project_stack = ["Figma", "User Research", "Wireframing", "Prototyping", "Design Systems"];
-    } elseif (strpos($active_title, 'backend') !== false || strpos($active_title, 'node') !== false || strpos($active_title, 'php') !== false || strpos($active_title, 'database') !== false) {
-        $active_domain = "Backend Development";
-        $project_name  = "RESTful API Service";
-        $project_desc  = "Design and implement a secure RESTful API with authentication, database integration, and comprehensive documentation. Include unit tests and deploy to a staging environment.";
-        $project_stack = ["Node.js", "PHP", "MySQL", "REST API", "JWT Auth"];
+    if (empty($project_desc)) {
+        $project_desc  = "Research and document key concepts relevant to your internship domain. Prepare a structured report and present findings to your mentor.";
+        $project_stack = ["Research", "Documentation", "Presentation"];
+
+        if (strpos($active_title, 'mobile') !== false || strpos($active_title, 'android') !== false || strpos($active_title, 'ios') !== false || strpos($active_title, 'flutter') !== false || strpos($active_title, 'app developer') !== false) {
+            if (empty($active_domain)) $active_domain = "Mobile App Development";
+            $project_name  = "Mobile App Development Project";
+            $project_desc  = "Design and build a cross-platform mobile application. Implement UI screens, navigation, API integration, and local storage. Deliver a fully functional app with documentation.";
+            $project_stack = ["Flutter", "Dart", "Firebase", "REST API", "Android Studio"];
+        } elseif (strpos($active_title, 'frontend') !== false || strpos($active_title, 'react') !== false || strpos($active_title, 'web') !== false) {
+            if (empty($active_domain)) $active_domain = "Frontend Development";
+            $project_name  = "Responsive Web Application";
+            $project_desc  = "Design and build a fully responsive web application using React.js. Implement reusable components, state management, and integrate a REST API for dynamic data.";
+            $project_stack = ["React.js", "HTML5", "CSS3", "JavaScript", "REST API"];
+        } elseif (strpos($active_title, 'data') !== false || strpos($active_title, 'python') !== false || strpos($active_title, 'sql') !== false || strpos($active_title, 'science') !== false) {
+            if (empty($active_domain)) $active_domain = "Data Science";
+            $project_name  = "Sales Data Analysis Dashboard";
+            $project_desc  = "Build an end-to-end data pipeline — clean raw transaction records, perform exploratory analysis using Pandas, and construct an interactive visual dashboard for executive review.";
+            $project_stack = ["Python", "SQL", "Pandas", "Matplotlib", "Tableau"];
+        } elseif (strpos($active_title, 'ui') !== false || strpos($active_title, 'ux') !== false || strpos($active_title, 'design') !== false) {
+            if (empty($active_domain)) $active_domain = "UI/UX Design";
+            $project_name  = "Mobile App UI Redesign";
+            $project_desc  = "Conduct user research, create wireframes and high-fidelity prototypes for a mobile application redesign. Deliver a complete design system with components and interaction flows.";
+            $project_stack = ["Figma", "User Research", "Wireframing", "Prototyping", "Design Systems"];
+        } elseif (strpos($active_title, 'backend') !== false || strpos($active_title, 'node') !== false || strpos($active_title, 'php') !== false || strpos($active_title, 'database') !== false) {
+            if (empty($active_domain)) $active_domain = "Backend Development";
+            $project_name  = "RESTful API Service";
+            $project_desc  = "Design and implement a secure RESTful API with authentication, database integration, and comprehensive documentation. Include unit tests and deploy to a staging environment.";
+            $project_stack = ["Node.js", "PHP", "MySQL", "REST API", "JWT Auth"];
+        }
+    }
+
+    if (empty($active_domain)) {
+        $active_domain = "General";
     }
 
     $active_intern['domain']        = $active_domain;
@@ -110,14 +143,15 @@ if ($has_active) {
     $total_logs_row = mysqli_fetch_assoc($total_logs_res);
     $total_logs     = intval($total_logs_row['cnt'] ?? 0);
 
-    if ($total_logs >= 20)      $current_phase_num = 6;
-    elseif ($total_logs >= 15)  $current_phase_num = 5;
-    elseif ($total_logs >= 10)  $current_phase_num = 4;
-    elseif ($total_logs >= 6)   $current_phase_num = 3;
-    elseif ($total_logs >= 3)   $current_phase_num = 2;
-    else                        $current_phase_num = 1;
+    // Query phases from database
+    $db_phases_res = mysqli_query($conn, "SELECT * FROM internship_phases WHERE internship_id = '{$active_intern['internship_id']}' ORDER BY phase_number ASC");
+    $db_phases = [];
+    while ($db_row = mysqli_fetch_assoc($db_phases_res)) {
+        $db_phases[$db_row['phase_number']] = $db_row;
+    }
+    $db_phases_exist = !empty($db_phases);
 
-    $phases = [
+    $base_phases = [
         1 => ['label' => 'P1 Learning Phase',           'short' => 'Learning',      'icon' => 'school'],
         2 => ['label' => 'P2 Documentation & Planning', 'short' => 'Documentation', 'icon' => 'description'],
         3 => ['label' => 'P3 Designing',                'short' => 'Designing',     'icon' => 'design_services'],
@@ -125,6 +159,45 @@ if ($has_active) {
         5 => ['label' => 'P5 Testing',                  'short' => 'Testing',       'icon' => 'bug_report'],
         6 => ['label' => 'P6 Deployment',               'short' => 'Deployment',    'icon' => 'rocket_launch'],
     ];
+
+    $current_phase_num = 1;
+    $phases = [];
+    foreach ($base_phases as $pnum => $bp) {
+        $status = 'Pending';
+        $start_date_val = '';
+        $end_date_val = '';
+        if ($db_phases_exist && isset($db_phases[$pnum])) {
+            $status = $db_phases[$pnum]['status'];
+            $start_date_val = $db_phases[$pnum]['start_date'];
+            $end_date_val = $db_phases[$pnum]['end_date'];
+        } else {
+            // Legacy log-count fallback
+            $completed_threshold = [1 => 0, 2 => 3, 3 => 6, 4 => 10, 5 => 15, 6 => 20][$pnum];
+            $status = ($total_logs >= $completed_threshold) ? 'Completed' : 'Pending';
+            
+            // Determine active legacy phase
+            if ($pnum === 1 && $total_logs < 3) $status = 'Active';
+            elseif ($pnum === 2 && $total_logs >= 3 && $total_logs < 6) $status = 'Active';
+            elseif ($pnum === 3 && $total_logs >= 6 && $total_logs < 10) $status = 'Active';
+            elseif ($pnum === 4 && $total_logs >= 10 && $total_logs < 15) $status = 'Active';
+            elseif ($pnum === 5 && $total_logs >= 15 && $total_logs < 20) $status = 'Active';
+            elseif ($pnum === 6 && $total_logs >= 20) $status = 'Active';
+        }
+        
+        if ($status === 'Active') {
+            $current_phase_num = $pnum;
+        }
+        
+        $phases[$pnum] = [
+            'label' => $bp['label'],
+            'short' => $bp['short'],
+            'icon' => $bp['icon'],
+            'status' => $status,
+            'start_date' => $start_date_val,
+            'end_date' => $end_date_val
+        ];
+    }
+    
     $active_intern['current_phase_num']   = $current_phase_num;
     $active_intern['phases']              = $phases;
     $active_intern['current_phase_label'] = $phases[$current_phase_num]['label'];
@@ -147,9 +220,13 @@ if ($has_active) {
         $recent_logs[] = $log_row;
     }
 
-    $date_start  = new DateTime($active_intern['applied_date']);
+    $start_date_str = !empty($active_intern['start_date']) ? $active_intern['start_date'] : $active_intern['applied_date'];
+    $date_start  = new DateTime($start_date_str);
     $date_today  = new DateTime();
     $days_active = $date_start->diff($date_today)->days + 1;
+    if ($date_today < $date_start) {
+        $days_active = 0;
+    }
 }
 
 
@@ -198,11 +275,26 @@ $all_notif_result = mysqli_query($conn, $all_notif_sql);
 if ($has_active) {
     $phases            = $active_intern['phases'];
     $current_phase_num = $active_intern['current_phase_num'];
-    $progress_pct      = min(100, round(($days_active / 90) * 100));
-    $end_date          = new DateTime($active_intern['applied_date']);
-    $end_date->modify('+3 months');
-    $days_left         = max(0, (new DateTime())->diff($end_date)->days);
-    $is_completed      = ($days_active >= 90 || strtolower($active_intern['status']) === 'completed');
+    
+    $start_date_str = !empty($active_intern['start_date']) ? $active_intern['start_date'] : $active_intern['applied_date'];
+    $start_date_obj = new DateTime($start_date_str);
+    
+    $end_date = !empty($active_intern['end_date']) ? new DateTime($active_intern['end_date']) : clone $start_date_obj;
+    if (empty($active_intern['end_date'])) {
+        $end_date->modify('+3 months');
+    }
+    
+    $date_today = new DateTime();
+    $total_days = max(1, $start_date_obj->diff($end_date)->days);
+    
+    if ($date_today < $start_date_obj) {
+        $progress_pct = 0;
+    } else {
+        $progress_pct = min(100, round(($start_date_obj->diff($date_today)->days / $total_days) * 100));
+    }
+    
+    $days_left = ($date_today > $end_date) ? 0 : $date_today->diff($end_date)->days;
+    $is_completed = ($date_today >= $end_date || strtolower($active_intern['status']) === 'completed');
 } else {
     $phases            = [];
     $current_phase_num = 0;
@@ -429,9 +521,9 @@ if ($has_active) {
       <?php
         $d_end = null; $d_left = 0; $d_pct = 0;
         if ($has_active) {
-          $d_end  = new DateTime($active_intern['applied_date']); $d_end->modify('+3 months');
-          $d_left = max(0,(new DateTime())->diff($d_end)->days);
-          $d_pct  = min(100,round(($days_active/90)*100));
+          $d_end  = $end_date;
+          $d_left = $days_left;
+          $d_pct  = $progress_pct;
         }
       ?>
       <?php if ($has_active): ?>
@@ -467,7 +559,7 @@ if ($has_active) {
             <h3 class="text-base font-extrabold text-slate-800 mt-0.5 leading-snug"><?php echo htmlspecialchars($active_intern['title']); ?></h3>
           </div>
           <div class="grid grid-cols-2 gap-3 text-xs border-t border-slate-100 pt-4">
-            <div><p class="text-slate-400 font-semibold">Start Date</p><p class="font-bold text-slate-700 mt-0.5"><?php echo date('M d, Y',strtotime($active_intern['applied_date'])); ?></p></div>
+            <div><p class="text-slate-400 font-semibold">Start Date</p><p class="font-bold text-slate-700 mt-0.5"><?php echo date('M d, Y', strtotime($active_intern['start_date'] ?: $active_intern['applied_date'])); ?></p></div>
             <div><p class="text-slate-400 font-semibold">End Date</p><p class="font-bold text-slate-700 mt-0.5"><?php echo $d_end->format('M d, Y'); ?></p></div>
             <div><p class="text-slate-400 font-semibold">Duration</p><p class="font-bold text-slate-700 mt-0.5"><?php echo !empty($active_intern['duration'])?htmlspecialchars($active_intern['duration']):'3 Months'; ?></p></div>
             <div><p class="text-slate-400 font-semibold">Mode</p><p class="font-bold text-slate-700 mt-0.5 capitalize"><?php echo !empty($active_intern['mode'])?htmlspecialchars($active_intern['mode']):'Hybrid'; ?></p></div>
@@ -498,9 +590,12 @@ if ($has_active) {
               <div>
                 <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Assigned Project</p>
                 <h3 class="text-base font-extrabold text-slate-800 mt-0.5"><?php echo htmlspecialchars($active_intern['project_name']); ?></h3>
+                <?php if (!empty($active_intern['team_name'])): ?>
+                  <p class="text-xs text-indigo-600 font-bold mt-1 flex items-center gap-1"><span class="material-symbols-outlined text-xs">groups</span> Team: <?php echo htmlspecialchars($active_intern['team_name']); ?></p>
+                <?php endif; ?>
               </div>
             </div>
-            <span class="px-2.5 py-1 bg-indigo-50 text-indigo-700 text-[10px] font-extrabold rounded-full uppercase border border-indigo-100 shrink-0">In Progress</span>
+            <span class="px-2.5 py-1 bg-indigo-50 text-indigo-700 text-[10px] font-extrabold rounded-full uppercase border border-indigo-100 shrink-0"><?php echo htmlspecialchars($active_intern['team_status'] ?: 'In Progress'); ?></span>
           </div>
           <p class="text-sm text-slate-500 leading-relaxed"><?php echo htmlspecialchars($active_intern['project_desc']); ?></p>
           <div class="flex flex-wrap gap-2">
@@ -515,10 +610,20 @@ if ($has_active) {
           </div>
           <div class="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-4 text-xs">
             <div class="flex items-center gap-2">
-              <img src="https://ui-avatars.com/api/?name=Sarah+Jenkins&background=6366F1&color=fff" class="w-8 h-8 rounded-full border" alt="Mentor">
+              <?php 
+              $mentor_name_disp = !empty($active_intern['mentor_name']) ? $active_intern['mentor_name'] : 'Mentor assignment pending'; 
+              $avatar_url = "https://ui-avatars.com/api/?name=" . urlencode($mentor_name_disp) . "&background=6366F1&color=fff";
+              ?>
+              <img src="<?php echo $avatar_url; ?>" class="w-8 h-8 rounded-full border" alt="Mentor">
               <div>
                 <p class="text-[9px] text-slate-400 font-semibold uppercase">Assigned Mentor</p>
-                <p class="font-bold text-slate-700"><?php echo ($feedback_count > 0) ? 'Dr. Sarah Jenkins' : 'Mentor assignment pending'; ?></p>
+                <p class="font-bold text-slate-700">
+                  <?php if (!empty($active_intern['mentor_name'])): ?>
+                    <a href="mailto:<?php echo htmlspecialchars($active_intern['mentor_email']); ?>" class="hover:underline text-indigo-600"><?php echo htmlspecialchars($active_intern['mentor_name']); ?></a>
+                  <?php else: ?>
+                    Mentor assignment pending
+                  <?php endif; ?>
+                </p>
               </div>
             </div>
             <div>
@@ -546,8 +651,8 @@ if ($has_active) {
         </div>
         <div class="grid grid-cols-6 gap-3">
           <?php foreach($phases as $pnum => $phase):
-            $is_done    = $pnum < $current_phase_num;
-            $is_current = $pnum === $current_phase_num;
+            $is_done    = $phase['status'] === 'Completed';
+            $is_current = $phase['status'] === 'Active';
             $box_cls    = $is_done    ? 'bg-emerald-50 border-emerald-200' : ($is_current ? 'bg-blue-50 border-blue-300 ring-2 ring-blue-100' : 'bg-slate-50 border-slate-200');
             $icon_cls   = $is_done    ? 'bg-emerald-500 text-white' : ($is_current ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-400');
             $lbl_cls    = $is_done    ? 'text-emerald-700 font-bold' : ($is_current ? 'text-blue-700 font-extrabold' : 'text-slate-400');
@@ -560,6 +665,9 @@ if ($has_active) {
             <div>
               <p class="text-[10px] font-bold <?php echo $lbl_cls; ?>">P<?php echo $pnum; ?></p>
               <p class="text-[10px] <?php echo $lbl_cls; ?>"><?php echo $phase['short']; ?></p>
+              <?php if (!empty($phase['start_date']) && !empty($phase['end_date'])): ?>
+                <p class="text-[8px] text-slate-400 mt-0.5 whitespace-nowrap"><?php echo date('M d', strtotime($phase['start_date'])) . ' - ' . date('M d', strtotime($phase['end_date'])); ?></p>
+              <?php endif; ?>
               <p class="text-[9px] uppercase tracking-wide <?php echo $sub_cls; ?> mt-0.5"><?php echo $is_done ? 'Done' : ($is_current ? 'Current' : 'Pending'); ?></p>
             </div>
           </div>
@@ -711,11 +819,33 @@ if ($has_active) {
             </div>
             <div class="space-y-3">
               <?php
-                $deadlines = [
-                  ['label'=>'Development Phase Review','sub'=>'Submit code for approval','days'=>min($d_left,5),'urgent'=>$d_left<=7],
-                  ['label'=>'Final Project Submission','sub'=>'Complete project deployment check','days'=>min($d_left,20),'urgent'=>false],
-                  ['label'=>'Daily Log Due','sub'=>'Submit today\'s activity log','days'=>0,'urgent'=>true],
-                ];
+                $deadlines = [];
+                // Add Daily Log deadline
+                $deadlines[] = ['label' => 'Daily Log Due', 'sub' => 'Submit today\'s activity log', 'days' => 0, 'urgent' => true];
+                
+                if (isset($db_phases_exist) && $db_phases_exist) {
+                    foreach ($db_phases as $pnum => $db_p) {
+                        if ($db_p['status'] !== 'Completed') {
+                            $p_end = new DateTime($db_p['end_date']);
+                            $p_today = new DateTime();
+                            $diff = 0;
+                            if ($p_today <= $p_end) {
+                                $diff = $p_today->diff($p_end)->days;
+                            }
+                            $deadlines[] = [
+                                'label' => $db_p['phase_name'] . ' Deadline',
+                                'sub' => $db_p['status'] === 'Active' ? 'Current active phase review' : 'Upcoming phase deadline',
+                                'days' => $diff,
+                                'urgent' => ($diff <= 3 || $db_p['status'] === 'Active')
+                            ];
+                        }
+                    }
+                } else {
+                    // Legacy fallback
+                    $deadlines[] = ['label'=>'Development Phase Review','sub'=>'Submit code for approval','days'=>min($d_left,5),'urgent'=>$d_left<=7];
+                    $deadlines[] = ['label'=>'Final Project Submission','sub'=>'Complete project deployment check','days'=>min($d_left,20),'urgent'=>false];
+                }
+                
                 foreach($deadlines as $dl):
                   $dl_bg  = $dl['urgent'] ? 'bg-red-50 border-red-100' : 'bg-slate-50 border-slate-100';
                   $dl_day = $dl['urgent'] ? 'text-red-600 font-extrabold' : 'text-slate-500 font-semibold';
@@ -868,11 +998,11 @@ if ($has_active) {
                 </div>
                 <div class="bg-slate-50 rounded-xl p-3.5 border border-slate-100">
                   <p class="text-slate-400 text-[10px] font-bold uppercase tracking-wide mb-1">Start Date</p>
-                  <p class="font-bold text-slate-800"><?php echo date('M d, Y', strtotime($active_intern['applied_date'])); ?></p>
+                  <p class="font-bold text-slate-800"><?php echo date('M d, Y', strtotime($active_intern['start_date'] ?: $active_intern['applied_date'])); ?></p>
                 </div>
                 <div class="bg-slate-50 rounded-xl p-3.5 border border-slate-100">
                   <p class="text-slate-400 text-[10px] font-bold uppercase tracking-wide mb-1">End Date</p>
-                  <p class="font-bold text-slate-800"><?php echo $intern_end->format('M d, Y'); ?></p>
+                  <p class="font-bold text-slate-800"><?php echo $end_date->format('M d, Y'); ?></p>
                 </div>
                 <div class="bg-slate-50 rounded-xl p-3.5 border border-slate-100">
                   <p class="text-slate-400 text-[10px] font-bold uppercase tracking-wide mb-1">Duration</p>
@@ -885,6 +1015,18 @@ if ($has_active) {
                 <div class="bg-blue-50 rounded-xl p-3.5 border border-blue-100">
                   <p class="text-blue-400 text-[10px] font-bold uppercase tracking-wide mb-1">Current Phase</p>
                   <p class="font-bold text-blue-700"><?php echo htmlspecialchars($phases[$current_phase_num]['label']); ?></p>
+                  <?php if (!empty($phases[$current_phase_num]['start_date']) && !empty($phases[$current_phase_num]['end_date'])): 
+                    $p_start = date('M d, Y', strtotime($phases[$current_phase_num]['start_date']));
+                    $p_end = date('M d, Y', strtotime($phases[$current_phase_num]['end_date']));
+                    $p_end_dt = new DateTime($phases[$current_phase_num]['end_date']);
+                    $today_dt = new DateTime();
+                    $p_left = ($today_dt > $p_end_dt) ? 0 : $today_dt->diff($p_end_dt)->days;
+                  ?>
+                    <p class="text-slate-500 text-[10px] mt-1 font-semibold"><?php echo $p_start; ?> - <?php echo $p_end; ?></p>
+                    <p class="text-blue-600 text-[10px] font-bold mt-0.5"><?php echo $p_left; ?> days remaining for this phase</p>
+                  <?php else: ?>
+                    <p class="text-slate-500 text-[10px] mt-1 font-semibold">No dates set</p>
+                  <?php endif; ?>
                 </div>
               </div>
               <!-- Progress bar -->
@@ -1057,11 +1199,11 @@ if ($has_active) {
           <div class="grid grid-cols-3 gap-4 pt-4 border-t border-slate-50 text-sm">
             <div>
               <p class="text-slate-400 text-xs font-medium">Difficulty</p>
-              <p class="font-semibold text-amber-600 mt-0.5">Medium</p>
+              <p class="font-semibold text-amber-600 mt-0.5"><?php echo htmlspecialchars($active_intern['difficulty_level'] ?: 'Medium'); ?></p>
             </div>
             <div>
               <p class="text-slate-400 text-xs font-medium">Duration</p>
-              <p class="font-semibold text-slate-700 mt-0.5">3 Months</p>
+              <p class="font-semibold text-slate-700 mt-0.5"><?php echo htmlspecialchars($active_intern['duration'] ?: '3 Months'); ?></p>
             </div>
             <div>
               <p class="text-slate-400 text-xs font-medium">Current Phase</p>
