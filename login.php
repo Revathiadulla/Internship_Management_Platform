@@ -170,6 +170,11 @@ if (isset($_GET['success'])) $success_msg = htmlspecialchars(urldecode($_GET['su
         .auth-background {
             background-image: linear-gradient(135deg, #f8f9fa 0%, #e7e8e9 100%);
         }
+        /* Hide browser default password reveal button */
+        input::-ms-reveal,
+        input::-ms-clear {
+            display: none;
+        }
         @keyframes shake {
             0%,100%{transform:translateX(0)}
             20%{transform:translateX(-6px)}

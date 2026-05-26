@@ -137,6 +137,11 @@ $old_role     = isset($_GET['role'])      ? htmlspecialchars($_GET['role'])     
             80%{transform:translateX(4px)}
         }
         .animate-shake { animation: shake .4s ease; }
+        /* Hide browser default password reveal button */
+        input::-ms-reveal,
+        input::-ms-clear {
+            display: none;
+        }
     </style>
 </head>
 
