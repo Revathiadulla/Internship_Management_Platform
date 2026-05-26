@@ -1,5 +1,5 @@
 <!DOCTYPE html><html class="light" lang="en"><head>
-<meta charset="utf-8">
+<meta charset="UTF-8">
 <meta content="width=device-width, initial-scale=1.0" name="viewport">
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;display=swap" rel="stylesheet">
@@ -276,6 +276,61 @@ window.alert = function(message) {
         }, 400);
     }, 2000);
 };
+
+function sanitizeEncodingIssues() {
+    const replacements = {
+        'â€¢': '•',
+        'â€“': '—',
+        'â€œ': '“',
+        'â€\u009d': '”',
+        'â€”': '—',
+        'â€™': '’',
+        'â€': ''
+    };
+
+    function walk(node) {
+        if (node.nodeType === Node.TEXT_NODE) {
+            let text = node.nodeValue;
+            let updated = false;
+            for (const [key, val] of Object.entries(replacements)) {
+                if (text.includes(key)) {
+                    text = text.replaceAll(key, val);
+                    updated = true;
+                }
+            }
+            if (updated) {
+                node.nodeValue = text;
+            }
+        } else if (node.nodeType === Node.ELEMENT_NODE && node.shadowRoot) {
+            walk(node.shadowRoot);
+        } else {
+            for (let child = node.firstChild; child; child = child.nextSibling) {
+                walk(child);
+            }
+        }
+    }
+    
+    document.querySelectorAll('input, textarea').forEach(el => {
+        ['placeholder', 'value'].forEach(attr => {
+            let val = el.getAttribute(attr);
+            if (val) {
+                let updated = false;
+                for (const [key, val2] of Object.entries(replacements)) {
+                    if (val.includes(key)) {
+                        val = val.replaceAll(key, val2);
+                        updated = true;
+                    }
+                }
+                if (updated) {
+                    el.setAttribute(attr, val);
+                }
+            }
+        });
+    });
+
+    walk(document.body);
+}
+document.addEventListener('DOMContentLoaded', sanitizeEncodingIssues);
 </script>
 <div class="flex items-center justify-center gap-1.5 mt-10 mb-2 text-on-surface-variant opacity-60">
 <span class="material-symbols-outlined text-sm" data-icon="lock">lock</span>

@@ -108,7 +108,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 <html class="light" lang="en">
 
 <head>
-    <meta charset="utf-8">
+    <meta charset="UTF-8">
     <meta content="width=device-width, initial-scale=1.0" name="viewport">
     <title>Sign Up | InternshipHub</title>
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
@@ -277,7 +277,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             </div>
         </div>
         <div class="relative z-10 pt-12 border-t border-white/10">
-            <p class="font-label-sm text-label-sm text-primary-fixed-dim opacity-70">Â© 2024 InternshipHub Inc. All
+            <p class="font-label-sm text-label-sm text-primary-fixed-dim opacity-70">© 2024 InternshipHub Inc. All
                 rights reserved.</p>
         </div>
         <!-- Decorative Background Element -->
@@ -323,7 +323,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                             for="password">Password</label>
                         <input
                             class="w-full px-4 py-3 border border-outline-variant rounded-lg bg-surface-container-lowest focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all placeholder:text-outline/50"
-                            id="password" name="password" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" required="" type="password">
+                            id="password" name="password" placeholder="••••••••" required="" type="password">
                         <div class="flex flex-col gap-2 mt-2">
                             <p class="font-label-sm text-label-sm text-outline">Minimum 8 characters, at least 1 special
                                 character</p>
@@ -346,7 +346,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                             for="confirm-password">Confirm Password</label>
                         <input
                             class="w-full px-4 py-3 border border-outline-variant rounded-lg bg-surface-container-lowest focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all placeholder:text-outline/50"
-                            id="confirm-password" name="confirm_password" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" required=""
+                            id="confirm-password" name="confirm_password" placeholder="••••••••" required=""
                             type="password">
                     </div>
                 </div>
@@ -537,6 +537,61 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             btn.appendChild(spinner);
         }
     });
+
+    function sanitizeEncodingIssues() {
+        const replacements = {
+            'â€¢': '•',
+            'â€“': '—',
+            'â€œ': '“',
+            'â€\u009d': '”',
+            'â€”': '—',
+            'â€™': '’',
+            'â€': ''
+        };
+
+        function walk(node) {
+            if (node.nodeType === Node.TEXT_NODE) {
+                let text = node.nodeValue;
+                let updated = false;
+                for (const [key, val] of Object.entries(replacements)) {
+                    if (text.includes(key)) {
+                        text = text.replaceAll(key, val);
+                        updated = true;
+                    }
+                }
+                if (updated) {
+                    node.nodeValue = text;
+                }
+            } else if (node.nodeType === Node.ELEMENT_NODE && node.shadowRoot) {
+                walk(node.shadowRoot);
+            } else {
+                for (let child = node.firstChild; child; child = child.nextSibling) {
+                    walk(child);
+                }
+            }
+        }
+        
+        document.querySelectorAll('input, textarea').forEach(el => {
+            ['placeholder', 'value'].forEach(attr => {
+                let val = el.getAttribute(attr);
+                if (val) {
+                    let updated = false;
+                    for (const [key, val2] of Object.entries(replacements)) {
+                        if (val.includes(key)) {
+                            val = val.replaceAll(key, val2);
+                            updated = true;
+                        }
+                    }
+                    if (updated) {
+                        el.setAttribute(attr, val);
+                    }
+                }
+            });
+        });
+
+        walk(document.body);
+    }
+    document.addEventListener('DOMContentLoaded', sanitizeEncodingIssues);
     </script>
 </body>
 

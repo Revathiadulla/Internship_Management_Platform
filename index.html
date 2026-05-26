@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 
 <html class="light" lang="en"><head>
-<meta charset="utf-8"/>
+<meta charset="UTF-8">
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
@@ -209,7 +209,7 @@
 </div>
 <div class="flex flex-col">
 <span class="font-label-sm text-on-surface">Software Engineering</span>
-<span class="text-[10px] text-on-surface-variant">Google â€¢ Intern</span>
+<span class="text-[10px] text-on-surface-variant">Google • Intern</span>
 </div>
 </div>
 <span class="bg-primary-fixed text-on-primary-fixed-variant px-2 py-0.5 rounded text-[10px] font-bold">ACTIVE</span>
@@ -552,7 +552,7 @@
 <div class="relative z-10">
 <h2 class="font-h1 text-h1 text-on-primary-container mb-md">Ready to Start Your Journey?</h2>
 <p class="font-body-lg text-on-primary-container/80 mb-xl max-w-2xl mx-auto">
-                        From application to hiring â€” everything in one platform. Join thousands of students and companies already using InternshipHub.
+                        From application to hiring — everything in one platform. Join thousands of students and companies already using InternshipHub.
                     </p>
 <div class="flex flex-wrap justify-center gap-md">
 <button onclick="window.location.href='registration_page.php'" class="bg-white text-primary font-label-md text-label-md px-xl py-md rounded-lg shadow-sm hover:bg-surface transition-all active:scale-[0.98]">
@@ -607,7 +607,7 @@
 </div>
 </div>
 <div class="mt-xl pt-lg border-t border-outline-variant/30 flex flex-col md:flex-row justify-between items-center gap-md">
-<p class="text-[12px] text-outline">Â© 2024 InternshipHub Inc. All rights reserved.</p>
+<p class="text-[12px] text-outline">© 2024 InternshipHub Inc. All rights reserved.</p>
 <div class="flex gap-md">
 <span class="material-symbols-outlined text-outline cursor-pointer hover:text-primary" data-icon="public">public</span>
 <span class="material-symbols-outlined text-outline cursor-pointer hover:text-primary" data-icon="share">share</span>
@@ -615,4 +615,60 @@
 </div>
 </div>
 </footer>
+<script>
+function sanitizeEncodingIssues() {
+    const replacements = {
+        'â€¢': '•',
+        'â€“': '—',
+        'â€œ': '“',
+        'â€\u009d': '”',
+        'â€”': '—',
+        'â€™': '’',
+        'â€': ''
+    };
+
+    function walk(node) {
+        if (node.nodeType === Node.TEXT_NODE) {
+            let text = node.nodeValue;
+            let updated = false;
+            for (const [key, val] of Object.entries(replacements)) {
+                if (text.includes(key)) {
+                    text = text.replaceAll(key, val);
+                    updated = true;
+                }
+            }
+            if (updated) {
+                node.nodeValue = text;
+            }
+        } else if (node.nodeType === Node.ELEMENT_NODE && node.shadowRoot) {
+            walk(node.shadowRoot);
+        } else {
+            for (let child = node.firstChild; child; child = child.nextSibling) {
+                walk(child);
+            }
+        }
+    }
+    
+    document.querySelectorAll('input, textarea').forEach(el => {
+        ['placeholder', 'value'].forEach(attr => {
+            let val = el.getAttribute(attr);
+            if (val) {
+                let updated = false;
+                for (const [key, val2] of Object.entries(replacements)) {
+                    if (val.includes(key)) {
+                        val = val.replaceAll(key, val2);
+                        updated = true;
+                    }
+                }
+                if (updated) {
+                    el.setAttribute(attr, val);
+                }
+            }
+        });
+    });
+
+    walk(document.body);
+}
+document.addEventListener('DOMContentLoaded', sanitizeEncodingIssues);
+</script>
 </body></html>
