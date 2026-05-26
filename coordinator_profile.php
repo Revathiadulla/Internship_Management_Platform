@@ -301,12 +301,17 @@ $profile_photo = $user_data['profile_photo'] ?? '';
                                 <!-- Banner & Avatar Section -->
                                 <div class="h-32 bg-gradient-to-r from-blue-500 to-indigo-600 relative"></div>
                                 <div class="px-8 pb-6 relative flex flex-col sm:flex-row items-center sm:items-end gap-4 -mt-16 mb-4">
-                                        <div class="w-32 h-32 rounded-full border-4 border-white bg-white overflow-hidden shadow-md">
+                                        <div class="w-32 h-32 rounded-full border-4 border-white bg-white overflow-hidden shadow-md relative group cursor-pointer" id="avatar-container">
                                                 <?php if (!empty($profile_photo) && file_exists($profile_photo)): ?>
-                                                        <img src="<?php echo htmlspecialchars($profile_photo); ?>" alt="Avatar" class="w-full h-full object-cover">
+                                                        <img id="avatar-preview" src="<?php echo htmlspecialchars($profile_photo); ?>" alt="Avatar" class="w-full h-full object-cover">
                                                 <?php else: ?>
-                                                        <img src="https://ui-avatars.com/api/?name=<?php echo urlencode($full_name); ?>&background=0D8ABC&color=fff" alt="Avatar" class="w-full h-full object-cover">
+                                                        <img id="avatar-preview" src="https://ui-avatars.com/api/?name=<?php echo urlencode($full_name); ?>&background=0D8ABC&color=fff" alt="Avatar" class="w-full h-full object-cover">
                                                 <?php endif; ?>
+                                                <!-- Hover Edit Overlay -->
+                                                <div class="absolute inset-0 bg-black/50 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-white text-xs font-semibold">
+                                                        <span class="material-symbols-outlined text-white text-lg mb-1">photo_camera</span>
+                                                        <span>Edit</span>
+                                                </div>
                                         </div>
                                         <div class="text-center sm:text-left pb-2 flex-1">
                                                 <h1 class="text-2xl font-bold text-gray-900"><?php echo htmlspecialchars($full_name); ?></h1>
@@ -328,7 +333,8 @@ $profile_photo = $user_data['profile_photo'] ?? '';
                                 <div class="p-8">
                                         <?php if ($section === 'profile'): ?>
                                                 <form action="coordinator_profile.php?section=profile" method="POST" enctype="multipart/form-data" class="space-y-6">
-                                                        <input type="hidden" name="update_profile" value="1">
+                                                         <input type="hidden" name="update_profile" value="1">
+                                                         <input type="file" name="profile_photo" id="profile_photo_input" accept="image/jpeg,image/png,image/gif,image/webp" class="hidden">
                                                         
                                                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                                                                 <div>
@@ -350,11 +356,11 @@ $profile_photo = $user_data['profile_photo'] ?? '';
                                                                                class="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
                                                                 </div>
 
-                                                                <div>
-                                                                        <label class="block text-xs font-bold uppercase text-gray-500 tracking-wider mb-2">Profile Photo</label>
-                                                                        <input type="file" name="profile_photo" accept="image/*"
-                                                                               class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 transition-all">
-                                                                        <p class="text-xs text-gray-400 mt-1">Max size: 2MB. Formats: JPG, PNG, GIF, WEBP.</p>
+                                                                <div class="flex items-center h-full pt-6">
+                                                                         <div class="text-xs text-gray-500 italic flex items-center">
+                                                                                 <span class="material-symbols-outlined text-[18px] text-blue-500 mr-1">info</span>
+                                                                                 To update your profile photo, click on your avatar above.
+                                                                         </div>
                                                                 </div>
                                                         </div>
 
@@ -429,6 +435,54 @@ $profile_photo = $user_data['profile_photo'] ?? '';
                         document.addEventListener('click', function(e) {
                                 if (!profileBtn.contains(e.target) && !profileDropdown.contains(e.target)) {
                                         profileDropdown.classList.add('hidden');
+                                }
+                        });
+                }
+
+                // Avatar click to choose file & instant preview
+                const avatarContainer = document.getElementById('avatar-container');
+                const fileInput = document.getElementById('profile_photo_input');
+
+                if (avatarContainer && fileInput) {
+                        avatarContainer.addEventListener('click', () => {
+                                fileInput.click();
+                        });
+
+                        fileInput.addEventListener('change', function(e) {
+                                const file = e.target.files[0];
+                                if (file) {
+                                        // Validate file type
+                                        const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+                                        const fileType = file.type;
+                                        const fileExt = file.name.split('.').pop().toLowerCase();
+                                        const allowedExts = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+
+                                        if (!allowedTypes.includes(fileType) && !allowedExts.includes(fileExt)) {
+                                                alert('Invalid file type. Allowed formats: JPG, JPEG, PNG, GIF, WEBP');
+                                                this.value = '';
+                                                return;
+                                        }
+
+                                        // Validate file size (2MB)
+                                        if (file.size > 2 * 1024 * 1024) {
+                                                alert('File size exceeds the 2MB limit.');
+                                                this.value = '';
+                                                return;
+                                        }
+
+                                        // Instant preview
+                                        const reader = new FileReader();
+                                        reader.onload = function(event) {
+                                                const previewImg = document.getElementById('avatar-preview');
+                                                const headerPreviewImg = document.querySelector('#profile-container img');
+                                                if (previewImg) {
+                                                        previewImg.src = event.target.result;
+                                                }
+                                                if (headerPreviewImg) {
+                                                        headerPreviewImg.src = event.target.result;
+                                                }
+                                        };
+                                        reader.readAsDataURL(file);
                                 }
                         });
                 }
