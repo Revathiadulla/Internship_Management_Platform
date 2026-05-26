@@ -178,6 +178,20 @@ if (isset($_GET['success'])) $success_msg = htmlspecialchars(urldecode($_GET['su
             80%{transform:translateX(4px)}
         }
         .animate-shake { animation: shake .4s ease; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeOut {
+            from { opacity: 1; transform: translateY(0); }
+            to { opacity: 0; transform: translateY(-10px); }
+        }
+        .animate-fade-in {
+            animation: fadeIn 0.4s ease-out forwards;
+        }
+        .animate-fade-out {
+            animation: fadeOut 0.4s ease-in forwards;
+        }
     </style>
 </head>
 <body class="bg-background text-on-background min-h-screen flex flex-col">
@@ -247,9 +261,11 @@ if (isset($_GET['success'])) $success_msg = htmlspecialchars(urldecode($_GET['su
 <p class="font-body-md text-body-md text-on-surface-variant mt-2">Access your internship dashboard</p>
 </div>
 <?php if ($success_msg): ?>
-<div class="flex items-center gap-3 p-3.5 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700 font-medium mb-4">
-    <span class="material-symbols-outlined text-green-500 text-[20px] flex-shrink-0">check_circle</span>
-    <span><?php echo $success_msg; ?></span>
+<div id="login-success-container" class="animate-fade-in mb-4">
+    <div id="login-success-banner" class="flex items-center gap-3 p-3.5 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700 font-medium">
+        <span class="material-symbols-outlined text-green-500 text-[20px] flex-shrink-0">check_circle</span>
+        <span><?php echo $success_msg; ?></span>
+    </div>
 </div>
 <?php endif; ?>
 <form id="login-form" class="space-y-6" action="login.php" method="POST">
@@ -264,7 +280,7 @@ if (isset($_GET['success'])) $success_msg = htmlspecialchars(urldecode($_GET['su
 <div>
 <div class="flex justify-between mb-1.5">
 <label class="block font-label-md text-label-md text-on-surface-variant">Password</label>
-<a class="font-label-sm text-label-sm text-primary hover:underline" href="forgot_password.php">Forgot?</a>
+<a class="font-label-sm text-label-sm text-primary hover:underline" href="forgot_password.php">Forgot Password?</a>
 </div>
 <div class="relative">
 <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-lg" data-icon="lock">lock</span>
@@ -278,9 +294,11 @@ if (isset($_GET['success'])) $success_msg = htmlspecialchars(urldecode($_GET['su
 <label class="ml-2 font-body-md text-body-md text-on-surface-variant" for="remember">Keep me logged in for 30 days</label>
 </div>
 <?php if ($error_msg): ?>
-<div id="login-error-banner" class="flex items-center gap-3 p-3.5 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 font-medium animate-shake">
-    <span class="material-symbols-outlined text-red-500 text-[20px] flex-shrink-0">error</span>
-    <span><?php echo $error_msg; ?></span>
+<div id="login-error-container" class="animate-fade-in">
+    <div id="login-error-banner" class="flex items-center gap-3 p-3.5 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 font-medium animate-shake">
+        <span class="material-symbols-outlined text-red-500 text-[20px] flex-shrink-0">error</span>
+        <span><?php echo $error_msg; ?></span>
+    </div>
 </div>
 <?php endif; ?>
 <button type="submit" id="login-submit-btn" class="w-full py-3 bg-primary-container hover:bg-primary text-on-primary font-label-md text-label-md rounded-lg shadow-sm transition-colors flex items-center justify-center gap-2"><span class="btn-text">Sign In</span><span class="material-symbols-outlined text-lg" data-icon="arrow_forward">arrow_forward</span></button><p class="mt-4 text-center font-body-md text-body-md text-on-surface-variant opacity-75">Login for Students, HR, Mentors, and Companies</p>
@@ -321,11 +339,15 @@ if (document.getElementById('login-error-banner')) {
     document.getElementById('login-password').classList.add('border-red-400', 'bg-red-50/30');
     // Clear red on input
     ['login-email','login-password'].forEach(id => {
-        document.getElementById(id).addEventListener('input', function() {
-            this.classList.remove('border-red-400','bg-red-50/30');
-        });
+        const inputEl = document.getElementById(id);
+        if (inputEl) {
+            inputEl.addEventListener('input', function() {
+                this.classList.remove('border-red-400','bg-red-50/30');
+            });
+        }
     });
 }
+
 document.getElementById('login-form').addEventListener('submit', function(e) {
     const btn = document.getElementById('login-submit-btn');
     if (btn) {
@@ -341,5 +363,80 @@ document.getElementById('login-form').addEventListener('submit', function(e) {
         }
     }
 });
+
+// Auto-dismiss banners after 2 seconds, fade out, then reload the login page
+function handleBannerAutoDismiss(container) {
+    if (!container) return;
+    setTimeout(() => {
+        container.classList.remove('animate-fade-in');
+        container.classList.add('animate-fade-out');
+        setTimeout(() => {
+            container.remove();
+            // Reload the login page cleanly (removing query parameters)
+            window.location.href = 'login.php';
+        }, 400); // Wait for fade-out animation to complete
+    }, 2000);
+}
+
+const errorContainer = document.getElementById('login-error-container');
+const successContainer = document.getElementById('login-success-container');
+
+if (errorContainer) {
+    handleBannerAutoDismiss(errorContainer);
+}
+if (successContainer) {
+    handleBannerAutoDismiss(successContainer);
+}
+
+// Override window.alert to show a custom non-blocking notification banner
+// with the same design, which auto-dismisses and reloads after 2 seconds
+function escapeHtml(str) {
+    return str.replace(/&/g, '&amp;')
+              .replace(/</g, '&lt;')
+              .replace(/>/g, '&gt;')
+              .replace(/"/g, '&quot;')
+              .replace(/'/g, '&#039;');
+}
+
+window.alert = function(message) {
+    // Prevent duplicate banners
+    const existing = document.querySelectorAll('#login-error-container, #login-success-container, .custom-js-alert-container');
+    existing.forEach(el => el.remove());
+
+    const isSuccess = /success|logout|logged out|ok/i.test(message);
+    const container = document.createElement('div');
+    container.className = 'custom-js-alert-container animate-fade-in mb-4';
+
+    if (isSuccess) {
+        container.innerHTML = `
+            <div class="flex items-center gap-3 p-3.5 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700 font-medium">
+                <span class="material-symbols-outlined text-green-500 text-[20px] flex-shrink-0">check_circle</span>
+                <span>${escapeHtml(message)}</span>
+            </div>
+        `;
+    } else {
+        container.innerHTML = `
+            <div class="flex items-center gap-3 p-3.5 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 font-medium animate-shake">
+                <span class="material-symbols-outlined text-red-500 text-[20px] flex-shrink-0">error</span>
+                <span>${escapeHtml(message)}</span>
+            </div>
+        `;
+    }
+
+    const form = document.getElementById('login-form');
+    if (form) {
+        form.parentNode.insertBefore(container, form);
+    }
+
+    // Auto dismiss and reload page after 2 seconds
+    setTimeout(() => {
+        container.classList.remove('animate-fade-in');
+        container.classList.add('animate-fade-out');
+        setTimeout(() => {
+            container.remove();
+            window.location.href = 'login.php';
+        }, 400);
+    }, 2000);
+};
 </script>
 </body></html>
