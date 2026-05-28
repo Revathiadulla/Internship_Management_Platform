@@ -20,7 +20,7 @@ $skills = mysqli_real_escape_string($conn, $_POST['skills']);
 $aadhaar_number = mysqli_real_escape_string($conn, $_POST['aadhaar_number']);
 $pan_number = mysqli_real_escape_string($conn, $_POST['pan_number']);
 
-$folder = __DIR__ . '/uploads/secure/';
+$folder = sys_get_temp_dir() . "/imp_uploads/";
 if (!is_dir($folder)) {
     if (!mkdir($folder, 0777, true)) {
         header("Location: student_profile_form.php?error=" . urlencode("Failed to create upload directory."));
@@ -29,9 +29,6 @@ if (!is_dir($folder)) {
     // Create an .htaccess file to restrict access
     $htaccess = "Order Deny,Allow\nDeny from all";
     file_put_contents($folder . ".htaccess", $htaccess);
-}
-if (!is_writable($folder)) {
-    chmod($folder, 0777);
 }
 
 // Fetch existing profile data to preserve old files if new ones aren't uploaded
@@ -157,7 +154,7 @@ if ($existing_profile) {
 }
 
 if (mysqli_query($conn, $sql)) {
-    header("Location: student_dashboard.php?msg=" . urlencode("Profile Saved Successfully"));
+    header("Location: student_dashboard.php?msg=profile_updated");
     exit();
 } else {
     header("Location: student_profile_form.php?error=" . urlencode("Database Error: " . mysqli_error($conn)));
