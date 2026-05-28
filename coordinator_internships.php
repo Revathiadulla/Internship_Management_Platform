@@ -159,8 +159,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $project_type = trim($_POST['project_type']);
     $project_subtype = trim($_POST['project_subtype']);
     $difficulty_level = trim($_POST['difficulty_level']);
-    $assigned_mentor = intval($_POST['assigned_mentor']);
-    $mentor_val = $assigned_mentor > 0 ? $assigned_mentor : null;
     $openings = intval($_POST['openings']);
     $start_date = !empty($_POST['start_date']) ? $_POST['start_date'] : null;
     $end_date = !empty($_POST['end_date']) ? $_POST['end_date'] : null;
@@ -168,8 +166,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     if (empty($title) || empty($project_title) || empty($duration) || empty($mode) || empty($technology_stack) || empty($description)) {
         $error_msg = "Please fill in all required fields.";
     } else {
-        $stmt = mysqli_prepare($conn, "INSERT INTO internships (title, duration, mode, skills, status, description, project_type, project_subtype, project_title, task_title, technology_stack, difficulty_level, assigned_mentor, openings, start_date, end_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        mysqli_stmt_bind_param($stmt, "ssssssssssssiiss", $title, $duration, $mode, $skills, $status, $description, $project_type, $project_subtype, $project_title, $task_title, $technology_stack, $difficulty_level, $mentor_val, $openings, $start_date, $end_date);
+        $stmt = mysqli_prepare($conn, "INSERT INTO internships (title, duration, mode, skills, status, description, project_type, project_subtype, project_title, task_title, technology_stack, difficulty_level, openings, start_date, end_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        mysqli_stmt_bind_param($stmt, "ssssssssssssiss", $title, $duration, $mode, $skills, $status, $description, $project_type, $project_subtype, $project_title, $task_title, $technology_stack, $difficulty_level, $openings, $start_date, $end_date);
         
         if (mysqli_stmt_execute($stmt)) {
             $new_id = mysqli_insert_id($conn);
@@ -199,8 +197,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $project_type = trim($_POST['project_type']);
     $project_subtype = trim($_POST['project_subtype']);
     $difficulty_level = trim($_POST['difficulty_level']);
-    $assigned_mentor = intval($_POST['assigned_mentor']);
-    $mentor_val = $assigned_mentor > 0 ? $assigned_mentor : null;
     $openings = intval($_POST['openings']);
     $start_date = !empty($_POST['start_date']) ? $_POST['start_date'] : null;
     $end_date = !empty($_POST['end_date']) ? $_POST['end_date'] : null;
@@ -214,8 +210,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $date_changed = ($old_row && $old_row['start_date'] !== $start_date);
         $duration_changed = ($old_row && $old_row['duration'] !== $duration);
 
-        $stmt = mysqli_prepare($conn, "UPDATE internships SET title = ?, duration = ?, mode = ?, skills = ?, status = ?, description = ?, project_type = ?, project_subtype = ?, project_title = ?, task_title = ?, technology_stack = ?, difficulty_level = ?, assigned_mentor = ?, openings = ?, start_date = ?, end_date = ? WHERE id = ?");
-        mysqli_stmt_bind_param($stmt, "ssssssssssssiissi", $title, $duration, $mode, $skills, $status, $description, $project_type, $project_subtype, $project_title, $task_title, $technology_stack, $difficulty_level, $mentor_val, $openings, $start_date, $end_date, $id);
+        $stmt = mysqli_prepare($conn, "UPDATE internships SET title = ?, duration = ?, mode = ?, skills = ?, status = ?, description = ?, project_type = ?, project_subtype = ?, project_title = ?, task_title = ?, technology_stack = ?, difficulty_level = ?, openings = ?, start_date = ?, end_date = ? WHERE id = ?");
+        mysqli_stmt_bind_param($stmt, "ssssssssssssissi", $title, $duration, $mode, $skills, $status, $description, $project_type, $project_subtype, $project_title, $task_title, $technology_stack, $difficulty_level, $openings, $start_date, $end_date, $id);
         
         if (mysqli_stmt_execute($stmt)) {
             // Check if timeline phases exist
@@ -683,23 +679,12 @@ mysqli_stmt_close($stmt);
                                                 </div>
                                         </div>
 
-                                        <div class="grid grid-cols-2 gap-4">
-                                                <div>
-                                                        <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Assigned Mentor</label>
-                                                        <select name="assigned_mentor" id="form-assigned-mentor" class="w-full rounded-xl border-gray-200 text-xs py-2 focus:border-blue-600 focus:ring-blue-600/10 cursor-pointer">
-                                                                <option value="">Select Mentor...</option>
-                                                                <?php foreach ($mentors as $mentor): ?>
-                                                                    <option value="<?php echo $mentor['id']; ?>"><?php echo htmlspecialchars($mentor['full_name']); ?></option>
-                                                                <?php endforeach; ?>
-                                                        </select>
-                                                </div>
-                                                <div>
-                                                        <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Status</label>
-                                                        <select name="status" id="form-status" class="w-full rounded-xl border-gray-200 text-xs py-2 focus:border-blue-600 focus:ring-blue-600/10 cursor-pointer">
-                                                                <option value="Active" selected>Active</option>
-                                                                <option value="Inactive">Inactive</option>
-                                                        </select>
-                                                </div>
+                                        <div>
+                                                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Status</label>
+                                                <select name="status" id="form-status" class="w-full rounded-xl border-gray-200 text-xs py-2 focus:border-blue-600 focus:ring-blue-600/10 cursor-pointer">
+                                                        <option value="Active" selected>Active</option>
+                                                        <option value="Inactive">Inactive</option>
+                                                </select>
                                         </div>
 
                                         <div>
@@ -768,7 +753,6 @@ mysqli_stmt_close($stmt);
                 const openingsInput = document.getElementById('form-openings');
                 const startDateInput = document.getElementById('form-start-date');
                 const endDateInput = document.getElementById('form-end-date');
-                const mentorInput = document.getElementById('form-assigned-mentor');
                 const techStackInput = document.getElementById('form-tech-stack');
                 const descriptionInput = document.getElementById('form-description');
 
@@ -947,7 +931,6 @@ mysqli_stmt_close($stmt);
                         openingsInput.value = item.openings || 1;
                         startDateInput.value = item.start_date || '';
                         endDateInput.value = item.end_date || '';
-                        mentorInput.value = item.assigned_mentor || '';
                         techStackInput.value = item.technology_stack || '';
                         descriptionInput.value = item.description || '';
 
