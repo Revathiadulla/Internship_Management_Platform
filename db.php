@@ -57,6 +57,14 @@ if (!$conn) {
     die("Connection failed: " . mysqli_connect_error());
 }
 
+// Add `title` column to student_notifications if it doesn't exist yet
+$_col_check = mysqli_query($conn, "SHOW COLUMNS FROM student_notifications LIKE 'title'");
+if ($_col_check && mysqli_num_rows($_col_check) === 0) {
+    mysqli_query($conn, "ALTER TABLE student_notifications
+                         ADD COLUMN title VARCHAR(255) NOT NULL DEFAULT ''
+                         AFTER user_id");
+}
+unset($_col_check);
 
 function checkAndAddToTalentPool($conn, $app_id) {
     $app_id = intval($app_id);
