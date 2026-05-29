@@ -19,6 +19,22 @@ function set_flash(string $message): void {
 }
 
 function ensure_module_schema(mysqli $conn): void {
+    // Ensure at least one name-related column exists in internship_applications to prevent SQL crashes
+    $chk_name_cols = mysqli_query($conn, "SHOW COLUMNS FROM internship_applications");
+    $has_name_col = false;
+    if ($chk_name_cols) {
+        while ($row = mysqli_fetch_assoc($chk_name_cols)) {
+            $col_name = strtolower($row['Field']);
+            if ($col_name === 'full_name' || $col_name === 'name' || $col_name === 'first_name') {
+                $has_name_col = true;
+                break;
+            }
+        }
+    }
+    if (!$has_name_col) {
+        mysqli_query($conn, "ALTER TABLE internship_applications ADD COLUMN full_name VARCHAR(150) DEFAULT NULL");
+    }
+
     module_add_column($conn, 'internship_applications', 'is_deleted', "TINYINT(1) DEFAULT 0");
     module_add_column($conn, 'internship_applications', 'verification_status', "VARCHAR(20) DEFAULT 'Pending'");
     module_add_column($conn, 'internship_applications', 'job_posting_id', "INT DEFAULT NULL");
@@ -130,6 +146,33 @@ function ensure_module_schema(mysqli $conn): void {
     module_add_column($conn, 'daily_logs', 'mentor_comment', "TEXT DEFAULT NULL");
     module_add_column($conn, 'daily_logs', 'attachment_path', "VARCHAR(255) DEFAULT NULL");
     module_add_column($conn, 'daily_logs', 'updated_at', "TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP");
+    module_add_column($conn, 'daily_logs', 'application_id', "INT DEFAULT NULL");
+    module_add_column($conn, 'daily_logs', 'hr_review_status', "VARCHAR(50) DEFAULT 'Pending'");
+    module_add_column($conn, 'daily_logs', 'hr_remarks', "TEXT DEFAULT NULL");
+    module_add_column($conn, 'daily_logs', 'hr_reviewed_by', "INT DEFAULT NULL");
+    module_add_column($conn, 'daily_logs', 'hr_reviewed_at', "TIMESTAMP NULL DEFAULT NULL");
+
+    // Create mentor_assignments table if it doesn't exist
+    mysqli_query($conn, "CREATE TABLE IF NOT EXISTS mentor_assignments (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        mentor_id INT NOT NULL,
+        student_id INT NOT NULL,
+        internship_id INT NULL,
+        project_id INT NULL,
+        application_id INT NULL,
+        assigned_by INT NULL,
+        status VARCHAR(50) DEFAULT 'Active',
+        assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_mentor (mentor_id),
+        INDEX idx_student (student_id),
+        INDEX idx_application (application_id),
+        FOREIGN KEY (mentor_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    // Add internship_id and project_id to mentor_assignments table if they are missing
+    module_add_column($conn, 'mentor_assignments', 'internship_id', "INT DEFAULT NULL");
+    module_add_column($conn, 'mentor_assignments', 'project_id', "INT DEFAULT NULL");
 
     // Recreate mentor_assignments if needed (checking assigned_by)
     $_chk_asg = mysqli_query($conn, "SHOW COLUMNS FROM mentor_assignments LIKE 'assigned_by'");
@@ -139,10 +182,12 @@ function ensure_module_schema(mysqli $conn): void {
             id INT AUTO_INCREMENT PRIMARY KEY,
             mentor_id INT NOT NULL,
             student_id INT NOT NULL,
+            internship_id INT NULL,
+            project_id INT NULL,
             application_id INT NULL,
             assigned_by INT NULL,
             assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            status ENUM('active','inactive') DEFAULT 'active',
+            status VARCHAR(50) DEFAULT 'Active',
             INDEX idx_mentor (mentor_id),
             INDEX idx_student (student_id),
             INDEX idx_application (application_id),
@@ -188,6 +233,7 @@ function ensure_module_schema(mysqli $conn): void {
     module_add_composite_unique_index($conn, 'daily_logs', 'user_id, log_date', 'idx_daily_logs_unique_student_date');
     module_add_index($conn, 'daily_logs', 'status', 'idx_daily_logs_status');
     module_add_index($conn, 'daily_logs', 'application_id', 'idx_daily_logs_application');
+    module_add_index($conn, 'daily_logs', 'application_id', 'idx_daily_logs_application_id');
     module_add_index($conn, 'mentor_assignments', 'status', 'idx_mentor_assignments_status');
     module_add_index($conn, 'mentor_notifications', 'is_read', 'idx_mentor_notifications_is_read');
     module_add_index($conn, 'student_notifications', 'user_id', 'idx_student_notifications_user_id');
@@ -206,6 +252,20 @@ function ensure_module_schema(mysqli $conn): void {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     module_add_index($conn, 'hr_notifications', 'is_read', 'idx_hr_notifications_is_read');
+
+    // Create hiring_requests table if it doesn't exist
+    mysqli_query($conn, "CREATE TABLE IF NOT EXISTS hiring_requests (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        company_id INT NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        department VARCHAR(100) NOT NULL,
+        openings INT DEFAULT 1,
+        description TEXT DEFAULT NULL,
+        requirements TEXT DEFAULT NULL,
+        status VARCHAR(50) DEFAULT 'Pending',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (company_id) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 }
 
 function format_module_date($date_value): string {
@@ -331,23 +391,78 @@ function validate_posting_input(array $input): array {
 }
 
 function sync_candidates_from_applications(mysqli $conn): void {
+    // Check internship_applications table columns to dynamically handle name-related columns
+    $columns_res = mysqli_query($conn, "SHOW COLUMNS FROM internship_applications");
+    $columns = [];
+    if ($columns_res) {
+        while ($row = mysqli_fetch_assoc($columns_res)) {
+            $columns[] = strtolower($row['Field']);
+        }
+    }
+
+    // 1. Determine full_name expression (Requirement 6: COALESCE(a.full_name, CONCAT(a.first_name, ' ', a.last_name), u.full_name))
+    // Constructed dynamically to prevent errors if applications columns are missing
+    $app_name_parts = [];
+    if (in_array('full_name', $columns, true)) {
+        $app_name_parts[] = "a.full_name";
+    }
+    if (in_array('first_name', $columns, true) && in_array('last_name', $columns, true)) {
+        $app_name_parts[] = "CONCAT(a.first_name, ' ', a.last_name)";
+    }
+    if (in_array('name', $columns, true)) {
+        $app_name_parts[] = "a.name";
+    }
+    $app_name_parts[] = "u.full_name";
+    $app_name_coalesce = "COALESCE(" . implode(", ", $app_name_parts) . ")";
+    $full_name_expr = "COALESCE(NULLIF(sp.full_name, ''), NULLIF($app_name_coalesce, ''), 'Unknown Candidate')";
+
+    // 2. Determine email expression (Requirements 3, 4: u.email AS email)
+    if (in_array('email', $columns, true)) {
+        $email_expr = "COALESCE(NULLIF(sp.email, ''), NULLIF(a.email, ''), u.email)";
+    } else {
+        $email_expr = "COALESCE(NULLIF(sp.email, ''), u.email)";
+    }
+
+    // 3. Determine phone expression (Requirement 5: COALESCE(a.phone, u.phone) AS phone)
+    if (in_array('phone', $columns, true)) {
+        $phone_expr = "COALESCE(NULLIF(sp.phone, ''), COALESCE(a.phone, u.phone))";
+    } else {
+        $phone_expr = "COALESCE(NULLIF(sp.phone, ''), u.phone)";
+    }
+
+    // 4. Determine other columns dynamically to prevent any fatal errors
+    $college_name_part = in_array('college_name', $columns, true) ? "NULLIF(a.college_name, '')" : "NULL";
+    $prev_college_name_part = in_array('prev_college_name', $columns, true) ? "NULLIF(a.prev_college_name, '')" : "NULL";
+    $college_expr = "COALESCE(NULLIF(sp.college_name, ''), $college_name_part, $prev_college_name_part)";
+
+    $relevant_skills_part = in_array('relevant_skills', $columns, true) ? "NULLIF(a.relevant_skills, '')" : "NULL";
+    $skills_expr = "COALESCE(NULLIF(sp.skills, ''), $relevant_skills_part)";
+
+    $resume_file_part = in_array('resume_file', $columns, true) ? "NULLIF(a.resume_file, '')" : "NULL";
+    $resume_file_expr = "COALESCE(NULLIF(sp.resume_file, ''), $resume_file_part)";
+
+    $status_part = in_array('status', $columns, true) ? "NULLIF(a.status, '')" : "NULL";
+    $current_status_expr = "COALESCE($status_part, 'Applied')";
+
+    $order_col = in_array('applied_date', $columns, true) ? 'a.applied_date' : (in_array('created_at', $columns, true) ? 'a.created_at' : 'a.id');
+
     mysqli_query($conn, "INSERT INTO candidates
         (user_id, full_name, email, phone, college, skills, resume_file, current_status, latest_application_id)
         SELECT
             a.user_id,
-            COALESCE(NULLIF(sp.full_name, ''), NULLIF(u.full_name, ''), NULLIF(a.full_name, ''), 'Unknown Candidate') AS full_name,
-            COALESCE(NULLIF(sp.email, ''), NULLIF(u.email, ''), NULLIF(a.email, '')) AS email,
-            COALESCE(NULLIF(sp.phone, ''), NULLIF(u.phone, ''), NULLIF(a.phone, '')) AS phone,
-            COALESCE(NULLIF(sp.college_name, ''), NULLIF(a.college_name, ''), NULLIF(a.prev_college_name, '')) AS college,
-            COALESCE(NULLIF(sp.skills, ''), NULLIF(a.relevant_skills, '')) AS skills,
-            COALESCE(NULLIF(sp.resume_file, ''), NULLIF(a.resume_file, '')) AS resume_file,
-            COALESCE(NULLIF(a.status, ''), 'Applied') AS current_status,
+            $full_name_expr AS full_name,
+            $email_expr AS email,
+            $phone_expr AS phone,
+            $college_expr AS college,
+            $skills_expr AS skills,
+            $resume_file_expr AS resume_file,
+            $current_status_expr AS current_status,
             a.id AS latest_application_id
         FROM internship_applications a
         LEFT JOIN student_profiles sp ON a.user_id = sp.user_id
         LEFT JOIN users u ON a.user_id = u.id
         WHERE a.user_id IS NOT NULL
-        ORDER BY a.applied_date DESC
+        ORDER BY $order_col DESC
         ON DUPLICATE KEY UPDATE
             full_name = VALUES(full_name),
             email = VALUES(email),

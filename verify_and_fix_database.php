@@ -56,6 +56,27 @@ if (mysqli_num_rows($check) > 0) {
             echo "<p class='text-slate-600 text-sm ml-4'>✓ Column exists: $col</p>";
         }
     }
+    
+    // Ensure at least one name-related column exists in internship_applications to prevent SQL crashes
+    $chk_name_cols = mysqli_query($conn, "SHOW COLUMNS FROM internship_applications");
+    $has_name_col = false;
+    if ($chk_name_cols) {
+        while ($row = mysqli_fetch_assoc($chk_name_cols)) {
+            $col_name = strtolower($row['Field']);
+            if ($col_name === 'full_name' || $col_name === 'name' || $col_name === 'first_name') {
+                $has_name_col = true;
+                break;
+            }
+        }
+    }
+    if (!$has_name_col) {
+        echo "<p class='text-orange-600 text-sm ml-4'>⚠ Adding missing fallback column: full_name</p>";
+        mysqli_query($conn, "ALTER TABLE internship_applications ADD COLUMN full_name VARCHAR(150) DEFAULT NULL");
+        $fixes_applied++;
+    } else {
+        echo "<p class='text-slate-600 text-sm ml-4'>✓ Name-related column exists in internship_applications</p>";
+        $checks_passed++;
+    }
 } else {
     echo "<p class='text-red-600 font-semibold'>✗ Table does not exist - Please run db.php first</p>";
     $checks_failed++;
@@ -181,6 +202,86 @@ if (mysqli_num_rows($check_dl) == 0) {
 }
 echo "</div>";
 
+// Check 6b: Check/Add application_id column in daily_logs
+echo "<div class='mb-6'>";
+echo "<h2 class='text-lg font-bold text-slate-800 mb-3'>6b. Checking daily_logs application_id column</h2>";
+$check_dl_app = mysqli_query($conn, "SHOW COLUMNS FROM daily_logs LIKE 'application_id'");
+if (mysqli_num_rows($check_dl_app) == 0) {
+    echo "<p class='text-orange-600 text-sm ml-4'>⚠ Adding missing column: application_id in daily_logs</p>";
+    if (mysqli_query($conn, "ALTER TABLE daily_logs ADD COLUMN application_id INT NULL")) {
+        echo "<p class='text-emerald-600 text-sm ml-4'>✓ Column application_id added successfully</p>";
+        $fixes_applied++;
+    } else {
+        echo "<p class='text-red-600 text-sm ml-4'>✗ Failed to add application_id column: " . mysqli_error($conn) . "</p>";
+        $checks_failed++;
+    }
+} else {
+    echo "<p class='text-emerald-600 font-semibold'>✓ Column application_id exists in daily_logs</p>";
+    $checks_passed++;
+}
+echo "</div>";
+
+// Check 6c: Check/Add idx_daily_logs_application index in daily_logs
+echo "<div class='mb-6'>";
+echo "<h2 class='text-lg font-bold text-slate-800 mb-3'>6c. Checking daily_logs application_id indexes</h2>";
+$index_check1 = mysqli_query($conn, "SHOW INDEX FROM daily_logs WHERE Key_name = 'idx_daily_logs_application'");
+if (mysqli_num_rows($index_check1) == 0) {
+    echo "<p class='text-orange-600 text-sm ml-4'>⚠ Adding missing index: idx_daily_logs_application in daily_logs</p>";
+    if (mysqli_query($conn, "ALTER TABLE daily_logs ADD INDEX idx_daily_logs_application (application_id)")) {
+        echo "<p class='text-emerald-600 text-sm ml-4'>✓ Index idx_daily_logs_application added successfully</p>";
+        $fixes_applied++;
+    } else {
+        echo "<p class='text-red-600 text-sm ml-4'>✗ Failed to add index: " . mysqli_error($conn) . "</p>";
+        $checks_failed++;
+    }
+} else {
+    echo "<p class='text-emerald-600 font-semibold ml-4'>✓ Index idx_daily_logs_application exists</p>";
+    $checks_passed++;
+}
+
+$index_check2 = mysqli_query($conn, "SHOW INDEX FROM daily_logs WHERE Key_name = 'idx_daily_logs_application_id'");
+if (mysqli_num_rows($index_check2) == 0) {
+    echo "<p class='text-orange-600 text-sm ml-4'>⚠ Adding missing index: idx_daily_logs_application_id in daily_logs</p>";
+    if (mysqli_query($conn, "ALTER TABLE daily_logs ADD INDEX idx_daily_logs_application_id (application_id)")) {
+        echo "<p class='text-emerald-600 text-sm ml-4'>✓ Index idx_daily_logs_application_id added successfully</p>";
+        $fixes_applied++;
+    } else {
+        echo "<p class='text-red-600 text-sm ml-4'>✗ Failed to add index: " . mysqli_error($conn) . "</p>";
+        $checks_failed++;
+    }
+} else {
+    echo "<p class='text-emerald-600 font-semibold ml-4'>✓ Index idx_daily_logs_application_id exists</p>";
+    $checks_passed++;
+}
+echo "</div>";
+
+// Check 6d: Checking daily_logs HR review columns
+echo "<div class='mb-6'>";
+echo "<h2 class='text-lg font-bold text-slate-800 mb-3'>6d. Checking daily_logs HR review columns</h2>";
+$hr_cols = [
+    'hr_review_status' => "VARCHAR(50) DEFAULT 'Pending'",
+    'hr_remarks' => "TEXT DEFAULT NULL",
+    'hr_reviewed_by' => "INT DEFAULT NULL",
+    'hr_reviewed_at' => "TIMESTAMP NULL DEFAULT NULL"
+];
+foreach ($hr_cols as $col => $def) {
+    $check_col = mysqli_query($conn, "SHOW COLUMNS FROM daily_logs LIKE '$col'");
+    if (mysqli_num_rows($check_col) == 0) {
+        echo "<p class='text-orange-600 text-sm ml-4'>⚠ Adding missing column: $col in daily_logs</p>";
+        if (mysqli_query($conn, "ALTER TABLE daily_logs ADD COLUMN $col $def")) {
+            echo "<p class='text-emerald-600 text-sm ml-4'>✓ Column $col added successfully</p>";
+            $fixes_applied++;
+        } else {
+            echo "<p class='text-red-600 text-sm ml-4'>✗ Failed to add column $col: " . mysqli_error($conn) . "</p>";
+            $checks_failed++;
+        }
+    } else {
+        echo "<p class='text-emerald-600 font-semibold ml-4'>✓ Column $col exists</p>";
+        $checks_passed++;
+    }
+}
+echo "</div>";
+
 // Check 7: Check/Add team columns in internship_applications
 echo "<div class='mb-6'>";
 echo "<h2 class='text-lg font-bold text-slate-800 mb-3'>7. Checking team assignment columns in internship_applications</h2>";
@@ -266,6 +367,89 @@ if (mysqli_num_rows($check) > 0) {
         INDEX idx_internship (internship_id),
         INDEX idx_phase (phase_number)
     )";
+    if (mysqli_query($conn, $create_sql)) {
+        echo "<p class='text-emerald-600 text-sm ml-4'>✓ Table created successfully</p>";
+        $fixes_applied++;
+    } else {
+        echo "<p class='text-red-600 text-sm ml-4'>✗ Failed to create table: " . mysqli_error($conn) . "</p>";
+        $checks_failed++;
+    }
+}
+echo "</div>";
+
+// Check 10: mentor_assignments table
+echo "<div class='mb-6'>";
+echo "<h2 class='text-lg font-bold text-slate-800 mb-3'>10. Checking mentor_assignments table</h2>";
+$check = mysqli_query($conn, "SHOW TABLES LIKE 'mentor_assignments'");
+if (mysqli_num_rows($check) > 0) {
+    echo "<p class='text-emerald-600 font-semibold'>✓ Table exists</p>";
+    $checks_passed++;
+    
+    // Check required columns
+    $required_columns = [
+        'internship_id' => "INT DEFAULT NULL",
+        'project_id' => "INT DEFAULT NULL"
+    ];
+    
+    foreach ($required_columns as $col => $def) {
+        $col_check = mysqli_query($conn, "SHOW COLUMNS FROM mentor_assignments LIKE '$col'");
+        if (mysqli_num_rows($col_check) == 0) {
+            echo "<p class='text-orange-600 text-sm ml-4'>⚠ Adding missing column: $col</p>";
+            mysqli_query($conn, "ALTER TABLE mentor_assignments ADD COLUMN $col $def");
+            $fixes_applied++;
+        } else {
+            echo "<p class='text-slate-600 text-sm ml-4'>✓ Column exists: $col</p>";
+        }
+    }
+} else {
+    echo "<p class='text-orange-600 font-semibold'>⚠ Creating table mentor_assignments...</p>";
+    $create_sql = "CREATE TABLE mentor_assignments (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        mentor_id INT NOT NULL,
+        student_id INT NOT NULL,
+        internship_id INT NULL,
+        project_id INT NULL,
+        application_id INT NULL,
+        assigned_by INT NULL,
+        status VARCHAR(50) DEFAULT 'Active',
+        assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_mentor (mentor_id),
+        INDEX idx_student (student_id),
+        INDEX idx_application (application_id),
+        FOREIGN KEY (mentor_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+    if (mysqli_query($conn, $create_sql)) {
+        echo "<p class='text-emerald-600 text-sm ml-4'>✓ Table created successfully</p>";
+        $fixes_applied++;
+    } else {
+        echo "<p class='text-red-600 text-sm ml-4'>✗ Failed to create table: " . mysqli_error($conn) . "</p>";
+        $checks_failed++;
+    }
+}
+echo "</div>";
+
+// Check 11: Checking hiring_requests table
+echo "<div class='mb-6'>";
+echo "<h2 class='text-lg font-bold text-slate-800 mb-3'>11. Checking hiring_requests table</h2>";
+$check_hr = mysqli_query($conn, "SHOW TABLES LIKE 'hiring_requests'");
+if (mysqli_num_rows($check_hr) > 0) {
+    echo "<p class='text-emerald-600 font-semibold'>✓ Table exists</p>";
+    $checks_passed++;
+} else {
+    echo "<p class='text-orange-600 font-semibold'>⚠ Creating table hiring_requests...</p>";
+    $create_sql = "CREATE TABLE hiring_requests (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        company_id INT NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        department VARCHAR(100) NOT NULL,
+        openings INT DEFAULT 1,
+        description TEXT DEFAULT NULL,
+        requirements TEXT DEFAULT NULL,
+        status VARCHAR(50) DEFAULT 'Pending',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (company_id) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
     if (mysqli_query($conn, $create_sql)) {
         echo "<p class='text-emerald-600 text-sm ml-4'>✓ Table created successfully</p>";
         $fixes_applied++;
