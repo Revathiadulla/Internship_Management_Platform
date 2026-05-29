@@ -245,6 +245,9 @@ function subtypeBadgeClass($subtype) {
         <a href="coordinator_profile.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
             <span class="material-symbols-outlined text-[20px]">account_circle</span> My Profile
         </a>
+        <a href="coordinator_help_center.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
+            <span class="material-symbols-outlined text-[20px]">help</span> Help Center
+        </a>
         <a href="logout.php" class="flex items-center gap-3 text-red-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-red-50 transition-colors">
             <span class="material-symbols-outlined text-[20px]">logout</span> Logout
         </a>

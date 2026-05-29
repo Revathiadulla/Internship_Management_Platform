@@ -63,6 +63,7 @@ if ($education_status === 'Passed Out' && $new_status === 'HOD Approved') {
 // Update application status
 $update_sql = "UPDATE internship_applications SET status = '$new_status' WHERE id = $app_id";
 if (mysqli_query($conn, $update_sql)) {
+    checkAndAddToTalentPool($conn, $app_id);
     // Get updater's name
     $name_sql = "SELECT full_name FROM student_profiles WHERE user_id = $user_id LIMIT 1";
     $name_res = mysqli_query($conn, $name_sql);

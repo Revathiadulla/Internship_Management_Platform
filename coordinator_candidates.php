@@ -38,7 +38,7 @@ if (!empty($search)) {
     $params[] = $search_param;
 }
 
-$sql = "SELECT a.id as app_id, a.status, a.applied_date, a.reason_for_applying, a.relevant_skills, a.education_status,
+$sql = "SELECT a.id as app_id, a.status, a.applied_date, a.relevant_skills, a.education_status,
                COALESCE(i.title, a.internship_name) as title, u.full_name as student_name, u.email as student_email, sp.phone, sp.college_name
         FROM internship_applications a
         JOIN users u ON a.user_id = u.id
@@ -163,7 +163,7 @@ mysqli_stmt_close($stmt);
                 </nav>
                 <div class="mt-auto border-t border-gray-200 pt-4">
                         <a class="flex items-center gap-3 text-gray-600 px-4 py-3 hover:bg-gray-100 duration-200 ease-in-out"
-                                href="#">
+                                href="coordinator_help_center.php">
                                 <span class="material-symbols-outlined">help</span>
                                 <span>Help Center</span>
                         </a>
@@ -409,10 +409,7 @@ mysqli_stmt_close($stmt);
                                         <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">Skills</p>
                                         <p id="detail-skills" class="text-slate-700 mt-1 leading-relaxed bg-slate-50 p-2 rounded-lg border border-slate-100 text-xs"></p>
                                 </div>
-                                <div>
-                                        <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">Reason for Applying</p>
-                                        <p id="detail-reason" class="text-slate-700 mt-1 leading-relaxed bg-slate-50 p-2.5 rounded-lg border border-slate-100 text-xs whitespace-pre-wrap"></p>
-                                </div>
+
                         </div>
                         <div class="p-6 border-t border-gray-100 bg-gray-50/50 flex justify-end">
                                 <button type="button" onclick="closeDetailsModal()" class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium shadow-sm transition-colors cursor-pointer">Close</button>
@@ -431,7 +428,7 @@ mysqli_stmt_close($stmt);
                 const detailPosition = document.getElementById('detail-position');
                 const detailAppliedDate = document.getElementById('detail-applied-date');
                 const detailSkills = document.getElementById('detail-skills');
-                const detailReason = document.getElementById('detail-reason');
+
 
                 function openDetailsModal(app) {
                         detailName.textContent = app.student_name;
@@ -459,7 +456,7 @@ mysqli_stmt_close($stmt);
                         detailAppliedDate.textContent = `Applied on: ${d.toLocaleDateString(undefined, {month: 'short', day: 'numeric', year: 'numeric'})}`;
                         
                         detailSkills.textContent = app.relevant_skills || 'No skills listed';
-                        detailReason.textContent = app.reason_for_applying || 'No statement provided';
+
                         
                         detailsModal.classList.remove('hidden');
                 }

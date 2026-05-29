@@ -223,7 +223,9 @@ $internship_cols = [
     'assigned_mentor' => "INT DEFAULT NULL",
     'openings' => "INT DEFAULT 1",
     'start_date' => "DATE DEFAULT NULL",
-    'end_date' => "DATE DEFAULT NULL"
+    'end_date' => "DATE DEFAULT NULL",
+    'coordinator_id' => "INT DEFAULT NULL",
+    'submission_date' => "DATE DEFAULT NULL"
 ];
 foreach ($internship_cols as $col => $def) {
     $check_col = mysqli_query($conn, "SHOW COLUMNS FROM internships LIKE '$col'");

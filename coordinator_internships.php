@@ -166,8 +166,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     if (empty($title) || empty($project_title) || empty($duration) || empty($mode) || empty($technology_stack) || empty($description)) {
         $error_msg = "Please fill in all required fields.";
     } else {
-        $stmt = mysqli_prepare($conn, "INSERT INTO internships (title, duration, mode, skills, status, description, project_type, project_subtype, project_title, task_title, technology_stack, difficulty_level, openings, start_date, end_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        mysqli_stmt_bind_param($stmt, "ssssssssssssiss", $title, $duration, $mode, $skills, $status, $description, $project_type, $project_subtype, $project_title, $task_title, $technology_stack, $difficulty_level, $openings, $start_date, $end_date);
+        $stmt = mysqli_prepare($conn, "INSERT INTO internships (title, duration, mode, skills, status, description, project_type, project_subtype, project_title, task_title, technology_stack, difficulty_level, openings, start_date, end_date, coordinator_id, submission_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURDATE())");
+        mysqli_stmt_bind_param($stmt, "ssssssssssssissi", $title, $duration, $mode, $skills, $status, $description, $project_type, $project_subtype, $project_title, $task_title, $technology_stack, $difficulty_level, $openings, $start_date, $end_date, $_SESSION['user_id']);
         
         if (mysqli_stmt_execute($stmt)) {
             $new_id = mysqli_insert_id($conn);
@@ -374,7 +374,7 @@ mysqli_stmt_close($stmt);
                 </nav>
                 <div class="mt-auto border-t border-gray-200 pt-4">
                         <a class="flex items-center gap-3 text-gray-600 px-4 py-3 hover:bg-gray-100 duration-200 ease-in-out"
-                                href="#">
+                                href="coordinator_help_center.php">
                                 <span class="material-symbols-outlined">help</span>
                                 <span>Help Center</span>
                         </a>
@@ -681,10 +681,11 @@ mysqli_stmt_close($stmt);
 
                                         <div>
                                                 <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Status</label>
-                                                <select name="status" id="form-status" class="w-full rounded-xl border-gray-200 text-xs py-2 focus:border-blue-600 focus:ring-blue-600/10 cursor-pointer">
-                                                        <option value="Active" selected>Active</option>
-                                                        <option value="Inactive">Inactive</option>
-                                                </select>
+                                                <input type="hidden" name="status" id="form-status" value="Pending Approval">
+                                                <div class="flex items-center gap-2 py-2">
+                                                        <span id="form-status-display" class="px-3 py-1 rounded-full text-xs font-bold border bg-orange-50 text-orange-700 border-orange-200">Pending Approval</span>
+                                                        <span class="text-[10px] text-gray-400">(Set by Admin workflow)</span>
+                                                </div>
                                         </div>
 
                                         <div>
@@ -925,7 +926,20 @@ mysqli_stmt_close($stmt);
                         durationInput.value = item.duration || '3 Months';
 
                         modeInput.value = item.mode;
-                        statusInput.value = item.status;
+                        // Preserve the existing status — coordinators cannot change it
+                        const statusVal = item.status || 'Pending Approval';
+                        document.getElementById('form-status').value = statusVal;
+                        const statusDisplay = document.getElementById('form-status-display');
+                        const statusColors = {
+                                'pending approval': 'bg-orange-50 text-orange-700 border-orange-200',
+                                'active':           'bg-green-50 text-green-700 border-green-200',
+                                'completed':        'bg-slate-50 text-slate-700 border-slate-200',
+                                'archived':         'bg-gray-50 text-gray-700 border-gray-200',
+                                'rejected':         'bg-red-50 text-red-700 border-red-200'
+                        };
+                        const colorCls = statusColors[statusVal.toLowerCase()] || 'bg-orange-50 text-orange-700 border-orange-200';
+                        statusDisplay.className = 'px-3 py-1 rounded-full text-xs font-bold border ' + colorCls;
+                        statusDisplay.textContent = statusVal;
 
                         difficultyInput.value = item.difficulty_level || 'Medium';
                         openingsInput.value = item.openings || 1;

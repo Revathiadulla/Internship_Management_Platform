@@ -87,6 +87,7 @@ $new_cols = [
     "graduation_year"     => "VARCHAR(10) DEFAULT NULL",
     "prev_college_name"   => "VARCHAR(150) DEFAULT NULL",
     "aadhaar_number"      => "VARCHAR(20) DEFAULT NULL",
+    "aadhaar_card_file"   => "VARCHAR(255) DEFAULT NULL",
     "resume_file"         => "VARCHAR(255) DEFAULT NULL",
     "preferred_domain"    => "VARCHAR(100) DEFAULT NULL",
     "project_interests"   => "TEXT DEFAULT NULL",
@@ -233,6 +234,36 @@ $password_resets_table = "CREATE TABLE IF NOT EXISTS password_resets (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )";
 executeSetupQuery($conn, $password_resets_table, "Creating password_resets table", $errors, $is_cli);
+
+// 11. Add Talent Pool columns to internship_applications
+$talent_pool_cols = [
+    'in_talent_pool'        => "TINYINT(1) DEFAULT 0",
+    'is_featured'           => "TINYINT(1) DEFAULT 0",
+    'placement_status'      => "VARCHAR(100) DEFAULT 'Unplaced'",
+    'shortlisted_companies' => "TEXT DEFAULT NULL",
+    'performance_score'     => "DECIMAL(5,2) DEFAULT NULL",
+    'tech_stack'            => "VARCHAR(255) DEFAULT NULL",
+    'skills'                => "TEXT DEFAULT NULL",
+    'internship_duration'   => "VARCHAR(50) DEFAULT NULL",
+    'talent_pool_status'    => "VARCHAR(20) DEFAULT 'No'",
+    'mentor_evaluation'     => "VARCHAR(50) DEFAULT 'Approved'",
+    'certificate_status'    => "VARCHAR(50) DEFAULT 'Completed'",
+];
+foreach ($talent_pool_cols as $col => $def) {
+    $chk = mysqli_query($conn, "SHOW COLUMNS FROM internship_applications LIKE '$col'");
+    if ($chk && mysqli_num_rows($chk) == 0) {
+        executeSetupQuery($conn, "ALTER TABLE internship_applications ADD COLUMN $col $def", "Adding talent pool column: $col", $errors, $is_cli);
+    } else {
+        if ($is_cli) {
+            echo "[EXISTS] talent pool column: $col\n";
+        } else {
+            echo "<div class='p-3 bg-slate-50 text-slate-700 border border-slate-200 rounded-lg flex items-center justify-between'>
+                    <span>talent pool column: $col</span>
+                    <span class='font-medium text-slate-500'>[Already exists]</span>
+                  </div>";
+        }
+    }
+}
 
 
 $admin_email = 'imp.webportal2026@gmail.com';

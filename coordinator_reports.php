@@ -210,9 +210,9 @@ mysqli_stmt_close($student_stmt);
                     <span>Team Management</span>
                 </a>
             </nav>
-            <div class="mt-auto border-t border-gray-200 pt-4">
+            <div class="mt-auto border-t border-gray-200 pt-4 font-medium">
                 <a class="flex items-center gap-3 text-gray-600 px-4 py-3 hover:bg-gray-100 duration-200 ease-in-out"
-                    href="#">
+                    href="coordinator_help_center.php">
                     <span class="material-symbols-outlined">help</span>
                     <span>Help Center</span>
                 </a>

@@ -24,7 +24,7 @@ $app_sql = "SELECT a.id as app_id,
                    COALESCE(i.title, a.internship_name) as title,
                    COALESCE(i.duration, '') as duration,
                    COALESCE(i.mode, '') as mode,
-                   a.status, a.applied_date, a.reason_for_applying,
+                   a.status, a.applied_date,
                    a.relevant_skills, a.preferred_duration,
                    a.test_status, a.test_score, a.test_answers, a.education_status, a.test_submitted_date
             FROM internship_applications a
