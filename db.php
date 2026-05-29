@@ -19,11 +19,44 @@ if (isset($_SERVER['HTTP_HOST']) && ($_SERVER['HTTP_HOST'] == 'localhost' || str
     $port = 3306;
 }
 
-$conn = mysqli_connect($host, $user, $pass, $db, $port);
+try {
+    $conn = mysqli_connect($host, $user, $pass, $db, $port);
+} catch (\mysqli_sql_exception $e) {
+    $is_local = (isset($_SERVER['HTTP_HOST']) && ($_SERVER['HTTP_HOST'] == 'localhost' || strpos($_SERVER['HTTP_HOST'], '127.0.0.1') !== false));
+    if (!$is_local) {
+        http_response_code(503);
+        echo "<!DOCTYPE html>
+        <html lang='en'>
+        <head>
+            <meta charset='UTF-8'>
+            <title>Server Busy - IMP</title>
+            <style>
+                body { font-family: 'Inter', sans-serif; background-color: #f8f9fa; color: #191c1d; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+                .container { text-align: center; max-width: 450px; padding: 40px; background: white; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); border: 1px solid #e1e3e4; }
+                h1 { font-size: 24px; font-weight: 600; margin-bottom: 16px; color: #004ac6; }
+                p { font-size: 14px; line-height: 22px; color: #434655; margin-bottom: 24px; }
+                button { background-color: #004ac6; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background-color 0.2s; }
+                button:hover { background-color: #003ea8; }
+            </style>
+        </head>
+        <body>
+            <div class='container'>
+                <h1>Server is Busy</h1>
+                <p>The system is currently experiencing high traffic (database connections exhausted). Please wait a few seconds and click reload to try again.</p>
+                <button onclick='window.location.reload()'>Reload Page</button>
+            </div>
+        </body>
+        </html>";
+        exit();
+    } else {
+        die("Connection failed: " . $e->getMessage());
+    }
+}
 
 if (!$conn) {
     die("Connection failed: " . mysqli_connect_error());
 }
+
 
 function checkAndAddToTalentPool($conn, $app_id) {
     $app_id = intval($app_id);
