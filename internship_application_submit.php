@@ -155,6 +155,17 @@ if (mysqli_query($conn, $insert_sql)) {
         'action_label' => 'View Application Status'
     ]);
 
+    // Send exam invitation email only if a test is required
+    if ($test_status !== 'N/A') {
+        $exam_link = "https://internship-management-platform-1.onrender.com/student_test.php?app_id=" . mysqli_insert_id($conn);
+        $exam_subject = "Exam Invitation for $internship_name";
+        $exam_message = "Dear $full_name,\n\nYou are invited to take the skills assessment test for the '$internship_name' internship. Please complete the exam using the following link (valid for 48 hours): $exam_link\n\nBest regards,\nInternship Management Platform Team";
+        sendEmailNotification($user_id, $exam_subject, $exam_message, [
+            'event' => 'Exam Invitation',
+            'action_url' => $exam_link,
+            'action_label' => 'Take Exam',
+        ]);
+    }
     header("Location: student_dashboard.php?msg=" . urlencode("Application Submitted Successfully!"));
     exit();
 

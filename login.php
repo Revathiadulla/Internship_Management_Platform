@@ -38,7 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     header("Location: student_profile_form.php");
                 }
             } elseif ($role == "hr") {
-                header("Location: hr_applications.php");
+                header("Location: hr_dashboard.php");
             } elseif ($role == "mentor") {
                 header("Location: mentor_dashboard.php");
             } elseif ($role == "coordinator") {
