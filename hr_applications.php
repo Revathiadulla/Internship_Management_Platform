@@ -66,13 +66,20 @@ $total_pages  = max(1, (int) ceil($total_rows / $per_page));
 if ($current_page > $total_pages) $current_page = $total_pages;
 
 // Paginated data query
+$has_resume_url = false;
+$_col_check_res = mysqli_query($conn, "SHOW COLUMNS FROM student_profiles LIKE 'resume_url'");
+if ($_col_check_res && mysqli_num_rows($_col_check_res) > 0) {
+    $has_resume_url = true;
+}
+$resume_url_select = $has_resume_url ? "sp.resume_url" : "NULL as resume_url";
+
 $app_sql = "SELECT a.id as app_id, a.user_id, a.status, a.applied_date, a.education_status,
                    COALESCE(i.title, a.internship_name) as title,
                    COALESCE(i.duration, '') as duration,
                    COALESCE(i.mode, '') as mode,
                    a.verification_status,
                    sp.full_name, sp.email, sp.college_name, sp.course,
-                   sp.resume_file
+                   sp.resume_file, $resume_url_select
             FROM internship_applications a
             LEFT JOIN internships i       ON a.internship_id = i.id AND a.internship_id > 0
             LEFT JOIN student_profiles sp ON a.user_id = sp.user_id
@@ -307,25 +314,47 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
                       </a>
                       <?php
                         $resume = !empty($app['resume_file']) ? trim($app['resume_file']) : '';
-                        $safe   = $resume !== '' ? urlencode(basename($resume)) : '';
-                        $ext_r  = $resume !== '' ? strtolower(pathinfo($resume, PATHINFO_EXTENSION)) : '';
-                        $allowed_r = ['pdf', 'doc', 'docx'];
-                        $has_resume = $safe !== '' && in_array($ext_r, $allowed_r, true);
+                        $resume_url = !empty($app['resume_url']) ? trim($app['resume_url']) : '';
+                        $is_remote = false;
+                        $resume_link = '#';
+
+                        if ($resume_url !== '' && (strpos($resume_url, 'http://') === 0 || strpos($resume_url, 'https://') === 0)) {
+                            $resume_link = $resume_url;
+                            $is_remote = true;
+                        } elseif ($resume !== '' && (strpos($resume, 'http://') === 0 || strpos($resume, 'https://') === 0)) {
+                            $resume_link = $resume;
+                            $is_remote = true;
+                        }
+
+                        if ($is_remote) {
+                            $has_resume = true;
+                            $view_href = $resume_link;
+                            $download_href = $resume_link;
+                        } else {
+                            $safe   = $resume !== '' ? urlencode(basename($resume)) : '';
+                            $ext_r  = $resume !== '' ? strtolower(pathinfo($resume, PATHINFO_EXTENSION)) : '';
+                            $allowed_r = ['pdf', 'doc', 'docx'];
+                            $has_resume = $safe !== '' && in_array($ext_r, $allowed_r, true);
+                            $view_href = "resume_serve.php?file=" . $safe . "&mode=view";
+                            $download_href = "resume_serve.php?file=" . $safe . "&mode=download";
+                        }
                       ?>
                       <?php if ($has_resume): ?>
                         <!-- View resume -->
-                        <a href="resume_serve.php?file=<?php echo $safe; ?>&mode=view"
+                        <a href="<?php echo $view_href; ?>"
                            target="_blank"
                            class="p-2 text-emerald-600 bg-emerald-50 rounded-lg hover:bg-emerald-100 transition-colors"
-                           title="View Resume (<?php echo htmlspecialchars(strtoupper($ext_r)); ?>)">
+                           title="View Resume <?php echo !$is_remote ? '(' . htmlspecialchars(strtoupper($ext_r)) . ')' : ''; ?>">
                            <span class="material-symbols-outlined text-[18px]">description</span>
                         </a>
+                        <?php if (!$is_remote): ?>
                         <!-- Download resume -->
-                        <a href="resume_serve.php?file=<?php echo $safe; ?>&mode=download"
+                        <a href="<?php echo $download_href; ?>"
                            class="p-2 text-violet-600 bg-violet-50 rounded-lg hover:bg-violet-100 transition-colors"
                            title="Download Resume">
                            <span class="material-symbols-outlined text-[18px]">download</span>
                         </a>
+                        <?php endif; ?>
                       <?php else: ?>
                         <span class="px-2 py-1 text-[10px] font-semibold text-slate-400 bg-slate-100 rounded-lg" title="No resume uploaded">
                           No Resume

@@ -167,7 +167,7 @@ $profile = mysqli_fetch_assoc($profile_result);
               </div>
               
               <div class="pt-3 border-t border-gray-100">
-                <a href="uploads/<?php echo htmlspecialchars($profile['resume_file']); ?>" target="_blank" class="w-full flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 transition-colors text-sm text-slate-700 group">
+                <a href="<?php echo get_resume_view_link($profile); ?>" target="_blank" class="w-full flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 transition-colors text-sm text-slate-700 group">
                   <div class="flex items-center gap-2">
                     <span class="material-symbols-outlined text-red-400 group-hover:text-red-500">picture_as_pdf</span>
                     <span class="truncate w-40 text-left font-medium"><?php echo basename($profile['resume_file']); ?></span>

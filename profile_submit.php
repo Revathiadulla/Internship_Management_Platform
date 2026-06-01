@@ -19,6 +19,9 @@ $year_of_study = mysqli_real_escape_string($conn, $_POST['year_of_study']);
 $skills = mysqli_real_escape_string($conn, $_POST['skills']);
 $aadhaar_number = mysqli_real_escape_string($conn, $_POST['aadhaar_number']);
 $pan_number = mysqli_real_escape_string($conn, $_POST['pan_number']);
+$hod_name = isset($_POST['hod_name']) ? mysqli_real_escape_string($conn, trim($_POST['hod_name'])) : '';
+$hod_phone = isset($_POST['hod_phone']) ? mysqli_real_escape_string($conn, trim($_POST['hod_phone'])) : '';
+$hod_email = isset($_POST['hod_email']) ? mysqli_real_escape_string($conn, trim($_POST['hod_email'])) : '';
 
 $folder = sys_get_temp_dir() . "/imp_uploads/";
 if (!is_dir($folder)) {
@@ -143,14 +146,15 @@ if ($existing_profile) {
             full_name='$full_name', email='$email', phone='$phone', dob='$dob', gender='$gender',
             college_name='$college_name', course='$course', year_of_study='$year_of_study', skills='$skills',
             resume_file='$new_resume', aadhaar_number='$aadhaar_number', pan_number='$pan_number',
-            aadhaar_file='$new_aadhaar', pan_file='$new_pan'
+            aadhaar_file='$new_aadhaar', pan_file='$new_pan',
+            hod_name='$hod_name', hod_phone='$hod_phone', hod_email='$hod_email'
             WHERE user_id='$user_id'";
 } else {
     // Insert
     $sql = "INSERT INTO student_profiles 
-            (user_id, full_name, email, phone, dob, gender, college_name, course, year_of_study, skills, resume_file, aadhaar_number, pan_number, aadhaar_file, pan_file) 
+            (user_id, full_name, email, phone, dob, gender, college_name, course, year_of_study, skills, resume_file, aadhaar_number, pan_number, aadhaar_file, pan_file, hod_name, hod_phone, hod_email) 
             VALUES 
-            ('$user_id', '$full_name', '$email', '$phone', '$dob', '$gender', '$college_name', '$course', '$year_of_study', '$skills', '$new_resume', '$aadhaar_number', '$pan_number', '$new_aadhaar', '$new_pan')";
+            ('$user_id', '$full_name', '$email', '$phone', '$dob', '$gender', '$college_name', '$course', '$year_of_study', '$skills', '$new_resume', '$aadhaar_number', '$pan_number', '$new_aadhaar', '$new_pan', '$hod_name', '$hod_phone', '$hod_email')";
 }
 
 if (mysqli_query($conn, $sql)) {

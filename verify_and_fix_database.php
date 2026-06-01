@@ -121,9 +121,45 @@ $check = mysqli_query($conn, "SHOW TABLES LIKE 'student_profiles'");
 if (mysqli_num_rows($check) > 0) {
     echo "<p class='text-emerald-600 font-semibold'>✓ Table exists</p>";
     $checks_passed++;
+    
+    // Check for required HOD and phone columns
+    $required_sp_columns = [
+        'phone' => "VARCHAR(20) DEFAULT NULL",
+        'hod_name' => "VARCHAR(100) DEFAULT NULL",
+        'hod_phone' => "VARCHAR(20) DEFAULT NULL",
+        'hod_email' => "VARCHAR(100) DEFAULT NULL"
+    ];
+    
+    foreach ($required_sp_columns as $col => $def) {
+        $col_check = mysqli_query($conn, "SHOW COLUMNS FROM student_profiles LIKE '$col'");
+        if (mysqli_num_rows($col_check) == 0) {
+            echo "<p class='text-orange-600 text-sm ml-4'>⚠ Adding missing column: $col</p>";
+            mysqli_query($conn, "ALTER TABLE student_profiles ADD COLUMN $col $def");
+            $fixes_applied++;
+        } else {
+            echo "<p class='text-slate-600 text-sm ml-4'>✓ Column exists: $col</p>";
+        }
+    }
 } else {
     echo "<p class='text-red-600 font-semibold'>✗ Table does not exist - Please run db.php first</p>";
     $checks_failed++;
+}
+echo "</div>";
+
+// Check 3b: users table phone column
+echo "<div class='mb-6'>";
+echo "<h2 class='text-lg font-bold text-slate-800 mb-3'>3b. Checking users table</h2>";
+$check_users = mysqli_query($conn, "SHOW TABLES LIKE 'users'");
+if (mysqli_num_rows($check_users) > 0) {
+    $col_check = mysqli_query($conn, "SHOW COLUMNS FROM users LIKE 'phone'");
+    if (mysqli_num_rows($col_check) == 0) {
+        echo "<p class='text-orange-600 text-sm ml-4'>⚠ Adding missing column: phone</p>";
+        mysqli_query($conn, "ALTER TABLE users ADD COLUMN phone VARCHAR(20) DEFAULT NULL");
+        $fixes_applied++;
+    } else {
+        echo "<p class='text-slate-600 text-sm ml-4'>✓ Column exists: phone</p>";
+        $checks_passed++;
+    }
 }
 echo "</div>";
 

@@ -112,4 +112,42 @@ function checkAndAddToTalentPool($conn, $app_id) {
     }
     return false;
 }
+
+function get_resume_view_link($profile) {
+    if (!$profile) {
+        return '#';
+    }
+    // Check resume_url
+    if (!empty($profile['resume_url']) && (strpos($profile['resume_url'], 'http://') === 0 || strpos($profile['resume_url'], 'https://') === 0)) {
+        return $profile['resume_url'];
+    }
+    // Check resume_file as an absolute URL (for safety)
+    if (!empty($profile['resume_file']) && (strpos($profile['resume_file'], 'http://') === 0 || strpos($profile['resume_file'], 'https://') === 0)) {
+        return $profile['resume_file'];
+    }
+    // Check local resume_file
+    if (!empty($profile['resume_file'])) {
+        return 'resume_serve.php?file=' . urlencode(basename($profile['resume_file'])) . '&mode=view';
+    }
+    return '#';
+}
+
+function get_resume_download_link($profile) {
+    if (!$profile) {
+        return '#';
+    }
+    // Check resume_url
+    if (!empty($profile['resume_url']) && (strpos($profile['resume_url'], 'http://') === 0 || strpos($profile['resume_url'], 'https://') === 0)) {
+        return $profile['resume_url'];
+    }
+    // Check resume_file as an absolute URL
+    if (!empty($profile['resume_file']) && (strpos($profile['resume_file'], 'http://') === 0 || strpos($profile['resume_file'], 'https://') === 0)) {
+        return $profile['resume_file'];
+    }
+    // Check local resume_file
+    if (!empty($profile['resume_file'])) {
+        return 'resume_serve.php?file=' . urlencode(basename($profile['resume_file'])) . '&mode=download';
+    }
+    return '#';
+}
 ?>

@@ -63,10 +63,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 if (isset($_GET['action']) && $_GET['action'] === 'get_details') {
     header('Content-Type: application/json');
     $id = intval($_GET['id']);
+    $has_resume_url = false;
+    $col_check = mysqli_query($conn, "SHOW COLUMNS FROM student_profiles LIKE 'resume_url'");
+    if ($col_check && mysqli_num_rows($col_check) > 0) {
+        $has_resume_url = true;
+    }
+    $resume_url_select = $has_resume_url ? "sp.resume_url" : "NULL";
+
     $details_sql = "
         SELECT a.*, u.full_name as student_name, u.email as student_email, u.phone as student_phone, i.title as internship_title,
                sp.aadhaar_file as profile_aadhaar_file, sp.pan_file as profile_pan_file, sp.resume_file as profile_resume_file,
-               sp.verification_status as profile_verification_status
+               sp.verification_status as profile_verification_status, $resume_url_select as profile_resume_url
         FROM internship_applications a
         JOIN users u ON a.user_id = u.id
         LEFT JOIN internships i ON a.internship_id = i.id
@@ -84,6 +91,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_details') {
         if (empty($row['resume_file'])) {
             $row['resume_file'] = $row['profile_resume_file'] ?? '';
         }
+        $row['resume_url'] = $row['profile_resume_url'] ?? '';
         // Fetch status history as well
         $history = [];
         $hist_res = mysqli_query($conn, "SELECT old_status, new_status, updated_by_role, updated_by_name, notes, created_at FROM application_status_history WHERE application_id = $id ORDER BY created_at DESC");
@@ -597,9 +605,20 @@ $header_photo = $header_user['profile_photo'] ?? '';
           // Documents
           const baseUploadPath = 'view_doc.php?file=';
           
-          if (app.resume_file && app.resume_file.trim() !== '') {
+          if (app.resume_url && (app.resume_url.startsWith('http://') || app.resume_url.startsWith('https://'))) {
             document.getElementById('link-resume').classList.remove('hidden');
-            document.getElementById('link-resume').setAttribute('href', baseUploadPath + app.resume_file);
+            document.getElementById('link-resume').setAttribute('href', app.resume_url);
+            document.getElementById('link-resume').setAttribute('target', '_blank');
+            document.getElementById('no-resume').classList.add('hidden');
+          } else if (app.resume_file && (app.resume_file.startsWith('http://') || app.resume_file.startsWith('https://'))) {
+            document.getElementById('link-resume').classList.remove('hidden');
+            document.getElementById('link-resume').setAttribute('href', app.resume_file);
+            document.getElementById('link-resume').setAttribute('target', '_blank');
+            document.getElementById('no-resume').classList.add('hidden');
+          } else if (app.resume_file && app.resume_file.trim() !== '') {
+            document.getElementById('link-resume').classList.remove('hidden');
+            document.getElementById('link-resume').setAttribute('href', 'resume_serve.php?file=' + encodeURIComponent(app.resume_file) + '&mode=view');
+            document.getElementById('link-resume').setAttribute('target', '_blank');
             document.getElementById('no-resume').classList.add('hidden');
           } else {
             document.getElementById('link-resume').classList.add('hidden');

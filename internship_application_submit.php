@@ -39,11 +39,20 @@ $college_name  = mysqli_real_escape_string($conn, trim($_POST['college_name']  ?
 $department    = mysqli_real_escape_string($conn, trim($_POST['department']    ?? ''));
 $year_of_study = mysqli_real_escape_string($conn, trim($_POST['year_of_study'] ?? ''));
 $hod_name      = mysqli_real_escape_string($conn, trim($_POST['hod_name']      ?? ''));
+$hod_phone     = mysqli_real_escape_string($conn, trim($_POST['hod_phone']     ?? ''));
 $hod_email     = mysqli_real_escape_string($conn, trim($_POST['hod_email']     ?? ''));
 
 // ── Passed-out-specific ──
 $graduation_year = mysqli_real_escape_string($conn, trim($_POST['graduation_year']   ?? ''));
 $prev_college    = mysqli_real_escape_string($conn, trim($_POST['prev_college_name'] ?? ''));
+
+// ── Prevent Duplicate Applications ──
+$dup_sql = "SELECT id FROM internship_applications WHERE user_id = '$user_id' AND internship_id = '$internship_id' AND (internship_id > 0 OR internship_name = '" . mysqli_real_escape_string($conn, $internship_name) . "') LIMIT 1";
+$dup_result = mysqli_query($conn, $dup_sql);
+if (mysqli_num_rows($dup_result) > 0) {
+    header("Location: student_dashboard.php?error=" . urlencode("You have already applied for this internship."));
+    exit();
+}
 
 // ── Workflow status ──
 // Simplified workflow: Applied → Test Completed → HR Round → (Pursuing: HOD Approved) → Selected/Rejected
@@ -99,7 +108,10 @@ $update_profile_sql = "UPDATE student_profiles SET
     phone          = '$phone',
     skills         = '$skills',
     aadhaar_number = '$aadhaar_number',
-    pan_number     = '$pan_number'
+    pan_number     = '$pan_number',
+    hod_name       = '$hod_name',
+    hod_phone      = '$hod_phone',
+    hod_email      = '$hod_email'
     " . ($resume_filename ? ", resume_file = '$resume_filename'" : "") . "
     " . ($pan_filename    ? ", pan_file    = '$pan_filename'"    : "") . "
     WHERE id = '$profile_id' AND user_id = '$user_id'";

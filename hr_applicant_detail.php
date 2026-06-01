@@ -43,6 +43,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 }
 
 // Join users, student_profiles, and internship_applications in one query for full detail.
+$has_resume_url = false;
+$col_check = mysqli_query($conn, "SHOW COLUMNS FROM student_profiles LIKE 'resume_url'");
+if ($col_check && mysqli_num_rows($col_check) > 0) {
+    $has_resume_url = true;
+}
+$resume_url_select = $has_resume_url ? "sp.resume_url AS sp_resume_url" : "NULL AS sp_resume_url";
+
 $sql = "SELECT
             a.id                      AS app_id,
             a.user_id,
@@ -78,6 +85,7 @@ $sql = "SELECT
             sp.dob,
             sp.gender,
             sp.resume_file            AS sp_resume,
+            $resume_url_select,
             sp.aadhaar_file,
             sp.pan_file,
             sp.aadhaar_number         AS sp_aadhaar,
@@ -120,10 +128,33 @@ $applied_date       = $d['applied_date'] ? date('M d, Y', strtotime($d['applied_
 $verification       = $d['verification_status'] ?: 'Pending';
 $current_status     = $d['status'] ?: '—';
 $resume             = $d['sp_resume'] ?: $d['app_resume'] ?: '';
-$resume_safe        = $resume !== '' ? urlencode(basename($resume)) : '';
-$resume_ext         = $resume !== '' ? strtolower(pathinfo($resume, PATHINFO_EXTENSION)) : '';
-$has_resume         = $resume_safe !== '' && in_array($resume_ext, ['pdf', 'doc', 'docx'], true);
-$resume_label       = $resume !== '' ? basename($resume) : 'No resume uploaded';
+$resume_url         = !empty($d['sp_resume_url']) ? trim($d['sp_resume_url']) : '';
+
+$is_remote = false;
+$resume_link = '#';
+
+if ($resume_url !== '' && (strpos($resume_url, 'http://') === 0 || strpos($resume_url, 'https://') === 0)) {
+    $resume_link = $resume_url;
+    $is_remote = true;
+} elseif ($resume !== '' && (strpos($resume, 'http://') === 0 || strpos($resume, 'https://') === 0)) {
+    $resume_link = $resume;
+    $is_remote = true;
+}
+
+if ($is_remote) {
+    $has_resume = true;
+    $resume_ext = 'url';
+    $resume_label = $resume_link;
+    $view_href = $resume_link;
+    $download_href = $resume_link;
+} else {
+    $resume_safe        = $resume !== '' ? urlencode(basename($resume)) : '';
+    $resume_ext         = $resume !== '' ? strtolower(pathinfo($resume, PATHINFO_EXTENSION)) : '';
+    $has_resume         = $resume_safe !== '' && in_array($resume_ext, ['pdf', 'doc', 'docx'], true);
+    $resume_label       = $resume !== '' ? basename($resume) : 'No resume uploaded';
+    $view_href = "resume_serve.php?file=" . $resume_safe . "&mode=view";
+    $download_href = "resume_serve.php?file=" . $resume_safe . "&mode=download";
+}
 
 // Status history timeline
 $history_sql    = "SELECT * FROM application_status_history WHERE application_id = $app_id ORDER BY created_at ASC";
@@ -421,14 +452,16 @@ $status_colors = [
               </div>
               <?php if ($has_resume): ?>
                 <div class="flex flex-wrap gap-2">
-                  <a href="resume_serve.php?file=<?php echo $resume_safe; ?>&mode=view" target="_blank" class="inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-all">
+                  <a href="<?php echo $view_href; ?>" target="_blank" class="inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-all">
                     <span class="material-symbols-outlined">visibility</span>
                     View resume
                   </a>
-                  <a href="resume_serve.php?file=<?php echo $resume_safe; ?>&mode=download" class="inline-flex items-center gap-2 rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 transition-all">
+                  <?php if (!$is_remote): ?>
+                  <a href="<?php echo $download_href; ?>" class="inline-flex items-center gap-2 rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 transition-all">
                     <span class="material-symbols-outlined">download</span>
                     Download resume
                   </a>
+                  <?php endif; ?>
                 </div>
               <?php else: ?>
                 <span class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-500">
@@ -444,7 +477,7 @@ $status_colors = [
               </div>
               <div class="rounded-3xl bg-slate-50 p-4 border border-slate-200">
                 <p class="text-xs uppercase tracking-[0.24em] text-slate-400">Resume format</p>
-                <p class="mt-2 text-sm font-semibold text-slate-900"><?php echo $resume_ext ? htmlspecialchars(strtoupper($resume_ext)) : '—'; ?></p>
+                <p class="mt-2 text-sm font-semibold text-slate-900"><?php echo $is_remote ? 'Remote URL' : ($resume_ext ? htmlspecialchars(strtoupper($resume_ext)) : '—'); ?></p>
               </div>
             </div>
           </div>

@@ -16,10 +16,16 @@ $profile_sql = "SELECT * FROM student_profiles WHERE user_id = '$user_id' LIMIT 
 $profile_result = mysqli_query($conn, $profile_sql);
 $profile = mysqli_fetch_assoc($profile_result);
 
+// Fetch user phone from users table for auto-fill fallback
+$user_sql = "SELECT phone FROM users WHERE id = '$user_id' LIMIT 1";
+$user_result = mysqli_query($conn, $user_sql);
+$user_row = mysqli_fetch_assoc($user_result);
+$user_phone = ($user_row && isset($user_row['phone'])) ? $user_row['phone'] : '';
+
 // If profile exists, use those values; otherwise use empty defaults
 $first_name = ($profile && isset($profile['first_name'])) ? $profile['first_name'] : '';
 $last_name = ($profile && isset($profile['last_name'])) ? $profile['last_name'] : '';
-$phone = ($profile && isset($profile['phone'])) ? $profile['phone'] : '';
+$phone = ($profile && isset($profile['phone']) && !empty($profile['phone'])) ? $profile['phone'] : $user_phone;
 $dob = ($profile && isset($profile['dob'])) ? $profile['dob'] : '';
 $gender = ($profile && isset($profile['gender'])) ? $profile['gender'] : '';
 $college_name = ($profile && isset($profile['college_name'])) ? $profile['college_name'] : '';
@@ -30,6 +36,9 @@ $pan_number = ($profile && isset($profile['pan_number'])) ? $profile['pan_number
 $resume_file = ($profile && isset($profile['resume_file'])) ? $profile['resume_file'] : '';
 $aadhaar_file = ($profile && isset($profile['aadhaar_file'])) ? $profile['aadhaar_file'] : '';
 $pan_file = ($profile && isset($profile['pan_file'])) ? $profile['pan_file'] : '';
+$hod_name = ($profile && isset($profile['hod_name'])) ? $profile['hod_name'] : '';
+$hod_phone = ($profile && isset($profile['hod_phone'])) ? $profile['hod_phone'] : '';
+$hod_email = ($profile && isset($profile['hod_email'])) ? $profile['hod_email'] : '';
 
 // Parse year_of_study to determine education status and fields
 $year_of_study = ($profile && isset($profile['year_of_study'])) ? $profile['year_of_study'] : '';
@@ -93,7 +102,7 @@ if (empty($session_email) && $profile && isset($profile['email'])) {
         /* Smooth reveal for conditional fields */
         #pursuing-fields.visible,
         #passedout-fields.visible {
-            max-height: 300px !important;
+            max-height: 800px !important;
             opacity: 1 !important;
             pointer-events: auto !important;
             margin-top: 0 !important;
@@ -228,7 +237,7 @@ if (empty($session_email) && $profile && isset($profile['email'])) {
 
                         <!-- PURSUING fields -->
                         <div id="pursuing-fields" class="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6 overflow-hidden <?php echo ($education_status === 'Pursuing') ? 'visible' : ''; ?>"
-                             style="max-height:<?php echo ($education_status === 'Pursuing') ? '300px' : '0'; ?>; opacity:<?php echo ($education_status === 'Pursuing') ? '1' : '0'; ?>; pointer-events:<?php echo ($education_status === 'Pursuing') ? 'auto' : 'none'; ?>; transition: max-height .4s ease, opacity .35s ease, margin .35s ease; margin-top:0;">
+                             style="max-height:<?php echo ($education_status === 'Pursuing') ? '800px' : '0'; ?>; opacity:<?php echo ($education_status === 'Pursuing') ? '1' : '0'; ?>; pointer-events:<?php echo ($education_status === 'Pursuing') ? 'auto' : 'none'; ?>; transition: max-height .4s ease, opacity .35s ease, margin .35s ease; margin-top:0;">
                             <div>
                                 <label class="block text-sm font-medium text-slate-700 mb-1">Year of Study <span class="text-red-500">*</span></label>
                                 <select id="year_of_study_select" name="_year_of_study_pursuing"
@@ -251,6 +260,27 @@ if (empty($session_email) && $profile && isset($profile['email'])) {
                                     <?php endfor; ?>
                                 </select>
                                 <p id="exp-grad-err" class="hidden text-xs text-red-500 mt-1">Please select your expected graduation year.</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">HOD Name <span class="text-red-500">*</span></label>
+                                <input type="text" name="hod_name" id="hod_name" value="<?php echo htmlspecialchars($hod_name); ?>"
+                                       class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors outline-none text-slate-800"
+                                       placeholder="e.g. Dr. Ramesh Kumar">
+                                <p id="hod-name-err" class="hidden text-xs text-red-500 mt-1">Please enter HOD name.</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">HOD Phone Number <span class="text-red-500">*</span></label>
+                                <input type="tel" name="hod_phone" id="hod_phone" value="<?php echo htmlspecialchars($hod_phone); ?>"
+                                       class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors outline-none text-slate-800"
+                                       placeholder="1234567890" pattern="\d{10}" minlength="10" maxlength="10" title="Please enter exactly 10 digits" oninput="this.value = this.value.replace(/[^0-9]/g, '');">
+                                <p id="hod-phone-err" class="hidden text-xs text-red-500 mt-1">Please enter a valid 10-digit HOD phone number.</p>
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-sm font-medium text-slate-700 mb-1">HOD Email <span class="text-red-500">*</span></label>
+                                <input type="email" name="hod_email" id="hod_email" value="<?php echo htmlspecialchars($hod_email); ?>"
+                                       class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors outline-none text-slate-800"
+                                       placeholder="hod@college.edu">
+                                <p id="hod-email-err" class="hidden text-xs text-red-500 mt-1">Please enter a valid HOD email address.</p>
                             </div>
                         </div>
 
@@ -320,7 +350,7 @@ if (empty($session_email) && $profile && isset($profile['email'])) {
                                 </label>
                                 <div id="resume-preview" class="<?php echo empty($resume_file) ? 'hidden' : ''; ?> mt-4 pt-4 border-t border-slate-100">
                                     <p class="text-sm text-slate-500 mb-1">Selected file:</p>
-                                    <a href="<?php echo empty($resume_file) ? '#' : 'uploads/' . htmlspecialchars($resume_file); ?>" id="resume-link" target="_blank" class="inline-flex items-center gap-1 text-blue-600 hover:text-blue-700 hover:underline font-medium relative z-10" onclick="event.stopPropagation();">
+                                    <a href="<?php echo get_resume_view_link($profile); ?>" id="resume-link" target="_blank" class="inline-flex items-center gap-1 text-blue-600 hover:text-blue-700 hover:underline font-medium relative z-10" onclick="event.stopPropagation();">
                                         <span class="material-symbols-outlined text-[18px]">description</span>
                                         <span id="resume-filename" class="truncate max-w-[200px]"><?php echo empty($resume_file) ? 'filename.pdf' : basename($resume_file); ?></span>
                                     </a>
@@ -487,6 +517,12 @@ if (empty($session_email) && $profile && isset($profile['email'])) {
                 const expGradSel = document.getElementById('expected_grad_year');
                 const yearErr    = document.getElementById('year-err');
                 const expErr     = document.getElementById('exp-grad-err');
+                const hodName    = document.getElementById('hod_name');
+                const hodPhone   = document.getElementById('hod_phone');
+                const hodEmail   = document.getElementById('hod_email');
+                const hodNameErr = document.getElementById('hod-name-err');
+                const hodPhoneErr= document.getElementById('hod-phone-err');
+                const hodEmailErr= document.getElementById('hod-email-err');
 
                 if (!yearSel.value) {
                     yearErr.classList.remove('hidden');
@@ -504,6 +540,35 @@ if (empty($session_email) && $profile && isset($profile['email'])) {
                 } else {
                     expErr.classList.add('hidden');
                     expGradSel.classList.remove('border-red-400');
+                }
+
+                if (!hodName.value.trim()) {
+                    hodNameErr.classList.remove('hidden');
+                    hodName.classList.add('border-red-400');
+                    valid = false;
+                } else {
+                    hodNameErr.classList.add('hidden');
+                    hodName.classList.remove('border-red-400');
+                }
+
+                const phoneVal = hodPhone.value.trim();
+                if (!phoneVal || !/^\d{10}$/.test(phoneVal)) {
+                    hodPhoneErr.classList.remove('hidden');
+                    hodPhone.classList.add('border-red-400');
+                    valid = false;
+                } else {
+                    hodPhoneErr.classList.add('hidden');
+                    hodPhone.classList.remove('border-red-400');
+                }
+
+                const emailVal = hodEmail.value.trim();
+                if (!emailVal || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailVal)) {
+                    hodEmailErr.classList.remove('hidden');
+                    hodEmail.classList.add('border-red-400');
+                    valid = false;
+                } else {
+                    hodEmailErr.classList.add('hidden');
+                    hodEmail.classList.remove('border-red-400');
                 }
 
                 if (yearSel.value && expGradSel.value) {
@@ -537,9 +602,12 @@ if (empty($session_email) && $profile && isset($profile['email'])) {
     });
 
     // Live clear red border on change
-    ['year_of_study_select','expected_grad_year','graduation_year_select'].forEach(id => {
+    ['year_of_study_select','expected_grad_year','graduation_year_select','hod_name','hod_phone','hod_email'].forEach(id => {
         const el = document.getElementById(id);
-        if (el) el.addEventListener('change', () => el.classList.remove('border-red-400'));
+        if (el) {
+            el.addEventListener('change', () => el.classList.remove('border-red-400'));
+            el.addEventListener('input', () => el.classList.remove('border-red-400'));
+        }
     });
 </script>
 </body>

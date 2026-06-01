@@ -362,6 +362,22 @@ if ($has_active) {
 </script>
 <?php endif; ?>
 
+<?php if (isset($_GET['error'])): ?>
+<div id="error-toast" class="fixed top-6 right-6 z-50 bg-red-600 text-white rounded-2xl shadow-xl px-5 py-4 flex items-center gap-3 transform translate-x-[420px] transition-transform duration-500 ease-out">
+  <span class="material-symbols-outlined">warning</span>
+  <span class="text-sm font-semibold"><?php echo htmlspecialchars($_GET['error']); ?></span>
+  <button onclick="this.parentElement.remove()" class="ml-3 hover:opacity-70"><span class="material-symbols-outlined text-[18px]">close</span></button>
+</div>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const t = document.getElementById('error-toast');
+    if (!t) return;
+    setTimeout(() => t.classList.remove('translate-x-[420px]'), 100);
+    setTimeout(() => { t.classList.add('translate-x-[420px]'); setTimeout(() => t.remove(), 500); }, 4500);
+  });
+</script>
+<?php endif; ?>
+
 <!-- ═══════════════════════════════════════════════════════════════
      FIXED LEFT SIDEBAR
 ═══════════════════════════════════════════════════════════════ -->
@@ -493,7 +509,7 @@ if ($has_active) {
               <span class="text-slate-700 truncate"><?php echo htmlspecialchars($profile['skills'] ?? '—'); ?></span>
             </div>
             <?php if (!empty($profile['resume_file'])): ?>
-            <a href="uploads/<?php echo htmlspecialchars($profile['resume_file']); ?>" target="_blank"
+            <a href="<?php echo get_resume_view_link($profile); ?>" target="_blank"
                class="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 transition-colors text-slate-600 group">
               <span class="material-symbols-outlined text-red-400 text-[18px]">picture_as_pdf</span>
               <span class="truncate flex-1 text-xs font-medium"><?php echo basename($profile['resume_file']); ?></span>
