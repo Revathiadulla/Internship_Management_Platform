@@ -1,0 +1,8 @@
+[2026-06-01 07:20:03] resolve_resume_file_path check for filename 'this_file_really_does_not_exist_12345.pdf':
+- Database path/filename: this_file_really_does_not_exist_12345.pdf
+- Checked paths: C:\xampp\htdocs\Internship_Management_Platform-student_module/uploads/resumes/this_file_really_does_not_exist_12345.pdf, C:\xampp\htdocs\Internship_Management_Platform-student_module/uploads/secure/this_file_really_does_not_exist_12345.pdf, C:\xampp\htdocs\Internship_Management_Platform-student_module/uploads/this_file_really_does_not_exist_12345.pdf, C:\Users\REVATH~1.DES\AppData\Local\Temp/imp_uploads/this_file_really_does_not_exist_12345.pdf
+- Resolved path: NONE
+[2026-06-01 07:20:03] resolve_resume_file_path check for filename 'test_resume_1780291203.pdf':
+- Database path/filename: test_resume_1780291203.pdf
+- Checked paths: C:\xampp\htdocs\Internship_Management_Platform-student_module/uploads/resumes/test_resume_1780291203.pdf, C:\xampp\htdocs\Internship_Management_Platform-student_module/uploads/secure/test_resume_1780291203.pdf, C:\xampp\htdocs\Internship_Management_Platform-student_module/uploads/test_resume_1780291203.pdf, C:\Users\REVATH~1.DES\AppData\Local\Temp/imp_uploads/test_resume_1780291203.pdf
+- Resolved path: C:\Users\Revathi.DESKTOP-I0DEJU6\AppData\Local\Temp\imp_uploads\test_resume_1780291203.pdf
