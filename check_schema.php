@@ -1,6 +1,6 @@
 <?php
 include 'db.php';
-$tables = ['student_profiles', 'internship_applications'];
+$tables = ['internships', 'internship_applications'];
 foreach ($tables as $t) {
     echo "=== Table: $t ===\n";
     $res = mysqli_query($conn, "DESCRIBE $t");

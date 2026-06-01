@@ -506,20 +506,50 @@ function page_head(string $title): void {
 <script src="https://cdn.tailwindcss.com"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL,GRAD,opsz@300,0,0,24" rel="stylesheet">
-<style>
-body { font-family: Inter, sans-serif; }
 .material-symbols-outlined { font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24; }
-.profile-menu { position: relative; }
-.profile-menu .dropdown { display: none; position: absolute; right: 0; top: calc(100% + 8px); min-width: 170px; background: white; border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: 0 12px 30px rgba(15,23,42,.12); padding: 8px; z-index: 60; }
-.profile-menu:hover .dropdown { display: block; }
-.profile-menu .dropdown a { display: block; border-radius: 6px; padding: 9px 10px; color: #334155; font-size: 14px; font-weight: 600; }
+
+/* Profile & Notification menus — must NOT clip their dropdowns */
+.profile-menu { position: relative; overflow: visible !important; }
+.notif-menu   { position: relative; overflow: visible !important; }
+
+/* Dropdown panels — click-toggled via .open class on the wrapper */
+.profile-menu .dropdown,
+.notif-menu .dropdown {
+    display: none;
+    position: absolute !important;
+    right: 0;
+    top: calc(100% + 8px);
+    z-index: 9999 !important;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    box-shadow: 0 12px 40px rgba(15,23,42,.16);
+}
+.profile-menu .dropdown { min-width: 190px; padding: 6px; }
+.notif-menu .dropdown  { min-width: 320px; }
+
+/* Show when .open is present on the wrapper */
+.profile-menu.open .dropdown,
+.notif-menu.open .dropdown { display: block !important; }
+
+/* Ensure all dropdown links are always clickable */
+.profile-menu .dropdown a,
+.notif-menu .dropdown a {
+    display: block;
+    border-radius: 8px;
+    padding: 9px 12px;
+    color: #334155;
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: none;
+    pointer-events: auto !important;
+    cursor: pointer !important;
+}
 .profile-menu .dropdown a:hover { background: #f8fafc; color: #1d4ed8; }
-.notif-menu { position: relative; }
-.notif-menu .dropdown { display: none; position: absolute; right: 0; top: calc(100% + 8px); min-width: 320px; background: white; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 12px 30px rgba(15,23,42,.12); z-index: 60; }
-.notif-menu:hover .dropdown { display: block; }
 </style>
 </head><body class="bg-[#f8f9fa] text-slate-900 antialiased">';
 }
+
 
 function hr_sidebar(string $active): void {
     $visible = [];
@@ -624,7 +654,7 @@ function module_topbar(string $active, string $action_html = '', bool $show_sear
                 if ($notif_res) {
                     $notification_count = (int) mysqli_fetch_assoc($notif_res)['total'];
                 }
-
+ 
                 $notif_q = mysqli_query($conn, "SELECT id, title, type, message, created_at, is_read FROM hr_notifications ORDER BY id DESC LIMIT 5");
                 if ($notif_q) {
                     while ($n_row = mysqli_fetch_assoc($notif_q)) {
@@ -694,7 +724,7 @@ function module_topbar(string $active, string $action_html = '', bool $show_sear
                     }
                 }
                 $notif_url = 'mark_notification_read.php?id=' . intval($n['id']) . '&redirect=' . urlencode($redirect_url);
-
+ 
                 $items_html .= '<a href="' . $notif_url . '" class="block px-4 py-3 border-b border-slate-100 hover:bg-slate-50 transition ' . $unread_style . '">
                     <div class="flex gap-3">
                         <div class="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ' . $icon_color . '">
@@ -715,13 +745,13 @@ function module_topbar(string $active, string $action_html = '', bool $show_sear
         $badge_id = $is_mentor ? 'mentor-navbar-badge' : 'hr-notification-badge';
         $view_all_url = $is_mentor ? 'mentor_notifications.php' : 'hr_applications.php';
         
-        $notif_html = '<div class="notif-menu relative">
-            <button type="button" class="relative rounded-full p-2 text-slate-500 hover:bg-slate-50" title="Notifications Dropdown">
+        $notif_html = '<div class="notif-menu" id="imp-notif-menu">
+            <button type="button" id="imp-notif-btn" onclick="impToggleNotifMenu(event)" style="cursor:pointer;" class="relative rounded-full p-2 text-slate-500 hover:bg-slate-50" title="Notifications">
                 <span class="material-symbols-outlined">notifications</span>
                 <span id="' . $badge_id . '" class="' . $badge_class . ' absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white">' . e($badge_text) . '</span>
             </button>
-            <div class="dropdown absolute right-0 top-full mt-2 w-80 rounded-2xl border border-slate-200 bg-white shadow-xl py-2 overflow-hidden z-[90]">
-                <div class="px-4 py-2 border-b border-slate-150 flex items-center justify-between font-bold text-xs text-slate-500 uppercase tracking-wider">
+            <div class="dropdown">
+                <div class="px-4 py-2 border-b border-slate-100 flex items-center justify-between font-bold text-xs text-slate-500 uppercase tracking-wider">
                     <span>Recent Alerts</span>
                     ' . ($notification_count > 0 ? '<button id="btn-mark-all-read-dropdown" onclick="markAllNotificationsRead(event)" class="text-[9px] font-black text-blue-600 hover:underline lowercase tracking-normal">Mark all read</button>' : '') . '
                 </div>
@@ -729,12 +759,13 @@ function module_topbar(string $active, string $action_html = '', bool $show_sear
                 <div class="border-t border-slate-100 px-4 py-2 text-center bg-slate-50"><a href="' . $view_all_url . '" class="text-xs font-black text-blue-600 hover:underline">View All Notifications</a></div>
             </div>
         </div>';
+ 
     }
     
     // Build profile dropdown HTML
     $profile_dropdown_html = '';
     if ($is_mentor) {
-        $profile_dropdown_html = '<div class="dropdown absolute right-0 top-full mt-2 min-w-[220px] rounded-2xl border border-slate-200 bg-white shadow-xl py-2 z-[90]">
+        $profile_dropdown_html = '<div class="dropdown">
             <div class="border-b border-slate-100 px-4 py-3 bg-slate-50/50">
                 <p class="text-sm font-black text-slate-800">' . e($name) . '</p>
                 <p class="truncate text-xs text-slate-400 mt-0.5">' . e($email) . '</p>
@@ -747,16 +778,16 @@ function module_topbar(string $active, string $action_html = '', bool $show_sear
             <a href="logout.php" class="block px-4 py-2.5 text-sm font-bold text-red-600 hover:bg-red-50 hover:text-red-700 transition">Logout</a>
         </div>';
     } else {
-        $profile_dropdown_html = '<div class="dropdown absolute right-0 top-full mt-2 min-w-[170px] rounded-2xl border border-slate-200 bg-white shadow-lg">
+        $profile_dropdown_html = '<div class="dropdown">
             <div class="border-b border-slate-100 px-3 py-3"><p class="text-sm font-bold text-slate-900">' . e($name) . '</p><p class="truncate text-xs text-slate-500">' . e($email) . '</p></div>
-            <a href="profile.php" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">Profile</a>
-            <a href="settings.php" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">Settings</a>
-            <a href="logout.php" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">Logout</a>
+            <a href="profile.php">Profile</a>
+            <a href="settings.php">Settings</a>
+            <a href="logout.php" style="color:#dc2626;">Logout</a>
         </div>';
     }
     
-    return '<div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">' . $search_html . '<div class="flex items-center gap-3">' . $action_html . $notif_html . '<div class="profile-menu relative">
-            <button type="button" class="flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-slate-50">
+    return '<div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">' . $search_html . '<div class="flex items-center gap-3">' . $action_html . $notif_html . '<div class="profile-menu" id="imp-profile-menu">
+            <button type="button" id="imp-profile-btn" onclick="impToggleProfileMenu(event)" style="cursor:pointer;" class="flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-slate-50 select-none">
                 ' . $avatar_html . '
                 <span class="hidden text-left lg:block"><span class="block text-sm font-bold text-slate-900">' . e($name) . '</span><span class="block text-xs text-slate-500">' . e($role) . '</span></span>
                 <span class="material-symbols-outlined text-slate-400">expand_more</span>
@@ -764,7 +795,8 @@ function module_topbar(string $active, string $action_html = '', bool $show_sear
             ' . $profile_dropdown_html . '
         </div></div></div>';
 }
-
+ 
+ 
 function module_search_row(string $active): string {
     [$search_action, $placeholder] = module_search_config($active);
     $search_value = e($_GET['search'] ?? '');
@@ -777,7 +809,7 @@ function module_search_row(string $active): string {
          . '</form>'
          . '</div>';
 }
-
+ 
 function page_shell_start(string $active, string $title, string $subtitle = '', string $action_html = ''): void {
     page_head($title);
     if (isset($_SESSION['role']) && strtolower($_SESSION['role']) === 'mentor') {
@@ -804,13 +836,50 @@ function page_shell_start(string $active, string $title, string $subtitle = '', 
     echo '<section class="px-8 py-8">';
     echo module_flash();
 }
-
+ 
 function page_shell_end(): void {
     echo '</section></main>
 <script>
+// ── IMP Profile Dropdown — click-to-toggle, click-outside-to-close ──────────
+function impToggleProfileMenu(event) {
+    event.stopPropagation();
+    var menu = document.getElementById("imp-profile-menu");
+    var notif = document.getElementById("imp-notif-menu");
+    if (notif) notif.classList.remove("open");
+    if (menu) { menu.classList.toggle("open"); }
+}
+function impToggleNotifMenu(event) {
+    event.stopPropagation();
+    var menu = document.getElementById("imp-notif-menu");
+    var profile = document.getElementById("imp-profile-menu");
+    if (profile) profile.classList.remove("open");
+    if (menu) { menu.classList.toggle("open"); }
+}
+document.addEventListener("click", function(e) {
+    var profileMenu = document.getElementById("imp-profile-menu");
+    var notifMenu   = document.getElementById("imp-notif-menu");
+    if (profileMenu && !profileMenu.contains(e.target)) { profileMenu.classList.remove("open"); }
+    if (notifMenu   && !notifMenu.contains(e.target))   { notifMenu.classList.remove("open"); }
+});
+// Make all dropdown links always clickable regardless of parent styles
+document.addEventListener("DOMContentLoaded", function() {
+    ["imp-profile-menu","imp-notif-menu"].forEach(function(id) {
+        var menu = document.getElementById(id);
+        if (!menu) return;
+        menu.querySelectorAll(".dropdown a").forEach(function(link) {
+            link.style.pointerEvents = "auto";
+            link.style.cursor = "pointer";
+            link.style.display = "block";
+        });
+    });
+});
+
+// ── HR Notification Badge polling ───────────────────────────────────────────
 (function() {
     const badge = document.getElementById("hr-notification-badge");
     if (!badge) return;
+
+
     
     let lastCount = parseInt(badge.textContent) || 0;
     

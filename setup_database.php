@@ -103,9 +103,42 @@ if (!$has_name_col) {
 }
 
 
+// 1c. Check/Add approval columns in internships
+$internship_approval_cols = [
+    "approval_status" => "VARCHAR(50) DEFAULT 'Pending Approval'",
+    "approved_by"     => "INT DEFAULT NULL",
+    "approved_at"     => "TIMESTAMP DEFAULT NULL",
+    "admin_remarks"   => "TEXT DEFAULT NULL"
+];
+foreach ($internship_approval_cols as $col => $definition) {
+    $chk = mysqli_query($conn, "SHOW COLUMNS FROM internships LIKE '$col'");
+    if (mysqli_num_rows($chk) == 0) {
+        executeSetupQuery($conn, "ALTER TABLE internships ADD COLUMN $col $definition", "Adding $col column to internships", $errors, $is_cli);
+    } else {
+        if ($is_cli) {
+            echo "[EXISTS] internships.$col column\n";
+        } else {
+            echo "<div class='p-3 bg-slate-50 text-slate-700 border border-slate-200 rounded-lg flex items-center justify-between'>
+                    <span>internships.$col column</span>
+                    <span class='font-medium text-slate-500'>[Already exists]</span>
+                  </div>";
+        }
+    }
+}
+
 // 2. Check/Add smart-form columns in internship_applications
 $new_cols = [
     "education_status"    => "VARCHAR(20) DEFAULT NULL",
+    "hod_phone"           => "VARCHAR(20) DEFAULT NULL",
+    "test_result"         => "VARCHAR(100) DEFAULT NULL",
+    "hr_review_status"    => "VARCHAR(50) DEFAULT 'Pending'",
+    "hod_approval_status" => "VARCHAR(50) DEFAULT 'Pending'",
+    "hod_approval_sent_at"=> "TIMESTAMP DEFAULT NULL",
+    "hod_approved_at"     => "TIMESTAMP DEFAULT NULL",
+    "hod_remarks"         => "TEXT DEFAULT NULL",
+    "selected_by"         => "INT DEFAULT NULL",
+    "selected_at"         => "TIMESTAMP DEFAULT NULL",
+    "hod_token"           => "VARCHAR(255) DEFAULT NULL",
     "department"          => "VARCHAR(100) DEFAULT NULL",
     "hod_name"            => "VARCHAR(100) DEFAULT NULL",
     "hod_email"           => "VARCHAR(100) DEFAULT NULL",

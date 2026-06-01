@@ -73,6 +73,47 @@ if ($_col_check && mysqli_num_rows($_col_check) === 0) {
 }
 unset($_col_check);
 
+// Add approval columns to internships safely
+$_col_check = mysqli_query($conn, "SHOW COLUMNS FROM internships LIKE 'approval_status'");
+if ($_col_check && mysqli_num_rows($_col_check) === 0) {
+    mysqli_query($conn, "ALTER TABLE internships ADD COLUMN approval_status VARCHAR(50) DEFAULT 'Pending Approval'");
+}
+unset($_col_check);
+
+$_col_check = mysqli_query($conn, "SHOW COLUMNS FROM internships LIKE 'approved_by'");
+if ($_col_check && mysqli_num_rows($_col_check) === 0) {
+    mysqli_query($conn, "ALTER TABLE internships ADD COLUMN approved_by INT DEFAULT NULL");
+}
+unset($_col_check);
+
+$_col_check = mysqli_query($conn, "SHOW COLUMNS FROM internships LIKE 'approved_at'");
+if ($_col_check && mysqli_num_rows($_col_check) === 0) {
+    mysqli_query($conn, "ALTER TABLE internships ADD COLUMN approved_at TIMESTAMP DEFAULT NULL");
+}
+unset($_col_check);
+
+// Add workflow columns to internship_applications safely
+$app_new_cols = [
+    'hod_phone' => "VARCHAR(20) DEFAULT NULL",
+    'test_result' => "VARCHAR(100) DEFAULT NULL",
+    'hr_review_status' => "VARCHAR(50) DEFAULT 'Pending'",
+    'hod_approval_status' => "VARCHAR(50) DEFAULT 'Pending'",
+    'hod_approval_sent_at' => "TIMESTAMP DEFAULT NULL",
+    'hod_approved_at' => "TIMESTAMP DEFAULT NULL",
+    'hod_remarks' => "TEXT DEFAULT NULL",
+    'selected_by' => "INT DEFAULT NULL",
+    'selected_at' => "TIMESTAMP DEFAULT NULL",
+    'hod_token' => "VARCHAR(255) DEFAULT NULL"
+];
+foreach ($app_new_cols as $_col => $_def) {
+    $_col_check = mysqli_query($conn, "SHOW COLUMNS FROM internship_applications LIKE '$_col'");
+    if ($_col_check && mysqli_num_rows($_col_check) === 0) {
+        mysqli_query($conn, "ALTER TABLE internship_applications ADD COLUMN $_col $_def");
+    }
+    unset($_col_check);
+}
+
+
 function checkAndAddToTalentPool($conn, $app_id) {
     $app_id = intval($app_id);
     if ($app_id <= 0) return false;

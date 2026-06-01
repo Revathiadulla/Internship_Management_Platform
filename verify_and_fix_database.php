@@ -43,7 +43,17 @@ if (mysqli_num_rows($check) > 0) {
         'internship_name' => "VARCHAR(255) DEFAULT NULL",
         'preferred_duration' => "VARCHAR(100) DEFAULT NULL",
         'reason_for_applying' => "TEXT DEFAULT NULL",
-        'relevant_skills' => "TEXT DEFAULT NULL"
+        'relevant_skills' => "TEXT DEFAULT NULL",
+        'hod_phone' => "VARCHAR(20) DEFAULT NULL",
+        'test_result' => "VARCHAR(100) DEFAULT NULL",
+        'hr_review_status' => "VARCHAR(50) DEFAULT 'Pending'",
+        'hod_approval_status' => "VARCHAR(50) DEFAULT 'Pending'",
+        'hod_approval_sent_at' => "TIMESTAMP DEFAULT NULL",
+        'hod_approved_at' => "TIMESTAMP DEFAULT NULL",
+        'hod_remarks' => "TEXT DEFAULT NULL",
+        'selected_by' => "INT DEFAULT NULL",
+        'selected_at' => "TIMESTAMP DEFAULT NULL",
+        'hod_token' => "VARCHAR(255) DEFAULT NULL"
     ];
     
     foreach ($required_columns as $col => $def) {
@@ -82,6 +92,38 @@ if (mysqli_num_rows($check) > 0) {
     $checks_failed++;
 }
 echo "</div>";
+
+// Check 1b: Checking internships table
+echo "<div class='mb-6'>";
+echo "<h2 class='text-lg font-bold text-slate-800 mb-3'>1b. Checking internships table</h2>";
+$check_internships = mysqli_query($conn, "SHOW TABLES LIKE 'internships'");
+if (mysqli_num_rows($check_internships) > 0) {
+    echo "<p class='text-emerald-600 font-semibold'>✓ Table exists</p>";
+    $checks_passed++;
+    
+    $required_internship_columns = [
+        'approval_status' => "VARCHAR(50) DEFAULT 'Pending Approval'",
+        'approved_by' => "INT DEFAULT NULL",
+        'approved_at' => "TIMESTAMP DEFAULT NULL",
+        'admin_remarks' => "TEXT DEFAULT NULL"
+    ];
+    
+    foreach ($required_internship_columns as $col => $def) {
+        $col_check = mysqli_query($conn, "SHOW COLUMNS FROM internships LIKE '$col'");
+        if (mysqli_num_rows($col_check) == 0) {
+            echo "<p class='text-orange-600 text-sm ml-4'>⚠ Adding missing column to internships: $col</p>";
+            mysqli_query($conn, "ALTER TABLE internships ADD COLUMN $col $def");
+            $fixes_applied++;
+        } else {
+            echo "<p class='text-slate-600 text-sm ml-4'>✓ Column exists: $col</p>";
+        }
+    }
+} else {
+    echo "<p class='text-red-600 font-semibold'>✗ Table does not exist</p>";
+    $checks_failed++;
+}
+echo "</div>";
+
 
 // Check 2: application_status_history table
 echo "<div class='mb-6'>";
