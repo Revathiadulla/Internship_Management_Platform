@@ -97,12 +97,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
     
+    // Calculate test result — Passed if 15 or more out of 30 (50% threshold)
+    $test_result = ($score >= 15) ? 'Passed' : 'Failed';
+    
     $escaped_answers = mysqli_real_escape_string($conn, json_encode($answers_array));
     
     // Update application details
     $update_sql = "UPDATE internship_applications 
                    SET test_status = 'Completed', 
-                       test_score = '$score', 
+                       test_score = '$score',
+                       test_result = '$test_result',
                        test_answers = '$escaped_answers',
                        test_submitted_date = NOW(),
                        status = 'Test Completed'
@@ -112,7 +116,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Record in status history
         $student_name = mysqli_real_escape_string($conn, $profile['full_name'] ?? 'Student');
         $old_status = mysqli_real_escape_string($conn, $app['status']);
-        $notes = "Assessment test completed with score: $score/30";
+        $notes = "Assessment test completed with score: $score/30 ($test_result)";
         
         $history_sql = "INSERT INTO application_status_history 
                         (application_id, old_status, new_status, updated_by_role, updated_by_name, notes) 
@@ -121,18 +125,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         // Send email notification for assessment test completion
         $test_subject = "IMP Assessment Test Completed: " . $app['title'];
-        $test_message = "Dear " . ($profile['full_name'] ?? 'Student') . ",\n\nYou have successfully completed the online skills assessment test for the \"" . $app['title'] . "\" internship.\n\nHere is your test summary:\n- Assessment Domain: **$domain**\n- Final Score: **$score / 30** (" . round(($score / 30) * 100, 1) . "%)\n\nYour application status has been updated to **Test Completed**. The hiring managers and coordinators will review your results shortly.\n\nThank you!";
+        $test_message = "Dear " . ($profile['full_name'] ?? 'Student') . ",\n\nYou have successfully completed the online skills assessment test for the \"" . $app['title'] . "\" internship.\n\nHere is your test summary:\n- Assessment Domain: **$domain**\n- Final Score: **$score / 30** (" . round(($score / 30) * 100, 1) . "%)\n- Result: **$test_result**\n\nYour application status has been updated to **Test Completed**. The hiring managers and coordinators will review your results shortly.\n\nThank you!";
         sendEmailNotification($user_id, $test_subject, $test_message, [
             'event' => 'Assessment Completion',
             'internship_position' => $app['title'],
             'assessment_domain' => $domain,
             'achieved_score' => "$score / 30",
+            'result' => $test_result,
             'percentage' => round(($score / 30) * 100, 1) . "%",
             'action_url' => 'http://localhost/IMP/student_applications.php',
             'action_label' => 'View Test Breakdown'
         ]);
 
-        header("Location: student_applications.php?msg=" . urlencode("Assessment Completed! Score: $score/30"));
+        header("Location: student_applications.php?msg=" . urlencode("Assessment Completed! Score: $score/30 – $test_result"));
         exit();
     } else {
         $error = "Failed to submit assessment: " . mysqli_error($conn);

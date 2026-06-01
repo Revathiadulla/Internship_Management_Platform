@@ -5,6 +5,7 @@ if (!isset($_SESSION['user_id']) || strtolower($_SESSION['role']) !== 'coordinat
     exit();
 }
 include "db.php";
+include_once __DIR__ . "/includes/mail_helper.php";
 
 $success_msg = "";
 $error_msg = "";
@@ -153,7 +154,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $mode = trim($_POST['mode']);
     $technology_stack = trim($_POST['technology_stack']);
     $skills = $technology_stack; // sync skills with technology stack
-    $status = trim($_POST['status']);
+    // Always force Pending Approval for coordinator-created projects
+    $status = 'Pending Approval';
     
     $description = trim($_POST['description']);
     $project_type = trim($_POST['project_type']);
@@ -166,13 +168,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     if (empty($title) || empty($project_title) || empty($duration) || empty($mode) || empty($technology_stack) || empty($description)) {
         $error_msg = "Please fill in all required fields.";
     } else {
-        $stmt = mysqli_prepare($conn, "INSERT INTO internships (title, duration, mode, skills, status, description, project_type, project_subtype, project_title, task_title, technology_stack, difficulty_level, openings, start_date, end_date, coordinator_id, submission_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURDATE())");
-        mysqli_stmt_bind_param($stmt, "ssssssssssssissi", $title, $duration, $mode, $skills, $status, $description, $project_type, $project_subtype, $project_title, $task_title, $technology_stack, $difficulty_level, $openings, $start_date, $end_date, $_SESSION['user_id']);
+        $coord_id = intval($_SESSION['user_id']);
+        $stmt = mysqli_prepare($conn, "INSERT INTO internships (title, duration, mode, skills, status, approval_status, description, project_type, project_subtype, project_title, task_title, technology_stack, difficulty_level, openings, start_date, end_date, coordinator_id, submission_date) VALUES (?, ?, ?, ?, 'Pending Approval', 'Pending Approval', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURDATE())");
+        mysqli_stmt_bind_param($stmt, "ssssssssssssissi", $title, $duration, $mode, $skills, $description, $project_type, $project_subtype, $project_title, $task_title, $technology_stack, $difficulty_level, $openings, $start_date, $end_date, $coord_id);
         
         if (mysqli_stmt_execute($stmt)) {
             $new_id = mysqli_insert_id($conn);
             generatePhases($conn, $new_id, $duration, $start_date);
-            header("Location: coordinator_internships.php?success=" . urlencode("Project posting created successfully!"));
+
+            // Fetch coordinator's name for the email
+            $coord_res = mysqli_query($conn, "SELECT full_name FROM users WHERE id = $coord_id LIMIT 1");
+            $coord_row = mysqli_fetch_assoc($coord_res);
+            $coord_name = $coord_row['full_name'] ?? 'A Coordinator';
+
+            // Notify Admin about new project awaiting approval
+            $admin_email = 'imp.webportal2026@gmail.com';
+            $admin_subject = "IMP – New Project Awaiting Approval: $title";
+            $admin_message = "Hello Admin,\n\nCoordinator $coord_name has submitted a new project posting that requires your review and approval.\n\nProject: $title\nType: $project_type" . ($project_subtype ? " / $project_subtype" : "") . "\nDuration: $duration | Mode: $mode\n\nPlease log in to the Admin panel to Approve, Reject, or Request Changes.";
+            sendEmailNotification($admin_email, $admin_subject, $admin_message, [
+                'event'         => 'New Project Pending Approval',
+                'project_title' => $title,
+                'submitted_by'  => $coord_name,
+                'duration'      => $duration,
+                'mode'          => $mode,
+                'action_url'    => 'http://localhost/IMP/admin_internships.php?status=Pending+Approval',
+                'action_label'  => 'Review Project Posting'
+            ]);
+
+            header("Location: coordinator_internships.php?success=" . urlencode("Project posting submitted for Admin approval!"));
             exit();
         } else {
             $error_msg = "Error creating project posting: " . mysqli_error($conn);
@@ -535,12 +558,15 @@ mysqli_stmt_close($stmt);
                                                             }
                                                         }
                                                         
-                                                        $badge_cls = match($computed_status) {
-                                                            'Active' => 'bg-green-50 text-green-700 border-green-200',
-                                                            'Upcoming' => 'bg-blue-50 text-blue-700 border-blue-200',
-                                                            'Completed' => 'bg-amber-50 text-amber-700 border-amber-200',
-                                                            default => 'bg-slate-50 text-slate-700 border-slate-200' // Inactive
+                                                        $badge_cls = match(true) {
+                                                            $computed_status === 'Active'   => 'bg-green-50 text-green-700 border-green-200',
+                                                            $computed_status === 'Upcoming' => 'bg-blue-50 text-blue-700 border-blue-200',
+                                                            $computed_status === 'Completed'=> 'bg-amber-50 text-amber-700 border-amber-200',
+                                                            in_array($item['status'] ?? '', ['Pending Approval', 'Changes Requested']) => 'bg-orange-50 text-orange-700 border-orange-200',
+                                                            ($item['status'] ?? '') === 'Rejected' => 'bg-red-50 text-red-700 border-red-200',
+                                                            default => 'bg-slate-50 text-slate-700 border-slate-200'
                                                         };
+                                                        $approval_status = $item['approval_status'] ?? $item['status'] ?? 'Pending Approval';
 
                                                         $difficulty_cls = match($item['difficulty_level'] ?? 'Medium') {
                                                             'Easy' => 'bg-emerald-50 text-emerald-600',
@@ -571,10 +597,18 @@ mysqli_stmt_close($stmt);
                                                                 <td class="px-6 py-4 text-xs font-semibold text-gray-700 whitespace-nowrap"><?php echo $item['start_date'] ? date('M d, Y', strtotime($item['start_date'])) : '—'; ?></td>
                                                                 <td class="px-6 py-4 text-xs font-semibold text-gray-700 whitespace-nowrap"><?php echo $item['end_date'] ? date('M d, Y', strtotime($item['end_date'])) : '—'; ?></td>
                                                                 <td class="px-6 py-4">
-                                                                        <span class="px-2.5 py-0.5 border rounded-full text-xs font-bold <?php echo $badge_cls; ?>"><?php echo htmlspecialchars($computed_status); ?></span>
+                                                                        <span class="px-2.5 py-0.5 border rounded-full text-xs font-bold <?php echo $badge_cls; ?>"><?php echo htmlspecialchars($item['status'] ?? $computed_status); ?></span>
+                                                                        <?php if (in_array($item['status'] ?? '', ['Changes Requested', 'Rejected']) && !empty($item['admin_remarks'])): ?>
+                                                                            <p class="text-[10px] text-red-600 mt-1 font-semibold" title="<?php echo htmlspecialchars($item['admin_remarks']); ?>">⚠ Admin: <?php echo htmlspecialchars(mb_substr($item['admin_remarks'], 0, 40)) . (mb_strlen($item['admin_remarks']) > 40 ? '...' : ''); ?></p>
+                                                                        <?php endif; ?>
                                                                 </td>
                                                                 <td class="px-6 py-4 text-right space-x-2 whitespace-nowrap">
-                                                                        <button onclick='openTimelineModal(<?php echo json_encode($item); ?>)' class="text-indigo-600 hover:text-indigo-800 font-bold text-xs cursor-pointer mr-1">Timeline</button>
+                                                                        <?php $is_active = ($item['status'] ?? '') === 'Active'; ?>
+                                                                        <?php if ($is_active): ?>
+                                                                            <button onclick='openTimelineModal(<?php echo json_encode($item); ?>)' class="text-indigo-600 hover:text-indigo-800 font-bold text-xs cursor-pointer mr-1">Timeline</button>
+                                                                        <?php else: ?>
+                                                                            <span class="text-gray-300 font-bold text-xs mr-1 cursor-not-allowed" title="Timeline is only available for Active projects">Timeline</span>
+                                                                        <?php endif; ?>
                                                                         <button onclick='openEditModal(<?php echo json_encode($item); ?>)' class="text-blue-600 hover:text-blue-800 font-bold text-xs cursor-pointer mr-1">Edit</button>
                                                                         <a href="coordinator_internships.php?action=delete&id=<?php echo $item['id']; ?>" onclick="return confirm('Are you sure you want to delete this project posting?');" class="text-red-600 hover:text-red-800 font-bold text-xs">Delete</a>
                                                                 </td>

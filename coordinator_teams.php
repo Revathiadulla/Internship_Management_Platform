@@ -52,7 +52,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             }
             mysqli_stmt_close($check_team_stmt);
 
-            if ($success) {
+            if ($action !== 'delete_team') {
+            // Verify the selected internship/project is Active (admin-approved)
+            $proj_status_res = mysqli_query($conn, "SELECT status FROM internships WHERE id = $internship_id LIMIT 1");
+            $proj_status_row = mysqli_fetch_assoc($proj_status_res);
+            if (!$proj_status_row || $proj_status_row['status'] !== 'Active') {
+                $error_msg = "Cannot create a team for this project. This project is not yet Active (Admin-approved). Current status: " . htmlspecialchars($proj_status_row['status'] ?? 'Unknown') . ". Please wait for Admin approval.";
+                $success = false;
+            }
+        }
+
+        if ($success) {
                 // Assign new team to selected students
                 foreach ($students as $student_id) {
                     $student_id = intval($student_id);

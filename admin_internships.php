@@ -5,38 +5,78 @@ if (!isset($_SESSION['user_id']) || !isset($_SESSION['role']) || strtolower($_SE
     exit();
 }
 include "db.php";
+include_once __DIR__ . "/includes/mail_helper.php";
 
 $success_msg = "";
 $error_msg = "";
 
-// ── Workflow Oversights Actions ──
-if (isset($_GET['action']) && isset($_GET['id'])) {
+// ── Workflow Oversight Actions ──
+// Handle POST-based review actions (from modal form with admin_remarks)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && isset($_POST['id'])) {
+    $action = trim($_POST['action']);
+    $id = intval($_POST['id']);
+    $admin_remarks = trim($_POST['admin_remarks'] ?? '');
+    $admin_id = intval($_SESSION['user_id']);
+
+    if ($id > 0 && in_array($action, ['approve', 'reject', 'request_changes'])) {
+        $new_status = match($action) {
+            'approve'         => 'Active',
+            'reject'          => 'Rejected',
+            'request_changes' => 'Changes Requested',
+        };
+        $new_approval = $new_status;
+
+        $esc_remarks = mysqli_real_escape_string($conn, $admin_remarks);
+        $update_sql = "UPDATE internships SET status = '$new_status', approval_status = '$new_approval',
+                       approved_by = $admin_id, approved_at = NOW(),
+                       admin_remarks = '$esc_remarks'
+                       WHERE id = $id";
+
+        if (mysqli_query($conn, $update_sql)) {
+            $success_msg = "Project posting status updated to: $new_status";
+
+            // Fetch coordinator's email to notify them
+            $coord_res = mysqli_query($conn, "SELECT u.email, u.full_name, i.title
+                FROM internships i LEFT JOIN users u ON i.coordinator_id = u.id
+                WHERE i.id = $id LIMIT 1");
+            $coord_row = mysqli_fetch_assoc($coord_res);
+            if ($coord_row && !empty($coord_row['email'])) {
+                $coord_email = $coord_row['email'];
+                $coord_name  = $coord_row['full_name'] ?? 'Coordinator';
+                $proj_title  = $coord_row['title'] ?? 'Your Project';
+                $action_labels = [
+                    'Active'            => 'Approved',
+                    'Rejected'          => 'Rejected',
+                    'Changes Requested' => 'Changes Requested'
+                ];
+                $action_label_str = $action_labels[$new_status] ?? $new_status;
+                $notif_subject = "IMP – Project Review Decision: $action_label_str – $proj_title";
+                $notif_message = "Dear $coord_name,\n\nYour project posting \"$proj_title\" has been reviewed by the Admin.\n\nDecision: $action_label_str" .
+                    (!empty($admin_remarks) ? "\nAdmin Remarks: $admin_remarks" : "") .
+                    "\n\nPlease log in to your Coordinator dashboard to view the updated status.";
+                sendEmailNotification($coord_email, $notif_subject, $notif_message, [
+                    'event'         => "Project Review: $action_label_str",
+                    'project_title' => $proj_title,
+                    'decision'      => $action_label_str,
+                    'admin_remarks' => $admin_remarks ?: 'No remarks',
+                    'action_url'    => 'http://localhost/IMP/coordinator_internships.php',
+                    'action_label'  => 'View My Postings'
+                ]);
+            }
+        } else {
+            $error_msg = "Failed to update status: " . mysqli_error($conn);
+        }
+    }
+}
+
+// Handle GET-based archive/simple actions
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action']) && isset($_GET['id'])) {
     $action = $_GET['action'];
     $id = intval($_GET['id']);
 
     if ($id > 0) {
-        if ($action === 'approve') {
-            $stmt = mysqli_prepare($conn, "UPDATE internships SET status = 'Active' WHERE id = ? AND status = 'Pending Approval'");
-            mysqli_stmt_bind_param($stmt, "i", $id);
-            if (mysqli_stmt_execute($stmt)) {
-                $success_msg = "Internship approved and activated successfully!";
-            } else {
-                $error_msg = "Failed to approve internship. " . mysqli_error($conn);
-            }
-            mysqli_stmt_close($stmt);
-        }
-        elseif ($action === 'reject') {
-            $stmt = mysqli_prepare($conn, "UPDATE internships SET status = 'Rejected' WHERE id = ? AND status = 'Pending Approval'");
-            mysqli_stmt_bind_param($stmt, "i", $id);
-            if (mysqli_stmt_execute($stmt)) {
-                $success_msg = "Internship rejected successfully!";
-            } else {
-                $error_msg = "Failed to reject internship. " . mysqli_error($conn);
-            }
-            mysqli_stmt_close($stmt);
-        }
-        elseif ($action === 'archive') {
-            $stmt = mysqli_prepare($conn, "UPDATE internships SET status = 'Archived' WHERE id = ? AND status IN ('Active', 'Completed')");
+        if ($action === 'archive') {
+            $stmt = mysqli_prepare($conn, "UPDATE internships SET status = 'Archived', approval_status = 'Archived' WHERE id = ? AND status IN ('Active', 'Completed')");
             mysqli_stmt_bind_param($stmt, "i", $id);
             if (mysqli_stmt_execute($stmt)) {
                 $success_msg = "Internship archived successfully!";
@@ -430,9 +470,8 @@ $header_photo = $header_user['profile_photo'] ?? '';
                 <div class="pt-4 border-t border-gray-100 flex flex-wrap gap-1.5 justify-end items-center">
                   <button onclick='openDetailsModal(<?php echo json_encode($item); ?>)' class="px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-bold text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer">View Details</button>
                   
-                  <?php if (strtolower($item['status']) === 'pending approval'): ?>
-                    <a href="admin_internships.php?action=approve&id=<?php echo $item['id']; ?>" class="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-bold transition-colors">Activate Internship</a>
-                    <a href="admin_internships.php?action=reject&id=<?php echo $item['id']; ?>" onclick="return confirm('Are you sure you want to reject this posting?')" class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition-colors">Reject</a>
+                  <?php if (in_array(strtolower($item['status']), ['pending approval', 'changes requested'])): ?>
+                    <button onclick='openReviewModal(<?php echo $item["id"]; ?>, <?php echo json_encode($item["title"]); ?>)' class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer">Review</button>
                   <?php endif; ?>
                   
                   <?php if (in_array(strtolower($item['status']), ['active', 'completed'])): ?>
@@ -591,6 +630,60 @@ $header_photo = $header_user['profile_photo'] ?? '';
     function closeModal(modalId) {
       document.getElementById(modalId).classList.add('hidden');
     }
+
+    function openReviewModal(id, title) {
+      document.getElementById('review-internship-id').value = id;
+      document.getElementById('review-title').textContent = title;
+      document.getElementById('review-admin-remarks').value = '';
+      document.getElementById('review-modal').classList.remove('hidden');
+    }
   </script>
+
+  <!-- ── REVIEW MODAL ── -->
+  <div id="review-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+      <div class="bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-4 flex items-center justify-between">
+        <h3 class="text-white font-bold flex items-center gap-2">
+          <span class="material-symbols-outlined">rate_review</span> Review Project Posting
+        </h3>
+        <button onclick="closeModal('review-modal')" class="text-white/80 hover:text-white cursor-pointer">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <form method="POST" action="admin_internships.php">
+        <input type="hidden" name="id" id="review-internship-id">
+        <div class="p-6 space-y-4">
+          <p class="text-sm font-semibold text-gray-800">Project: <span id="review-title" class="text-blue-700"></span></p>
+          <div>
+            <label class="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Admin Remarks (optional)</label>
+            <textarea id="review-admin-remarks" name="admin_remarks" rows="3"
+              class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+              placeholder="Provide feedback or reason for your decision..."></textarea>
+          </div>
+          <div class="flex flex-col gap-2 pt-2 border-t border-gray-100">
+            <button type="submit" name="action" value="approve"
+              class="w-full py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold text-sm transition-colors cursor-pointer flex items-center justify-center gap-2">
+              <span class="material-symbols-outlined text-[18px]">check_circle</span> Approve &amp; Activate
+            </button>
+            <button type="submit" name="action" value="request_changes"
+              class="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-bold text-sm transition-colors cursor-pointer flex items-center justify-center gap-2">
+              <span class="material-symbols-outlined text-[18px]">edit_note</span> Request Changes
+            </button>
+            <button type="submit" name="action" value="reject"
+              onclick="return confirm('Are you sure you want to reject this posting?')"
+              class="w-full py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold text-sm transition-colors cursor-pointer flex items-center justify-center gap-2">
+              <span class="material-symbols-outlined text-[18px]">cancel</span> Reject
+            </button>
+            <button type="button" onclick="closeModal('review-modal')"
+              class="w-full py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-bold text-sm transition-colors cursor-pointer">
+              Cancel
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
 </body>
 </html>
+

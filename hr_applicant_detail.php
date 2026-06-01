@@ -69,6 +69,11 @@ $sql = "SELECT
             a.email                   AS app_email,
             a.phone                   AS app_phone,
             a.resume_file             AS app_resume,
+            a.hod_name                AS hod_name,
+            a.hod_email               AS hod_email,
+            a.hod_phone               AS hod_phone,
+            a.hod_approval_status     AS hod_approval_status,
+            a.hod_token               AS hod_token,
             COALESCE(i.title, a.internship_name) AS internship_title,
             COALESCE(i.duration, '')  AS internship_duration,
             COALESCE(i.mode, '')      AS internship_mode,
@@ -92,7 +97,9 @@ $sql = "SELECT
             sp.pan_number,
             a.aadhaar_number          AS app_aadhaar,
             a.pan_number              AS app_pan,
-            a.pan_file                AS app_pan_file
+            a.pan_file                AS app_pan_file,
+            sp.hod_email              AS sp_hod_email,
+            sp.hod_name               AS sp_hod_name
         FROM internship_applications a
         LEFT JOIN internships i       ON a.internship_id = i.id AND a.internship_id > 0
         LEFT JOIN student_profiles sp ON a.user_id = sp.user_id
@@ -643,13 +650,19 @@ $status_colors = [
                 <p class="mt-2 text-lg font-semibold text-slate-900"><?php echo htmlspecialchars($verification); ?></p>
               </div>
               
-              <?php if ($current_status !== 'Selected' && $current_status !== 'Rejected'): ?>
+              <?php
+                // Fetch HOD info from the application
+                $hod_appr_status = $d['hod_approval_status'] ?? '';
+                $hod_email_val   = $d['hod_email'] ?? $d['sp_hod_email'] ?? '';
+              ?>
+
+              <?php if ($current_status !== 'Selected' && $current_status !== 'Rejected' && $current_status !== 'HOD Rejected'): ?>
                 <div class="mt-5 border-t border-slate-100 pt-5 space-y-3">
                   <p class="text-xs font-bold uppercase tracking-wider text-slate-400">Available Actions</p>
                   <?php
                     $next_status = '';
                     $btn_label = '';
-                    $education_status = $d['education_status'];
+                    $education_status_val = $d['education_status'] ?? '';
                     if ($current_status === 'Applied') {
                         $next_status = 'Test Completed';
                         $btn_label = 'Move to Test Completed';
@@ -657,18 +670,33 @@ $status_colors = [
                         $next_status = 'HR Round';
                         $btn_label = 'Move to HR Round';
                     } elseif ($current_status === 'HR Round') {
-                        if ($education_status === 'Pursuing') {
-                            $next_status = 'HOD Approved';
-                            $btn_label = 'Recommend HOD Approval';
+                        if ($education_status_val === 'Currently Pursuing') {
+                            $next_status = 'HOD Approval Pending';
+                            $btn_label = 'Send HOD Approval Email';
                         } else {
                             $next_status = 'Selected';
                             $btn_label = 'Confirm Selection';
                         }
+                    } elseif ($current_status === 'HOD Approval Pending') {
+                        // Waiting for HOD response — no next action for HR
+                        $next_status = '';
+                        $btn_label = '';
                     } elseif ($current_status === 'HOD Approved') {
                         $next_status = 'Selected';
                         $btn_label = 'Confirm Selection';
                     }
                   ?>
+
+                  <?php if ($current_status === 'HOD Approval Pending'): ?>
+                    <div class="rounded-2xl bg-amber-50 border border-amber-200 p-4 text-xs">
+                      <p class="font-bold text-amber-700 flex items-center gap-1">
+                        <span class="material-symbols-outlined text-[16px]">hourglass_empty</span>
+                        Waiting for HOD Approval
+                      </p>
+                      <p class="mt-1 text-amber-600">HOD approval email has been sent<?php echo !empty($hod_email_val) ? ' to <strong>' . htmlspecialchars($hod_email_val) . '</strong>' : ''; ?>. Awaiting HOD decision.</p>
+                    </div>
+                  <?php endif; ?>
+
                   <?php if ($next_status !== ''): ?>
                     <button type="button" 
                             id="btn-move-next" 
