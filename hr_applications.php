@@ -33,14 +33,19 @@ foreach ($test_cols as $col => $sql) {
 // Filter and search values
 $status_options       = ['Applied', 'Test Completed', 'Interview Scheduled', 'HR Round', 'HOD Approved', 'Selected', 'Offer Sent', 'Onboarding Completed', 'Rejected'];
 $verification_options = ['Pending', 'Verified', 'Rejected'];
-// Determine view mode: 'review' (default) shows only HR‑review‑eligible candidates, 'all' shows every applicant
+// Determine view mode: 'review' (default) shows all applicants, 'all' also shows all
 $view = isset($_GET['view']) ? trim($_GET['view']) : 'review';
 // Base where clause
 $where_clauses = ["a.is_deleted = 0"];
-if ($view === 'review') {
-    $where_clauses[] = "a.status = 'Test Completed'";
-    $where_clauses[] = "a.test_score >= 60";
-}
+// Previously, 'review' filtered to Test Completed and passing score. This is removed to show all.
+// if ($view === 'review') {
+//     $where_clauses[] = "a.status = 'Test Completed'";
+//     $where_clauses[] = "a.test_score >= 60";
+// }
+
+// No additional filter for review mode; show all applications
+
+// Existing filters remain unchanged
 $status_filter       = isset($_GET['status'])              ? trim($_GET['status'])              : '';;
 $verification_filter = isset($_GET['verification_status']) ? trim($_GET['verification_status']) : '';
 $title_filter        = isset($_GET['title'])               ? trim($_GET['title'])               : '';
