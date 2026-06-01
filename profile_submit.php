@@ -44,6 +44,8 @@ $new_aadhaar = $existing_profile ? $existing_profile['aadhaar_file'] : '';
 $new_pan = $existing_profile ? $existing_profile['pan_file'] : '';
 
 // 1. Resume File Upload Validation & Processing
+$resume_url = isset($_POST['resume_url']) ? mysqli_real_escape_string($conn, trim($_POST['resume_url'])) : '';
+
 if (isset($_FILES['resume']) && $_FILES['resume']['error'] === UPLOAD_ERR_OK) {
     $resume_name = $_FILES['resume']['name'];
     $resume_tmp = $_FILES['resume']['tmp_name'];
@@ -70,8 +72,8 @@ if (isset($_FILES['resume']) && $_FILES['resume']['error'] === UPLOAD_ERR_OK) {
         header("Location: student_profile_form.php?error=" . urlencode("Failed to move uploaded resume file."));
         exit();
     }
-} elseif (empty($new_resume)) {
-    header("Location: student_profile_form.php?error=" . urlencode("Resume document is required."));
+} elseif (empty($new_resume) && empty($resume_url)) {
+    header("Location: student_profile_form.php?error=" . urlencode("Resume document or URL is required."));
     exit();
 }
 
@@ -145,16 +147,16 @@ if ($existing_profile) {
     $sql = "UPDATE student_profiles SET 
             full_name='$full_name', email='$email', phone='$phone', dob='$dob', gender='$gender',
             college_name='$college_name', course='$course', year_of_study='$year_of_study', skills='$skills',
-            resume_file='$new_resume', aadhaar_number='$aadhaar_number', pan_number='$pan_number',
+            resume_file='$new_resume', resume_url='$resume_url', aadhaar_number='$aadhaar_number', pan_number='$pan_number',
             aadhaar_file='$new_aadhaar', pan_file='$new_pan',
             hod_name='$hod_name', hod_phone='$hod_phone', hod_email='$hod_email'
             WHERE user_id='$user_id'";
 } else {
     // Insert
     $sql = "INSERT INTO student_profiles 
-            (user_id, full_name, email, phone, dob, gender, college_name, course, year_of_study, skills, resume_file, aadhaar_number, pan_number, aadhaar_file, pan_file, hod_name, hod_phone, hod_email) 
+            (user_id, full_name, email, phone, dob, gender, college_name, course, year_of_study, skills, resume_file, resume_url, aadhaar_number, pan_number, aadhaar_file, pan_file, hod_name, hod_phone, hod_email) 
             VALUES 
-            ('$user_id', '$full_name', '$email', '$phone', '$dob', '$gender', '$college_name', '$course', '$year_of_study', '$skills', '$new_resume', '$aadhaar_number', '$pan_number', '$new_aadhaar', '$new_pan', '$hod_name', '$hod_phone', '$hod_email')";
+            ('$user_id', '$full_name', '$email', '$phone', '$dob', '$gender', '$college_name', '$course', '$year_of_study', '$skills', '$new_resume', '$resume_url', '$aadhaar_number', '$pan_number', '$new_aadhaar', '$new_pan', '$hod_name', '$hod_phone', '$hod_email')";
 }
 
 if (mysqli_query($conn, $sql)) {

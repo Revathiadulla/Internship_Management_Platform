@@ -241,9 +241,12 @@ if (!empty($mentor_email)) {
             a.hod_name,
             a.hod_email,
             u.full_name as student_name, 
-            u.email as student_email
+            u.email as student_email,
+            sp.resume_file,
+            sp.resume_url
         FROM internship_applications a
         JOIN users u ON a.user_id = u.id
+        LEFT JOIN student_profiles sp ON a.user_id = sp.user_id
         WHERE a.status = 'HR Round' 
           AND a.education_status = 'Pursuing'
           AND LOWER(TRIM(a.hod_email)) = LOWER(TRIM(?))
@@ -381,7 +384,15 @@ page_shell_start('dashboard', 'Mentor Dashboard', 'Welcome back, ' . htmlspecial
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-slate-100">
-                                    <?php foreach ($hod_pending_list as $app): ?>
+                                    <?php foreach ($hod_pending_list as $app): 
+                                        $profile_mock = [
+                                            'resume_file' => $app['resume_file'] ?? '',
+                                            'resume_url' => $app['resume_url'] ?? ''
+                                        ];
+                                        $view_link = get_resume_view_link($profile_mock);
+                                        $exists = check_resume_exists($profile_mock);
+                                        $has_res = (!empty($app['resume_file']) || !empty($app['resume_url']));
+                                    ?>
                                         <tr class="hover:bg-slate-50/50 transition-colors" id="hod-row-<?php echo $app['id']; ?>">
                                             <td class="py-4 px-4 font-semibold text-slate-800"><?php echo htmlspecialchars($app['student_name']); ?></td>
                                             <td class="py-4 px-4 text-slate-500"><?php echo htmlspecialchars($app['student_email']); ?></td>
@@ -391,6 +402,11 @@ page_shell_start('dashboard', 'Mentor Dashboard', 'Welcome back, ' . htmlspecial
                                                 <strong>Email:</strong> <?php echo htmlspecialchars($app['hod_email'] ?? ''); ?>
                                             </td>
                                             <td class="py-4 px-4 text-right space-x-2 whitespace-nowrap">
+                                                <?php if ($has_res): ?>
+                                                    <a href="<?php echo $view_link; ?>" target="_blank" data-resume-exists="<?php echo $exists ? 'true' : 'false'; ?>" class="inline-flex items-center justify-center bg-blue-50 border border-blue-200 text-blue-600 px-3 py-1.5 rounded-lg text-xs font-bold transition shadow-sm hover:bg-blue-100 cursor-pointer">
+                                                        View Resume
+                                                    </a>
+                                                <?php endif; ?>
                                                 <button onclick="handleHodApproval(<?php echo $app['id']; ?>, 'HOD Approved')" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition shadow-sm cursor-pointer">
                                                     Approve
                                                 </button>
@@ -741,6 +757,5 @@ page_shell_start('dashboard', 'Mentor Dashboard', 'Welcome back, ' . htmlspecial
             });
         });
     </script>
-<?php
-page_shell_end();
-?>
+<?php print_resume_not_found_js(); ?>
+<?php page_shell_end(); ?>

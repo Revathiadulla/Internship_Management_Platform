@@ -92,6 +92,11 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_details') {
             $row['resume_file'] = $row['profile_resume_file'] ?? '';
         }
         $row['resume_url'] = $row['profile_resume_url'] ?? '';
+        $profile_mock = [
+            'resume_file' => $row['resume_file'],
+            'resume_url' => $row['resume_url']
+        ];
+        $row['resume_exists'] = check_resume_exists($profile_mock);
         // Fetch status history as well
         $history = [];
         $hist_res = mysqli_query($conn, "SELECT old_status, new_status, updated_by_role, updated_by_name, notes, created_at FROM application_status_history WHERE application_id = $id ORDER BY created_at DESC");
@@ -624,6 +629,9 @@ $header_photo = $header_user['profile_photo'] ?? '';
             document.getElementById('link-resume').classList.add('hidden');
             document.getElementById('no-resume').classList.remove('hidden');
           }
+          if (document.getElementById('link-resume')) {
+            document.getElementById('link-resume').setAttribute('data-resume-exists', app.resume_exists ? 'true' : 'false');
+          }
 
           if (app.pan_file && app.pan_file.trim() !== '') {
             document.getElementById('link-pan').classList.remove('hidden');
@@ -862,5 +870,6 @@ $header_photo = $header_user['profile_photo'] ?? '';
       document.getElementById('details-modal').classList.add('hidden');
     }
   </script>
+<?php print_resume_not_found_js(); ?>
 </body>
 </html>

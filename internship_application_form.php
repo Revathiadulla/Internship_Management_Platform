@@ -319,7 +319,7 @@ if (!empty($profile['year_of_study'])) {
                             <span class="material-symbols-outlined text-red-500 text-2xl">picture_as_pdf</span>
                             <div class="min-w-0 flex-grow">
                                 <p class="text-[10px] font-bold text-slate-400 uppercase">Resume File</p>
-                                <a href="<?php echo get_resume_view_link($profile); ?>" target="_blank" class="text-xs font-semibold text-blue-600 hover:underline truncate block">
+                                <a href="<?php echo get_resume_view_link($profile); ?>" target="_blank" data-resume-exists="<?php echo check_resume_exists($profile) ? 'true' : 'false'; ?>" class="text-xs font-semibold text-blue-600 hover:underline truncate block">
                                     View Resume
                                 </a>
                             </div>
@@ -431,5 +431,6 @@ if (!empty($profile['year_of_study'])) {
     </div>
 </footer>
 
+<?php print_resume_not_found_js(); ?>
 </body>
 </html>

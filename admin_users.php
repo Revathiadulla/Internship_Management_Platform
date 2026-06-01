@@ -134,7 +134,11 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_profile') {
         if ($role === 'student') {
             // Fetch student profile details
             $prof_res = mysqli_query($conn, "SELECT * FROM student_profiles WHERE user_id = $uid LIMIT 1");
-            $data['profile'] = mysqli_fetch_assoc($prof_res) ?: null;
+            $profile = mysqli_fetch_assoc($prof_res) ?: null;
+            if ($profile) {
+                $profile['resume_exists'] = check_resume_exists($profile);
+            }
+            $data['profile'] = $profile;
             
             // Fetch student applications
             $apps = [];
@@ -865,14 +869,22 @@ $header_photo = $header_user['profile_photo'] ?? '';
       const baseUploadPath = 'view_doc.php?file=';
       
       let resumeHtml = '';
-      if (prof.resume_file) {
+      if (prof.resume_file || prof.resume_url) {
+        let rLink = '#';
+        if (prof.resume_url && (prof.resume_url.startsWith('http://') || prof.resume_url.startsWith('https://'))) {
+          rLink = prof.resume_url;
+        } else if (prof.resume_file && (prof.resume_file.startsWith('http://') || prof.resume_file.startsWith('https://'))) {
+          rLink = prof.resume_file;
+        } else if (prof.resume_file) {
+          rLink = 'resume_serve.php?file=' + encodeURIComponent(prof.resume_file) + '&mode=view';
+        }
         resumeHtml = `
           <div class="flex justify-between items-center bg-slate-50 p-3 rounded-lg border border-slate-100">
             <div class="flex items-center gap-2">
               <span class="material-symbols-outlined text-red-500">picture_as_pdf</span>
               <span class="font-semibold text-gray-800 text-xs">Student Resume</span>
             </div>
-            <a href="${baseUploadPath + prof.resume_file}" target="_blank" class="text-blue-600 hover:text-blue-800 text-xs font-bold">View PDF</a>
+            <a href="${rLink}" target="_blank" data-resume-exists="${prof.resume_exists ? 'true' : 'false'}" class="text-blue-600 hover:text-blue-800 text-xs font-bold">View PDF</a>
           </div>
         `;
       }
@@ -1541,5 +1553,6 @@ $header_photo = $header_user['profile_photo'] ?? '';
       document.getElementById(modalId).classList.add('hidden');
     }
   </script>
+<?php print_resume_not_found_js(); ?>
 </body>
 </html>

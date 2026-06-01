@@ -156,6 +156,12 @@ if ($is_remote) {
     $download_href = "resume_serve.php?file=" . $resume_safe . "&mode=download";
 }
 
+$profile_mock = [
+    'resume_file' => $resume,
+    'resume_url' => $resume_url
+];
+$exists = check_resume_exists($profile_mock);
+
 // Status history timeline
 $history_sql    = "SELECT * FROM application_status_history WHERE application_id = $app_id ORDER BY created_at ASC";
 $history_result = mysqli_query($conn, $history_sql);
@@ -452,12 +458,12 @@ $status_colors = [
               </div>
               <?php if ($has_resume): ?>
                 <div class="flex flex-wrap gap-2">
-                  <a href="<?php echo $view_href; ?>" target="_blank" class="inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-all">
+                  <a href="<?php echo $view_href; ?>" target="_blank" data-resume-exists="<?php echo $exists ? 'true' : 'false'; ?>" class="inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-all">
                     <span class="material-symbols-outlined">visibility</span>
                     View resume
                   </a>
                   <?php if (!$is_remote): ?>
-                  <a href="<?php echo $download_href; ?>" class="inline-flex items-center gap-2 rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 transition-all">
+                  <a href="<?php echo $download_href; ?>" data-resume-exists="<?php echo $exists ? 'true' : 'false'; ?>" class="inline-flex items-center gap-2 rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 transition-all">
                     <span class="material-symbols-outlined">download</span>
                     Download resume
                   </a>
@@ -1037,5 +1043,6 @@ $status_colors = [
       });
     }
   </script>
+<?php print_resume_not_found_js(); ?>
 </body>
 </html>

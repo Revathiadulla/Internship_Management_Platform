@@ -338,11 +338,17 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
                             $view_href = "resume_serve.php?file=" . $safe . "&mode=view";
                             $download_href = "resume_serve.php?file=" . $safe . "&mode=download";
                         }
+                        $profile_mock = [
+                            'resume_file' => $resume,
+                            'resume_url' => $resume_url
+                        ];
+                        $exists = check_resume_exists($profile_mock);
                       ?>
                       <?php if ($has_resume): ?>
                         <!-- View resume -->
                         <a href="<?php echo $view_href; ?>"
                            target="_blank"
+                           data-resume-exists="<?php echo $exists ? 'true' : 'false'; ?>"
                            class="p-2 text-emerald-600 bg-emerald-50 rounded-lg hover:bg-emerald-100 transition-colors"
                            title="View Resume <?php echo !$is_remote ? '(' . htmlspecialchars(strtoupper($ext_r)) . ')' : ''; ?>">
                            <span class="material-symbols-outlined text-[18px]">description</span>
@@ -350,7 +356,8 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
                         <?php if (!$is_remote): ?>
                         <!-- Download resume -->
                         <a href="<?php echo $download_href; ?>"
-                           class="p-2 text-violet-600 bg-violet-50 rounded-lg hover:bg-violet-100 transition-colors"
+                           data-resume-exists="<?php echo $exists ? 'true' : 'false'; ?>"
+                           class="p-2 text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-colors"
                            title="Download Resume">
                            <span class="material-symbols-outlined text-[18px]">download</span>
                         </a>
@@ -681,5 +688,5 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
       }, 3000);
     }
   </script>
-
+<?php print_resume_not_found_js(); ?>
 <?php page_shell_end(); ?>

@@ -348,14 +348,19 @@ if (empty($session_email) && $profile && isset($profile['email'])) {
                                         PDF, DOCX up to 5MB
                                     </p>
                                 </label>
-                                <div id="resume-preview" class="<?php echo empty($resume_file) ? 'hidden' : ''; ?> mt-4 pt-4 border-t border-slate-100">
-                                    <p class="text-sm text-slate-500 mb-1">Selected file:</p>
-                                    <a href="<?php echo get_resume_view_link($profile); ?>" id="resume-link" target="_blank" class="inline-flex items-center gap-1 text-blue-600 hover:text-blue-700 hover:underline font-medium relative z-10" onclick="event.stopPropagation();">
+                                <div id="resume-preview" class="<?php echo (empty($resume_file) && empty($profile['resume_url'] ?? '')) ? 'hidden' : ''; ?> mt-4 pt-4 border-t border-slate-100">
+                                    <p class="text-sm text-slate-500 mb-1">Selected file / link:</p>
+                                    <a href="<?php echo get_resume_view_link($profile); ?>" id="resume-link" target="_blank" data-resume-exists="<?php echo check_resume_exists($profile) ? 'true' : 'false'; ?>" class="inline-flex items-center gap-1 text-blue-600 hover:text-blue-700 hover:underline font-medium relative z-10" onclick="event.stopPropagation();">
                                         <span class="material-symbols-outlined text-[18px]">description</span>
-                                        <span id="resume-filename" class="truncate max-w-[200px]"><?php echo empty($resume_file) ? 'filename.pdf' : basename($resume_file); ?></span>
+                                        <span id="resume-filename" class="truncate max-w-[200px]"><?php echo (empty($resume_file) && !empty($profile['resume_url'] ?? '')) ? htmlspecialchars($profile['resume_url']) : (empty($resume_file) ? 'filename.pdf' : basename($resume_file)); ?></span>
                                     </a>
                                 </div>
                             </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Or Paste Resume URL <span class="text-slate-400 font-normal">(e.g., Cloudinary, Google Drive)</span></label>
+                            <input type="url" name="resume_url" id="resume_url" value="<?php echo htmlspecialchars($profile['resume_url'] ?? ''); ?>" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors outline-none text-slate-800" placeholder="https://res.cloudinary.com/... or https://drive.google.com/...">
                         </div>
                     </div>
                 </section>
@@ -441,7 +446,21 @@ if (empty($session_email) && $profile && isset($profile['email'])) {
 
 <script>
     // ── Resume upload preview ──
-    document.getElementById('resume').addEventListener('change', function(e) {
+    const resumeFile = document.getElementById('resume');
+    const resumeUrl = document.getElementById('resume_url');
+
+    function updateResumeRequirements() {
+        const hasFile = resumeFile.files.length > 0 || <?php echo !empty($resume_file) ? 'true' : 'false'; ?>;
+        const hasUrl = resumeUrl.value.trim() !== '';
+        
+        if (hasFile || hasUrl) {
+            resumeFile.removeAttribute('required');
+        } else {
+            resumeFile.setAttribute('required', 'required');
+        }
+    }
+
+    resumeFile.addEventListener('change', function(e) {
         const file = e.target.files[0];
         if (file) {
             document.getElementById('resume-text').textContent = 'Click to change file';
@@ -449,13 +468,35 @@ if (empty($session_email) && $profile && isset($profile['email'])) {
             document.getElementById('resume-preview').classList.remove('hidden');
             document.getElementById('resume-filename').textContent = file.name;
             document.getElementById('resume-link').href = URL.createObjectURL(file);
+            document.getElementById('resume-link').setAttribute('data-resume-exists', 'true');
         } else {
-            document.getElementById('resume-text').textContent = 'Click to upload or drag and drop';
-            document.getElementById('resume-hint').classList.remove('hidden');
+            if (resumeUrl.value.trim() === '') {
+                document.getElementById('resume-text').textContent = 'Click to upload or drag and drop';
+                document.getElementById('resume-hint').classList.remove('hidden');
+                document.getElementById('resume-preview').classList.add('hidden');
+                document.getElementById('resume-link').href = '#';
+                document.getElementById('resume-link').setAttribute('data-resume-exists', 'false');
+            }
+        }
+        updateResumeRequirements();
+    });
+
+    resumeUrl.addEventListener('input', function() {
+        if (resumeUrl.value.trim() !== '' && resumeFile.files.length === 0 && <?php echo empty($resume_file) ? 'true' : 'false'; ?>) {
+            document.getElementById('resume-preview').classList.remove('hidden');
+            document.getElementById('resume-filename').textContent = resumeUrl.value;
+            document.getElementById('resume-link').href = resumeUrl.value;
+            document.getElementById('resume-link').setAttribute('data-resume-exists', 'true');
+        } else if (resumeUrl.value.trim() === '' && resumeFile.files.length === 0 && <?php echo empty($resume_file) ? 'true' : 'false'; ?>) {
             document.getElementById('resume-preview').classList.add('hidden');
             document.getElementById('resume-link').href = '#';
+            document.getElementById('resume-link').setAttribute('data-resume-exists', 'false');
         }
+        updateResumeRequirements();
     });
+
+    // run initially
+    updateResumeRequirements();
 
     // ── Education Status conditional logic ──
     const cards         = document.querySelectorAll('.edu-status-card');
@@ -610,5 +651,6 @@ if (empty($session_email) && $profile && isset($profile['email'])) {
         }
     });
 </script>
+<?php print_resume_not_found_js(); ?>
 </body>
 </html>

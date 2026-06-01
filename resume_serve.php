@@ -34,7 +34,7 @@ $filename = basename($raw_file);
 require_login();
 $allowed = false;
 
-if (can_access_module('candidates')) {
+if (can_access_module('candidates') || current_user_role() === 'mentor') {
     $allowed = true;
 } elseif (current_user_role() === 'student') {
     $user_id = current_user_id();
@@ -67,24 +67,8 @@ if (!in_array($ext, $allowed_ext, true)) {
     exit('File type not allowed.');
 }
 
-// ── Locate the file — check both upload directories ──────────────────────────
-$search_dirs = [
-    __DIR__ . '/uploads/resumes/',
-    __DIR__ . '/uploads/secure/',
-    __DIR__ . '/uploads/',
-];
-
-$resolved_path = null;
-foreach ($search_dirs as $dir) {
-    $candidate = $dir . $filename;
-    // realpath() resolves symlinks and normalises — then verify it stays inside the dir
-    $real = realpath($candidate);
-    $real_dir = realpath($dir);
-    if ($real !== false && $real_dir !== false && strncmp($real, $real_dir, strlen($real_dir)) === 0) {
-        $resolved_path = $real;
-        break;
-    }
-}
+// ── Locate the file using the shared helper ──────────────────────────
+$resolved_path = resolve_resume_file_path($filename);
 
 if ($resolved_path === null || !is_file($resolved_path)) {
     http_response_code(404);
