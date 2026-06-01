@@ -30,6 +30,31 @@ foreach ($test_cols as $col => $sql) {
     }
 }
 
+// Ensure document verification columns exist in internship_applications
+$verif_cols = [
+    'aadhaar_verification_status' => "ALTER TABLE internship_applications ADD COLUMN aadhaar_verification_status VARCHAR(50) DEFAULT 'Pending'",
+    'pan_verification_status' => "ALTER TABLE internship_applications ADD COLUMN pan_verification_status VARCHAR(50) DEFAULT 'Pending'",
+    'document_verification_status' => "ALTER TABLE internship_applications ADD COLUMN document_verification_status VARCHAR(50) DEFAULT 'Pending'"
+];
+foreach ($verif_cols as $col => $sql) {
+    $col_check = mysqli_query($conn, "SHOW COLUMNS FROM internship_applications LIKE '$col'");
+    if ($col_check && mysqli_num_rows($col_check) == 0) {
+        mysqli_query($conn, $sql);
+    }
+}
+
+// Ensure document verification columns exist in student_profiles
+$sp_verif_cols = [
+    'aadhaar_verification_status' => "ALTER TABLE student_profiles ADD COLUMN aadhaar_verification_status VARCHAR(50) DEFAULT 'Pending'",
+    'pan_verification_status' => "ALTER TABLE student_profiles ADD COLUMN pan_verification_status VARCHAR(50) DEFAULT 'Pending'"
+];
+foreach ($sp_verif_cols as $col => $sql) {
+    $col_check = mysqli_query($conn, "SHOW COLUMNS FROM student_profiles LIKE '$col'");
+    if ($col_check && mysqli_num_rows($col_check) == 0) {
+        mysqli_query($conn, $sql);
+    }
+}
+
 // Filter and search values
 $status_options       = ['Applied', 'Test Completed', 'Documents Verified', 'HR Round', 'HOD Approval Pending', 'HOD Approved', 'Selected', 'Interview Scheduled', 'Offer Sent', 'Onboarding Completed', 'Rejected'];
 $verification_options = ['Pending', 'Verified', 'Rejected'];
