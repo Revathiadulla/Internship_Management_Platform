@@ -33,9 +33,15 @@ foreach ($test_cols as $col => $sql) {
 // Filter and search values
 $status_options       = ['Applied', 'Test Completed', 'Interview Scheduled', 'HR Round', 'HOD Approved', 'Selected', 'Offer Sent', 'Onboarding Completed', 'Rejected'];
 $verification_options = ['Pending', 'Verified', 'Rejected'];
-// Enforce HR Review eligibility: only Test Completed with score >= 60
-$where_clauses = ["a.is_deleted = 0", "a.status = 'Test Completed'", "a.test_score >= 60"];
-$status_filter       = isset($_GET['status'])              ? trim($_GET['status'])              : '';
+// Determine view mode: 'review' (default) shows only HR‑review‑eligible candidates, 'all' shows every applicant
+$view = isset($_GET['view']) ? trim($_GET['view']) : 'review';
+// Base where clause
+$where_clauses = ["a.is_deleted = 0"];
+if ($view === 'review') {
+    $where_clauses[] = "a.status = 'Test Completed'";
+    $where_clauses[] = "a.test_score >= 60";
+}
+$status_filter       = isset($_GET['status'])              ? trim($_GET['status'])              : '';;
 $verification_filter = isset($_GET['verification_status']) ? trim($_GET['verification_status']) : '';
 $title_filter        = isset($_GET['title'])               ? trim($_GET['title'])               : '';
 $job_posting_filter  = isset($_GET['job_posting_id'])      ? intval($_GET['job_posting_id'])    : 0;
@@ -113,6 +119,10 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
 ?>
 
       <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+<div class="flex mb-4 space-x-2">
+  <a href="hr_applications.php?view=review" class="px-4 py-2 rounded <?= $view === 'review' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-800' ?>">HR Review</a>
+  <a href="hr_applications.php?view=all" class="px-4 py-2 rounded <?= $view === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-800' ?>">All Applicants</a>
+</div>
         <form method="get" class="grid gap-4 xl:grid-cols-4">
           <div>
             <label class="block text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Status</label>
