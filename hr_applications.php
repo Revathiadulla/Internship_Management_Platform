@@ -312,6 +312,9 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
                       <a href="view_application_status.php?app_id=<?php echo $app['app_id']; ?>" class="p-2 text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors" title="View Timeline">
                         <span class="material-symbols-outlined text-[18px]">timeline</span>
                       </a>
+<a href="javascript:void(0)" class="p-2 text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-colors reminder-btn" data-app-id="<?php echo $app['app_id']; ?>" title="Send Reminder Email">
+  <span class="material-symbols-outlined text-[18px]">mail</span>
+</a>
                       <?php
                         $resume = !empty($app['resume_file']) ? trim($app['resume_file']) : '';
                         $resume_url = !empty($app['resume_url']) ? trim($app['resume_url']) : '';
@@ -687,6 +690,31 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
         }, 500);
       }, 3000);
     }
-  </script>
+  // Reminder email handler
+document.querySelectorAll('.reminder-btn').forEach(btn => {
+  btn.addEventListener('click', async function () {
+    const appId = this.dataset.appId;
+    if (!appId) return;
+    if (!confirm('Send reminder email to the applicant?')) return;
+
+    try {
+      const formData = new FormData();
+      formData.append('application_id', appId);
+      const response = await fetch('send_reminder_email.php', {
+        method: 'POST',
+        body: formData
+      });
+      const result = await response.json();
+      if (result.success) {
+        showToast('success', 'Email Sent', result.message);
+      } else {
+        showToast('error', 'Error', result.message || 'Failed to send email.');
+      }
+    } catch (e) {
+      showToast('error', 'Error', 'Network error while sending reminder.');
+    }
+  });
+});
+</script>
 <?php print_resume_not_found_js(); ?>
 <?php page_shell_end(); ?>
