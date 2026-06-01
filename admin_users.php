@@ -92,16 +92,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// DELETE USER
+// SOFT DELETE USER (set status to Inactive)
 if (isset($_GET['action']) && $_GET['action'] === 'delete') {
     $id = intval($_GET['id']);
     if ($id > 0) {
-        $stmt = mysqli_prepare($conn, "DELETE FROM users WHERE id = ?");
+        $stmt = mysqli_prepare($conn, "UPDATE users SET status = 'Inactive' WHERE id = ?");
         mysqli_stmt_bind_param($stmt, "i", $id);
         if (mysqli_stmt_execute($stmt)) {
-            $success_msg = "User deleted successfully!";
+            $success_msg = "User deactivated (soft deleted) successfully!";
         } else {
-            $error_msg = "Failed to delete user. Make sure there are no operational dependencies.";
+            $error_msg = "Failed to deactivate user. Database error.";
+        }
+        mysqli_stmt_close($stmt);
+    }
+}
+// RESTORE USER (reactivate)
+if (isset($_GET['action']) && $_GET['action'] === 'restore') {
+    $id = intval($_GET['id']);
+    if ($id > 0) {
+        $stmt = mysqli_prepare($conn, "UPDATE users SET status = 'Active' WHERE id = ?");
+        mysqli_stmt_bind_param($stmt, "i", $id);
+        if (mysqli_stmt_execute($stmt)) {
+            $success_msg = "User restored successfully!";
+        } else {
+            $error_msg = "Failed to restore user. Database error.";
         }
         mysqli_stmt_close($stmt);
     }
@@ -240,7 +254,7 @@ if ($page < 1) $page = 1;
 $limit = 10;
 $offset = ($page - 1) * $limit;
 
-$where_clauses = ["role != 'admin'"];
+$where_clauses = ["role != 'admin'", "status != 'Inactive'"];
 $params = [];
 $types = "";
 
@@ -280,7 +294,7 @@ if ($page > $total_pages) $page = $total_pages;
 $offset = ($page - 1) * $limit;
 
 // Fetch users
-$users_query = "SELECT id, full_name, email, role FROM users" . $where_sql . " ORDER BY id DESC LIMIT ? OFFSET ?";
+$users_query = "SELECT id, full_name, email, role, status FROM users" . $where_sql . " ORDER BY id DESC LIMIT ? OFFSET ?";
 $users_stmt = mysqli_prepare($conn, $users_query);
 
 $bind_types = $types . "ii";
@@ -291,7 +305,6 @@ $users_res = mysqli_stmt_get_result($users_stmt);
 
 $users_list = [];
 while ($row = mysqli_fetch_assoc($users_res)) {
-    $row['status'] = 'Active';
     $row['subscription_status'] = 'N/A';
     $row['phone'] = 'N/A';
     $row['created_at'] = 'N/A';
@@ -580,12 +593,10 @@ $header_photo = $header_user['profile_photo'] ?? '';
                         <button onclick='openEditModal(<?php echo json_encode($user); ?>)' class="text-gray-600 hover:text-gray-800 text-xs font-bold cursor-pointer">Edit</button>
                         
                         <?php if (strtolower($user['status'] ?? 'active') === 'inactive'): ?>
-                          <a href="admin_users.php?action=toggle_status&id=<?php echo $user['id']; ?>&status=Active" class="text-emerald-600 hover:text-emerald-800 text-xs font-bold">Activate</a>
+                          <a href="admin_users.php?action=restore&id=<?php echo $user['id']; ?>" class="text-emerald-600 hover:text-emerald-800 text-xs font-bold" onclick="return confirm('Restore this user?')">Restore</a>
                         <?php else: ?>
-                          <a href="admin_users.php?action=toggle_status&id=<?php echo $user['id']; ?>&status=Inactive" class="text-amber-600 hover:text-amber-800 text-xs font-bold" onclick="return confirm('Are you sure you want to deactivate this user?')">Deactivate</a>
+                          <a href="admin_users.php?action=delete&id=<?php echo $user['id']; ?>" class="text-red-600 hover:text-red-800 text-xs font-bold" onclick="return confirm('Are you sure you want to deactivate this user?')">Delete</a>
                         <?php endif; ?>
-                        
-                        <a href="admin_users.php?action=delete&id=<?php echo $user['id']; ?>" onclick="return confirm('Are you sure you want to delete this user? This will remove all their associations.')" class="text-red-600 hover:text-red-800 text-xs font-bold">Delete</a>
                       </td>
                     </tr>
                   <?php endforeach; ?>
