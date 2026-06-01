@@ -16,27 +16,40 @@ $delete_col_check = mysqli_query($conn, "SHOW COLUMNS FROM internship_applicatio
 if ($delete_col_check && mysqli_num_rows($delete_col_check) == 0) {
     mysqli_query($conn, "ALTER TABLE internship_applications ADD COLUMN is_deleted TINYINT(1) DEFAULT 0");
 }
+// Ensure test-related columns exist
+$test_cols = [
+    'test_score' => "ALTER TABLE internship_applications ADD COLUMN test_score INT DEFAULT NULL",
+    'test_result' => "ALTER TABLE internship_applications ADD COLUMN test_result VARCHAR(20) DEFAULT NULL",
+    'test_answers' => "ALTER TABLE internship_applications ADD COLUMN test_answers TEXT DEFAULT NULL",
+    'test_submitted_date' => "ALTER TABLE internship_applications ADD COLUMN test_submitted_date DATETIME DEFAULT NULL"
+];
+foreach ($test_cols as $col => $sql) {
+    $col_check = mysqli_query($conn, "SHOW COLUMNS FROM internship_applications LIKE '$col'");
+    if ($col_check && mysqli_num_rows($col_check) == 0) {
+        mysqli_query($conn, $sql);
+    }
+}
 
 // Filter and search values
 $status_options       = ['Applied', 'Test Completed', 'Interview Scheduled', 'HR Round', 'HOD Approved', 'Selected', 'Offer Sent', 'Onboarding Completed', 'Rejected'];
 $verification_options = ['Pending', 'Verified', 'Rejected'];
+// Enforce HR Review eligibility: only Test Completed with score >= 60
+$where_clauses = ["a.is_deleted = 0", "a.status = 'Test Completed'", "a.test_score >= 60"];
 $status_filter       = isset($_GET['status'])              ? trim($_GET['status'])              : '';
 $verification_filter = isset($_GET['verification_status']) ? trim($_GET['verification_status']) : '';
 $title_filter        = isset($_GET['title'])               ? trim($_GET['title'])               : '';
 $job_posting_filter  = isset($_GET['job_posting_id'])      ? intval($_GET['job_posting_id'])    : 0;
 $search_query        = isset($_GET['search'])              ? trim($_GET['search'])              : '';
-
 // Pagination
 $per_page    = 10;
 $current_page = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
 $offset       = ($current_page - 1) * $per_page;
-
 // Build shared WHERE clause (used for both COUNT and data query)
-$where_clauses = ["a.is_deleted = 0"];
-if (in_array($status_filter, $status_options, true)) {
+// Additional filters will be appended below if provided
+if (in_array($status_filter, $status_options, true) && $status_filter !== '') {
     $where_clauses[] = "a.status = '" . mysqli_real_escape_string($conn, $status_filter) . "'";
 }
-if (in_array($verification_filter, $verification_options, true)) {
+if (in_array($verification_filter, $verification_options, true) && $verification_filter !== '') {
     $where_clauses[] = "a.verification_status = '" . mysqli_real_escape_string($conn, $verification_filter) . "'";
 }
 if ($title_filter !== '') {
@@ -74,6 +87,7 @@ if ($_col_check_res && mysqli_num_rows($_col_check_res) > 0) {
 $resume_url_select = $has_resume_url ? "sp.resume_url" : "NULL as resume_url";
 
 $app_sql = "SELECT a.id as app_id, a.user_id, a.status, a.applied_date, a.education_status,
+                   a.test_score, a.test_result,
                    COALESCE(i.title, a.internship_name) as title,
                    COALESCE(i.duration, '') as duration,
                    COALESCE(i.mode, '') as mode,
@@ -236,9 +250,10 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
                 <th class="py-4 px-6">Internship</th>
                 <th class="py-4 px-6">Applied Date</th>
                 <th class="py-4 px-6">Education</th>
-                <th class="py-4 px-6">Current Status</th>
-                <th class="py-4 px-6">Update Status</th>
-                <th class="py-4 px-6">Actions</th>
+                <th class="py-4 px-6">Status/Verification</th>
+                <th class="py-4 px-6">Test Score</th>
+                <th class="py-4 px-6">Test Result</th>
+                <th class="py-4 px-6">Update</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-100 text-sm text-slate-600">
@@ -280,6 +295,20 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
                       </span>
                     </div>
                   </td>
+                  <td class="py-4 px-6">
+                      <?php if (isset($app['test_score'])): ?>
+                        <span class="font-medium text-slate-800"><?php echo $app['test_score']; ?></span>
+                      <?php else: ?>
+                        <span class="text-slate-400">N/A</span>
+                      <?php endif; ?>
+                    </td>
+                    <td class="py-4 px-6">
+                      <?php if (!empty($app['test_result'])): ?>
+                        <span class="font-medium text-slate-800"><?php echo htmlspecialchars($app['test_result']); ?></span>
+                      <?php else: ?>
+                        <span class="text-slate-400">N/A</span>
+                      <?php endif; ?>
+                    </td>
                   <td class="py-4 px-6">
                     <div class="space-y-2">
                       <select class="status-update-select w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-blue-600 focus:border-transparent outline-none" data-app-id="<?php echo $app['app_id']; ?>" data-education="<?php echo htmlspecialchars($app['education_status']); ?>">

@@ -4,6 +4,20 @@ include "db.php";
 include_once __DIR__ . "/includes/mail_helper.php";
 include "questions_pool.php";
 
+// Ensure test-related columns exist
+$col_checks = [
+    'test_score' => "ALTER TABLE internship_applications ADD COLUMN test_score INT DEFAULT NULL",
+    'test_result' => "ALTER TABLE internship_applications ADD COLUMN test_result VARCHAR(20) DEFAULT NULL",
+    'test_answers' => "ALTER TABLE internship_applications ADD COLUMN test_answers TEXT DEFAULT NULL",
+    'test_submitted_date' => "ALTER TABLE internship_applications ADD COLUMN test_submitted_date DATETIME DEFAULT NULL"
+];
+foreach ($col_checks as $col => $alter_sql) {
+    $col_check = mysqli_query($conn, "SHOW COLUMNS FROM internship_applications LIKE '$col'");
+    if ($col_check && mysqli_num_rows($col_check) == 0) {
+        mysqli_query($conn, $alter_sql);
+    }
+}
+
 if (!isset($_SESSION['user_id'])) {
     header("Location: login.html");
     exit();
@@ -97,9 +111,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
     
-    // Calculate test result — Passed if 15 or more out of 30 (50% threshold)
-    $test_result = ($score >= 15) ? 'Passed' : 'Failed';
-    
+    // Calculate test result — Passed if 60% (18/30) or more
+    $passed = ($score >= 18);
+    $test_result = $passed ? 'Passed' : 'Failed';
+    $new_status = $passed ? 'Test Completed' : 'Rejected';
+    $verification_status = $passed ? 'Pending' : NULL;
+
     $escaped_answers = mysqli_real_escape_string($conn, json_encode($answers_array));
     
     // Update application details
@@ -108,9 +125,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                        test_score = '$score',
                        test_result = '$test_result',
                        test_answers = '$escaped_answers',
-                       test_submitted_date = NOW(),
-                       status = 'Test Completed'
-                   WHERE id = '$app_id' AND user_id = '$user_id'";
+                       test_submitted_date = NOW(),";
+    // Append status and verification_status based on result
+    $update_sql .= $passed ?
+        "status = 'Test Completed', verification_status = 'Pending'" :
+        "status = 'Rejected'";
+    $update_sql .= " WHERE id = '$app_id' AND user_id = '$user_id'";
     
     if (mysqli_query($conn, $update_sql)) {
         // Record in status history
@@ -124,8 +144,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         mysqli_query($conn, $history_sql);
         
         // Send email notification for assessment test completion
-        $test_subject = "IMP Assessment Test Completed: " . $app['title'];
-        $test_message = "Dear " . ($profile['full_name'] ?? 'Student') . ",\n\nYou have successfully completed the online skills assessment test for the \"" . $app['title'] . "\" internship.\n\nHere is your test summary:\n- Assessment Domain: **$domain**\n- Final Score: **$score / 30** (" . round(($score / 30) * 100, 1) . "%)\n- Result: **$test_result**\n\nYour application status has been updated to **Test Completed**. The hiring managers and coordinators will review your results shortly.\n\nThank you!";
+        if ($passed) {
+            $test_subject = "IMP Assessment Test Passed: " . $app['title'];
+            $test_message = "Dear " . ($profile['full_name'] ?? 'Student') . ",\n\nCongratulations! You have passed the assessment for the \"" . $app['title'] . "\" internship.\n\nTest Summary:\n- Domain: **$domain**\n- Score: **$score / 30** (" . round(($score / 30) * 100, 1) . "% )\n- Result: **Passed**\n\nYour application status is now **Test Completed** and will be reviewed by HR.\n\nBest regards,\nInternship Management Platform";
+        } else {
+            $test_subject = "IMP Assessment Test Result: " . $app['title'];
+            $test_message = "Dear " . ($profile['full_name'] ?? 'Student') . ",\n\nWe appreciate your effort in completing the assessment for the \"" . $app['title'] . "\" internship.\n\nUnfortunately, you did not meet the minimum qualifying score.\n\nTest Summary:\n- Domain: **$domain**\n- Score: **$score / 30** (" . round(($score / 30) * 100, 1) . "% )\n- Result: **Failed**\n\nYour application status has been updated to **Rejected**. You may consider applying for other opportunities.\n\nBest wishes,\nInternship Management Platform";
+        }
+
         sendEmailNotification($user_id, $test_subject, $test_message, [
             'event' => 'Assessment Completion',
             'internship_position' => $app['title'],
