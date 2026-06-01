@@ -224,6 +224,28 @@ if (!function_exists('sendEmail')) {
     function sendEmail($toEmail, $toName, $subject, $body) {
         $mail = new PHPMailer(true);
         $debugOutput = '';
+        
+            // Load SMTP configuration from environment variables
+            $smtpHost = getenv('MAIL_HOST');
+            $smtpPort = getenv('MAIL_PORT');
+            $smtpUser = getenv('MAIL_USERNAME');
+            $smtpPass = getenv('MAIL_PASSWORD');
+            $fromEmail = getenv('MAIL_FROM_EMAIL') ?: $smtpUser;
+            $fromName = getenv('MAIL_FROM_NAME') ?: 'Internship Management Platform';
+
+            // Validate required SMTP settings
+            if (empty($smtpHost) || empty($smtpPort) || empty($smtpUser) || empty($smtpPass) || empty($fromEmail)) {
+                $errorMsg = "Missing SMTP configuration: " .
+                    (empty($smtpHost) ? 'MAIL_HOST ' : '') .
+                    (empty($smtpPort) ? 'MAIL_PORT ' : '') .
+                    (empty($smtpUser) ? 'MAIL_USERNAME ' : '') .
+                    (empty($smtpPass) ? 'MAIL_PASSWORD ' : '') .
+                    (empty($fromEmail) ? 'MAIL_FROM_EMAIL ' : '');
+                $logPath = __DIR__ . '/../email_notifications.log';
+                $logEntry = "[" . date('Y-m-d H:i:s') . "] SMTP configuration error: $errorMsg\n";
+                @file_put_contents($logPath, $logEntry, FILE_APPEND);
+                return false;
+            }
         try {
             $mail->SMTPDebug  = 3; // Enable detailed debug output
             $mail->Debugoutput = function($str, $level) use (&$debugOutput) {
@@ -231,17 +253,16 @@ if (!function_exists('sendEmail')) {
             };
 
             $mail->isSMTP();
-            $mail->Host       = 'smtp.gmail.com';
+                        // Apply SMTP settings
+            $mail->Host       = $smtpHost;
             $mail->SMTPAuth   = true;
-            
-            // Set SMTP credentials (use environment variables if available, otherwise fallback to admin credentials)
-            $smtpUser = getenv("MAIL_USERNAME") ?: 'imp.webportal2026@gmail.com';
-            $smtpPass = getenv("MAIL_PASSWORD") ?: 'qpnnwehjawuxcvob';
-            
             $mail->Username   = $smtpUser;
             $mail->Password   = $smtpPass;
             $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-            $mail->Port       = 587;
+            $mail->Port       = (int)$smtpPort;
+
+            // Set From address using configured email
+            $mail->setFrom($fromEmail, $fromName);
 
             // Timeout and connection settings to prevent blocking
             $mail->Timeout       = 10;
@@ -249,7 +270,6 @@ if (!function_exists('sendEmail')) {
 
             $mail->CharSet = 'UTF-8';
 
-            $fromName = getenv("MAIL_FROM_NAME") ?: "Internship Management Platform";
             $mail->setFrom($smtpUser, $fromName);
             $mail->addAddress($toEmail, $toName);
 
@@ -260,9 +280,10 @@ if (!function_exists('sendEmail')) {
             $mail->send();
             return true;
         } catch (\Throwable $e) {
-            $logPath = __DIR__ . "/../email_notifications.log";
+            // Log the PHPMailer error and return false; no fallback to PHP mail()
+            $logPath = __DIR__ . '/../email_notifications.log';
             $errorMessage = "[" . date('Y-m-d H:i:s') . "] PHPMailer sending failed to $toEmail. Error: " . $e->getMessage() . " (" . $mail->ErrorInfo . ")\n" .
-                            "SMTP Debug Logs:\n" . $debugOutput . "\n";
+                "SMTP Debug Logs:\n" . $debugOutput . "\n";
             @file_put_contents($logPath, $errorMessage, FILE_APPEND);
             return false;
         }
