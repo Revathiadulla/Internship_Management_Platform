@@ -3,6 +3,7 @@ session_start();
 include_once __DIR__ . '/includes/auth.php';
 require_ajax_role(['hr', 'admin']);
 include "db.php";
+include "includes/mail_helper.php";
 
 header('Content-Type: application/json');
 
@@ -20,7 +21,16 @@ if ($app_id <= 0 || empty($verification_status) || !in_array($verification_statu
 }
 
 // Ensure application record exists
-$app_sql = "SELECT id FROM internship_applications WHERE id = $app_id AND is_deleted = 0 LIMIT 1";
+    // Ensure application record exists and fetch current verification status
+    $app_sql = "SELECT id, verification_status, user_id FROM internship_applications WHERE id = $app_id AND is_deleted = 0 LIMIT 1";
+    $app_result = mysqli_query($conn, $app_sql);
+    if (!$app_result || mysqli_num_rows($app_result) === 0) {
+        echo json_encode(['success' => false, 'message' => 'Application not found']);
+        exit();
+    }
+    $app_row = mysqli_fetch_assoc($app_result);
+    $prev_status = $app_row['verification_status'];
+    $user_id = $app_row['user_id'];
 $app_result = mysqli_query($conn, $app_sql);
 if (!$app_result || mysqli_num_rows($app_result) === 0) {
     echo json_encode(['success' => false, 'message' => 'Application not found']);
@@ -28,7 +38,12 @@ if (!$app_result || mysqli_num_rows($app_result) === 0) {
 }
 
 $verification_status_escaped = mysqli_real_escape_string($conn, $verification_status);
-$update_sql = "UPDATE internship_applications SET verification_status = '$verification_status_escaped' WHERE id = $app_id AND is_deleted = 0";
+        // Insert audit log for verification status change
+        $audit_sql = "INSERT INTO verification_audit (application_id, previous_status, new_status, changed_by, changed_at) VALUES ($app_id, '$prev_status', '$verification_status', $user_id, NOW())";
+        if (!mysqli_query($conn, $audit_sql)) {
+            // Log but continue
+            error_log("Failed to insert verification audit for application $app_id: " . mysqli_error($conn));
+        }
 if (mysqli_query($conn, $update_sql)) {
     // Notify the student about verification status change
     $verif_type_map = [
@@ -39,6 +54,13 @@ if (mysqli_query($conn, $update_sql)) {
     $notif_type  = $verif_type_map[$verification_status] ?? 'verification';
     $notif_title = mysqli_real_escape_string($conn, "Document Verification: $verification_status");
     $notif_msg   = mysqli_real_escape_string($conn, "Your document verification status has been updated to \"$verification_status\".");
+    
+    // Insert audit log for verification status change (bulk)
+    $audit_sql = "INSERT INTO verification_audit (application_id, previous_status, new_status, changed_by, changed_at) VALUES ($app_id, '$prev_status', '$verification_status', $user_id, NOW())";
+    if (!mysqli_query($conn, $audit_sql)) {
+        error_log("Failed to insert verification audit for application $app_id: " . mysqli_error($conn));
+    }
+    
     mysqli_query($conn, "INSERT INTO student_notifications (user_id, type, title, message)
                          SELECT user_id, '$notif_type', '$notif_title', '$notif_msg'
                          FROM internship_applications WHERE id = $app_id");
