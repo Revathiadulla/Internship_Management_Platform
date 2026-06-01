@@ -17,10 +17,24 @@ $extended_cols = [
     // New test-related columns
     'test_score'          => "ALTER TABLE internship_applications ADD COLUMN test_score INT DEFAULT NULL",
     'test_result'         => "ALTER TABLE internship_applications ADD COLUMN test_result VARCHAR(20) DEFAULT NULL",
-    'test_submitted_date'=> "ALTER TABLE internship_applications ADD COLUMN test_submitted_date DATETIME DEFAULT NULL"
+    'test_submitted_date'=> "ALTER TABLE internship_applications ADD COLUMN test_submitted_date DATETIME DEFAULT NULL",
+    'aadhaar_verification_status' => "ALTER TABLE internship_applications ADD COLUMN aadhaar_verification_status VARCHAR(20) DEFAULT 'Pending'",
+    'pan_verification_status' => "ALTER TABLE internship_applications ADD COLUMN pan_verification_status VARCHAR(20) DEFAULT 'Pending'"
 ];
 foreach ($extended_cols as $col => $sql) {
     $check = mysqli_query($conn, "SHOW COLUMNS FROM internship_applications LIKE '$col'");
+    if ($check && mysqli_num_rows($check) == 0) {
+        mysqli_query($conn, $sql);
+    }
+}
+
+// Add to student_profiles as well
+$sp_cols = [
+    'aadhaar_verification_status' => "ALTER TABLE student_profiles ADD COLUMN aadhaar_verification_status VARCHAR(20) DEFAULT 'Pending'",
+    'pan_verification_status' => "ALTER TABLE student_profiles ADD COLUMN pan_verification_status VARCHAR(20) DEFAULT 'Pending'"
+];
+foreach ($sp_cols as $col => $sql) {
+    $check = mysqli_query($conn, "SHOW COLUMNS FROM student_profiles LIKE '$col'");
     if ($check && mysqli_num_rows($check) == 0) {
         mysqli_query($conn, $sql);
     }

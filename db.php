@@ -88,7 +88,7 @@ unset($_col_check);
 
 $_col_check = mysqli_query($conn, "SHOW COLUMNS FROM internships LIKE 'approved_at'");
 if ($_col_check && mysqli_num_rows($_col_check) === 0) {
-    mysqli_query($conn, "ALTER TABLE internships ADD COLUMN approved_at TIMESTAMP DEFAULT NULL");
+    mysqli_query($conn, "ALTER TABLE internships ADD COLUMN approved_at TIMESTAMP NULL DEFAULT NULL");
 }
 unset($_col_check);
 
@@ -98,11 +98,11 @@ $app_new_cols = [
     'test_result' => "VARCHAR(100) DEFAULT NULL",
     'hr_review_status' => "VARCHAR(50) DEFAULT 'Pending'",
     'hod_approval_status' => "VARCHAR(50) DEFAULT 'Pending'",
-    'hod_approval_sent_at' => "TIMESTAMP DEFAULT NULL",
-    'hod_approved_at' => "TIMESTAMP DEFAULT NULL",
+    'hod_approval_sent_at' => "TIMESTAMP NULL DEFAULT NULL",
+    'hod_approved_at' => "TIMESTAMP NULL DEFAULT NULL",
     'hod_remarks' => "TEXT DEFAULT NULL",
     'selected_by' => "INT DEFAULT NULL",
-    'selected_at' => "TIMESTAMP DEFAULT NULL",
+    'selected_at' => "TIMESTAMP NULL DEFAULT NULL",
     'hod_token' => "VARCHAR(255) DEFAULT NULL"
 ];
 foreach ($app_new_cols as $_col => $_def) {

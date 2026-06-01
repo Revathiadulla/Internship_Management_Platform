@@ -74,7 +74,7 @@ if (!in_array($new_status, $allowed_statuses)) {
 // ── HOD Approval Email flow ────────────────────────────────────────────────
 if ($new_status === 'HOD Approval Pending') {
     // Only applicable for Currently Pursuing students
-    if ($education_status !== 'Currently Pursuing') {
+    if ($education_status !== 'Currently Pursuing' && $education_status !== 'Pursuing') {
         echo json_encode(['success' => false, 'message' => 'HOD approval is only required for Currently Pursuing students']);
         exit();
     }

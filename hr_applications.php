@@ -31,7 +31,7 @@ foreach ($test_cols as $col => $sql) {
 }
 
 // Filter and search values
-$status_options       = ['Applied', 'Test Completed', 'Interview Scheduled', 'HR Round', 'HOD Approved', 'Selected', 'Offer Sent', 'Onboarding Completed', 'Rejected'];
+$status_options       = ['Applied', 'Test Completed', 'Documents Verified', 'HR Round', 'HOD Approval Pending', 'HOD Approved', 'Selected', 'Interview Scheduled', 'Offer Sent', 'Onboarding Completed', 'Rejected'];
 $verification_options = ['Pending', 'Verified', 'Rejected'];
 // Determine view mode: 'review' (default) shows all applicants, 'all' also shows all
 $view = isset($_GET['view']) ? trim($_GET['view']) : 'review';
@@ -104,7 +104,9 @@ $app_sql = "SELECT a.id as app_id, a.user_id, a.status, a.applied_date, a.educat
                    COALESCE(i.mode, '') as mode,
                    a.verification_status,
                    sp.full_name, sp.email, sp.college_name, sp.course,
-                   sp.resume_file, $resume_url_select
+                   sp.resume_file, $resume_url_select,
+                   sp.aadhaar_file, sp.pan_file,
+                   a.aadhaar_verification_status, a.pan_verification_status
             FROM internship_applications a
             LEFT JOIN internships i       ON a.internship_id = i.id AND a.internship_id > 0
             LEFT JOIN student_profiles sp ON a.user_id = sp.user_id
@@ -304,38 +306,54 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
                     <span class="inline-flex px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wide border uppercase <?php echo getStatusBadgeClass($app['status']); ?>">
                       <?php echo htmlspecialchars($app['status']); ?>
                     </span>
-                    <div class="mt-2">
-                      <span class="inline-flex px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wide border uppercase <?php echo getVerificationBadgeClass($app['verification_status'] ?? 'Pending'); ?>">
-                        <?php echo htmlspecialchars($app['verification_status'] ?: 'Pending'); ?>
+                    <div class="mt-2 space-y-1">
+                      <span class="inline-flex px-2 py-0.5 rounded text-[9px] font-bold uppercase border <?php echo getVerificationBadgeClass($app['verification_status'] ?? 'Pending'); ?>" title="Overall Document Verification">
+                        DOCS: <?php echo htmlspecialchars($app['verification_status'] ?: 'Pending'); ?>
                       </span>
+                      <?php if (!empty($app['aadhaar_file'])): ?>
+                        <br>
+                        <span class="inline-flex px-2 py-0.5 rounded text-[9px] font-bold uppercase border <?php echo getVerificationBadgeClass($app['aadhaar_verification_status'] ?? 'Pending'); ?>" title="Aadhaar Verification Status">
+                          Aadhaar: <?php echo htmlspecialchars($app['aadhaar_verification_status'] ?: 'Pending'); ?>
+                        </span>
+                      <?php endif; ?>
+                      <?php if (!empty($app['pan_file'])): ?>
+                        <br>
+                        <span class="inline-flex px-2 py-0.5 rounded text-[9px] font-bold uppercase border <?php echo getVerificationBadgeClass($app['pan_verification_status'] ?? 'Pending'); ?>" title="PAN Verification Status">
+                          PAN: <?php echo htmlspecialchars($app['pan_verification_status'] ?: 'Pending'); ?>
+                        </span>
+                      <?php endif; ?>
                     </div>
                   </td>
                   <td class="py-4 px-6">
-                      <?php if (isset($app['test_score'])): ?>
-                        <span class="font-medium text-slate-800"><?php echo $app['test_score']; ?></span>
-                      <?php else: ?>
-                        <span class="text-slate-400">N/A</span>
-                      <?php endif; ?>
-                    </td>
-                    <td class="py-4 px-6">
-                      <?php if (!empty($app['test_result'])): ?>
-                        <span class="font-medium text-slate-800"><?php echo htmlspecialchars($app['test_result']); ?></span>
-                      <?php else: ?>
-                        <span class="text-slate-400">N/A</span>
-                      <?php endif; ?>
-                    </td>
+                    <?php if (isset($app['test_score'])): ?>
+                      <span class="font-medium text-slate-800"><?php echo $app['test_score']; ?></span>
+                    <?php else: ?>
+                      <span class="text-slate-400">N/A</span>
+                    <?php endif; ?>
+                  </td>
+                  <td class="py-4 px-6">
+                    <?php if (!empty($app['test_result'])): ?>
+                      <span class="font-medium text-slate-800"><?php echo htmlspecialchars($app['test_result']); ?></span>
+                    <?php else: ?>
+                      <span class="text-slate-400">N/A</span>
+                    <?php endif; ?>
+                  </td>
                   <td class="py-4 px-6">
                     <div class="space-y-2">
                       <select class="status-update-select w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-blue-600 focus:border-transparent outline-none" data-app-id="<?php echo $app['app_id']; ?>" data-education="<?php echo htmlspecialchars($app['education_status']); ?>">
                         <option value="">-- Update Status --</option>
                         <option value="Applied" <?php echo $app['status'] === 'Applied' ? 'selected' : ''; ?>>Applied</option>
                         <option value="Test Completed" <?php echo $app['status'] === 'Test Completed' ? 'selected' : ''; ?>>Test Completed</option>
+                        <option value="Documents Verified" <?php echo $app['status'] === 'Documents Verified' ? 'selected' : ''; ?>>Documents Verified</option>
                         <option value="Interview Scheduled" <?php echo $app['status'] === 'Interview Scheduled' ? 'selected' : ''; ?>>Interview Scheduled</option>
                         <option value="HR Round" <?php echo $app['status'] === 'HR Round' ? 'selected' : ''; ?>>HR Round</option>
                         <?php if ($app['education_status'] === 'Pursuing'): ?>
+                          <option value="HOD Approval Pending" <?php echo $app['status'] === 'HOD Approval Pending' ? 'selected' : ''; ?>>HOD Approval Pending</option>
                           <option value="HOD Approved" <?php echo $app['status'] === 'HOD Approved' ? 'selected' : ''; ?>>HOD Approved</option>
                         <?php endif; ?>
-                        <option value="Selected" <?php echo $app['status'] === 'Selected' ? 'selected' : ''; ?>>Selected/Hired</option>
+                        <?php if ($app['education_status'] !== 'Pursuing' || $app['status'] === 'HOD Approved' || $app['status'] === 'Selected'): ?>
+                          <option value="Selected" <?php echo $app['status'] === 'Selected' ? 'selected' : ''; ?>>Selected/Hired</option>
+                        <?php endif; ?>
                         <option value="Offer Sent" <?php echo $app['status'] === 'Offer Sent' ? 'selected' : ''; ?>>Offer Sent</option>
                         <option value="Onboarding Completed" <?php echo $app['status'] === 'Onboarding Completed' ? 'selected' : ''; ?>>Onboarding Completed</option>
                         <option value="Rejected" <?php echo $app['status'] === 'Rejected' ? 'selected' : ''; ?>>Rejected</option>
@@ -346,19 +364,60 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
                         <option value="Verified" <?php echo ($app['verification_status'] ?? 'Pending') === 'Verified' ? 'selected' : ''; ?>>Verified</option>
                         <option value="Rejected" <?php echo ($app['verification_status'] ?? 'Pending') === 'Rejected' ? 'selected' : ''; ?>>Rejected</option>
                       </select>
+
+                      <!-- Granular verification action buttons -->
+                      <div class="mt-2 space-y-1">
+                        <?php if (!empty($app['aadhaar_file']) && ($app['aadhaar_verification_status'] ?? 'Pending') !== 'Verified'): ?>
+                          <button type="button" class="verify-single-doc-btn w-full text-center px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-100 rounded text-[10px] font-semibold flex items-center justify-center gap-1 transition" data-app-id="<?php echo $app['app_id']; ?>" data-doc-type="aadhaar">
+                            <span class="material-symbols-outlined text-[12px]">done</span> Verify Aadhaar
+                          </button>
+                        <?php endif; ?>
+                        <?php if (!empty($app['pan_file']) && ($app['pan_verification_status'] ?? 'Pending') !== 'Verified'): ?>
+                          <button type="button" class="verify-single-doc-btn w-full text-center px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-100 rounded text-[10px] font-semibold flex items-center justify-center gap-1 transition" data-app-id="<?php echo $app['app_id']; ?>" data-doc-type="pan">
+                            <span class="material-symbols-outlined text-[12px]">done</span> Verify PAN
+                          </button>
+                        <?php endif; ?>
+                        <?php if (($app['verification_status'] ?? 'Pending') !== 'Verified'): ?>
+                          <button type="button" class="verify-single-doc-btn w-full text-center px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-[10px] font-bold shadow-sm flex items-center justify-center gap-1 transition" data-app-id="<?php echo $app['app_id']; ?>" data-doc-type="all">
+                            <span class="material-symbols-outlined text-[12px]">verified</span> Verify All Docs
+                          </button>
+                        <?php endif; ?>
+                        
+                        <!-- Send HOD Approval flow -->
+                        <?php if ($app['education_status'] === 'Pursuing' && in_array($app['status'], ['Test Completed', 'Documents Verified']) && $app['status'] !== 'HOD Approval Pending'): ?>
+                          <button type="button" class="send-hod-approval-btn w-full text-center px-2 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-[10px] font-bold shadow-sm flex items-center justify-center gap-1 transition" data-app-id="<?php echo $app['app_id']; ?>">
+                            <span class="material-symbols-outlined text-[12px]">send</span> Send HOD Approval
+                          </button>
+                        <?php endif; ?>
+
+                        <!-- Direct Select Student button -->
+                        <?php 
+                        $can_select = false;
+                        if ($app['education_status'] !== 'Pursuing' && (($app['verification_status'] ?? 'Pending') === 'Verified' || $app['status'] === 'Documents Verified')) {
+                            $can_select = true;
+                        } elseif ($app['education_status'] === 'Pursuing' && $app['status'] === 'HOD Approved') {
+                            $can_select = true;
+                        }
+                        if ($can_select && $app['status'] !== 'Selected'): 
+                        ?>
+                          <button type="button" class="select-student-btn w-full text-center px-2 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10px] font-bold shadow-sm flex items-center justify-center gap-1 transition" data-app-id="<?php echo $app['app_id']; ?>">
+                            <span class="material-symbols-outlined text-[12px]">check_circle</span> Select Student
+                          </button>
+                        <?php endif; ?>
+                      </div>
                     </div>
                   </td>
                   <td class="py-4 px-6">
                     <div class="flex items-center gap-2">
-                      <a href="hr_applicant_detail.php?app_id=<?php echo $app['app_id']; ?>" class="p-2 text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors" title="View Applicant Details">
+                      <a href="hr_applicant_detail.php?app_id=<?php echo $app['app_id']; ?>" class="p-2 text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors" title="View Profile">
                         <span class="material-symbols-outlined text-[18px]">visibility</span>
                       </a>
                       <a href="view_application_status.php?app_id=<?php echo $app['app_id']; ?>" class="p-2 text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors" title="View Timeline">
                         <span class="material-symbols-outlined text-[18px]">timeline</span>
                       </a>
-<a href="javascript:void(0)" class="p-2 text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-colors reminder-btn" data-app-id="<?php echo $app['app_id']; ?>" title="Send Reminder Email">
-  <span class="material-symbols-outlined text-[18px]">mail</span>
-</a>
+                      <a href="javascript:void(0)" class="p-2 text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-colors reminder-btn" data-app-id="<?php echo $app['app_id']; ?>" title="Send Reminder Email">
+                        <span class="material-symbols-outlined text-[18px]">mail</span>
+                      </a>
                       <?php
                         $resume = !empty($app['resume_file']) ? trim($app['resume_file']) : '';
                         $resume_url = !empty($app['resume_url']) ? trim($app['resume_url']) : '';
@@ -400,19 +459,30 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
                            title="View Resume <?php echo !$is_remote ? '(' . htmlspecialchars(strtoupper($ext_r)) . ')' : ''; ?>">
                            <span class="material-symbols-outlined text-[18px]">description</span>
                         </a>
-                        <?php if (!$is_remote): ?>
-                        <!-- Download resume -->
-                        <a href="<?php echo $download_href; ?>"
-                           data-resume-exists="<?php echo $exists ? 'true' : 'false'; ?>"
-                           class="p-2 text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-colors"
-                           title="Download Resume">
-                           <span class="material-symbols-outlined text-[18px]">download</span>
-                        </a>
-                        <?php endif; ?>
                       <?php else: ?>
                         <span class="px-2 py-1 text-[10px] font-semibold text-slate-400 bg-slate-100 rounded-lg" title="No resume uploaded">
                           No Resume
                         </span>
+                      <?php endif; ?>
+
+                      <!-- View Aadhaar -->
+                      <?php if (!empty($app['aadhaar_file'])): ?>
+                        <a href="view_document.php?file=<?php echo urlencode(basename($app['aadhaar_file'])); ?>"
+                           target="_blank"
+                           class="p-2 text-amber-600 bg-amber-50 rounded-lg hover:bg-amber-100 transition-colors"
+                           title="View Aadhaar">
+                           <span class="material-symbols-outlined text-[18px]">badge</span>
+                        </a>
+                      <?php endif; ?>
+
+                      <!-- View PAN -->
+                      <?php if (!empty($app['pan_file'])): ?>
+                        <a href="view_document.php?file=<?php echo urlencode(basename($app['pan_file'])); ?>"
+                           target="_blank"
+                           class="p-2 text-cyan-600 bg-cyan-50 rounded-lg hover:bg-cyan-100 transition-colors"
+                           title="View PAN">
+                           <span class="material-symbols-outlined text-[18px]">credit_card</span>
+                        </a>
                       <?php endif; ?>
                     </div>
                   </td>
@@ -735,30 +805,135 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
       }, 3000);
     }
   // Reminder email handler
-document.querySelectorAll('.reminder-btn').forEach(btn => {
-  btn.addEventListener('click', async function () {
-    const appId = this.dataset.appId;
-    if (!appId) return;
-    if (!confirm('Send reminder email to the applicant?')) return;
+  document.querySelectorAll('.reminder-btn').forEach(btn => {
+    btn.addEventListener('click', async function () {
+      const appId = this.dataset.appId;
+      if (!appId) return;
+      if (!confirm('Send reminder email to the applicant?')) return;
 
-    try {
-      const formData = new FormData();
-      formData.append('application_id', appId);
-      const response = await fetch('send_reminder_email.php', {
-        method: 'POST',
-        body: formData
-      });
-      const result = await response.json();
-      if (result.success) {
-        showToast('success', 'Email Sent', result.message);
-      } else {
-        showToast('error', 'Error', result.message || 'Failed to send email.');
+      try {
+        const formData = new FormData();
+        formData.append('application_id', appId);
+        const response = await fetch('send_reminder_email.php', {
+          method: 'POST',
+          body: formData
+        });
+        const result = await response.json();
+        if (result.success) {
+          showToast('success', 'Email Sent', result.message);
+        } else {
+          showToast('error', 'Error', result.message || 'Failed to send email.');
+        }
+      } catch (e) {
+        showToast('error', 'Error', 'Network error while sending reminder.');
       }
-    } catch (e) {
-      showToast('error', 'Error', 'Network error while sending reminder.');
-    }
+    });
   });
-});
+
+  // Single document verification handler
+  document.querySelectorAll('.verify-single-doc-btn').forEach(btn => {
+    btn.addEventListener('click', async function() {
+      const appId = this.dataset.appId;
+      const docType = this.dataset.docType;
+      
+      let label = "all documents";
+      if (docType === "aadhaar") label = "Aadhaar";
+      if (docType === "pan") label = "PAN";
+
+      if (!confirm(`Mark ${label} as Verified for this applicant?`)) {
+        return;
+      }
+
+      try {
+        const formData = new FormData();
+        formData.append('application_id', appId);
+        formData.append('verification_status', 'Verified');
+        formData.append('verification_type', docType);
+
+        const response = await fetch('update_verification_status.php', {
+          method: 'POST',
+          body: formData
+        });
+
+        const result = await response.json();
+        if (result.success) {
+          showToast('success', 'Document Verified', result.message);
+          setTimeout(() => location.reload(), 1300);
+        } else {
+          showToast('error', 'Verification Failed', result.message || 'Failed to update verification status.');
+        }
+      } catch (error) {
+        showToast('error', 'Error', 'Failed to submit verification request.');
+        console.error(error);
+      }
+    });
+  });
+
+  // Send HOD approval handler
+  document.querySelectorAll('.send-hod-approval-btn').forEach(btn => {
+    btn.addEventListener('click', async function() {
+      const appId = this.dataset.appId;
+      if (!confirm('Are you sure you want to send a HOD approval request email?')) {
+        return;
+      }
+
+      try {
+        const formData = new FormData();
+        formData.append('application_id', appId);
+        formData.append('new_status', 'HOD Approval Pending');
+        formData.append('notes', 'Initiated HOD approval flow via HR review button.');
+
+        const response = await fetch('update_application_status.php', {
+          method: 'POST',
+          body: formData
+        });
+
+        const result = await response.json();
+        if (result.success) {
+          showToast('success', 'Approval Sent', result.message || 'HOD approval request email sent successfully.');
+          setTimeout(() => location.reload(), 1500);
+        } else {
+          showToast('error', 'Failed', result.message || 'Failed to send HOD approval.');
+        }
+      } catch (error) {
+        showToast('error', 'Error', 'Failed to request HOD approval.');
+        console.error(error);
+      }
+    });
+  });
+
+  // Direct Select Student handler
+  document.querySelectorAll('.select-student-btn').forEach(btn => {
+    btn.addEventListener('click', async function() {
+      const appId = this.dataset.appId;
+      if (!confirm('Are you sure you want to select this student for the internship?')) {
+        return;
+      }
+
+      try {
+        const formData = new FormData();
+        formData.append('application_id', appId);
+        formData.append('new_status', 'Selected');
+        formData.append('notes', 'Candidate selected directly by HR.');
+
+        const response = await fetch('update_application_status.php', {
+          method: 'POST',
+          body: formData
+        });
+
+        const result = await response.json();
+        if (result.success) {
+          showToast('success', 'Student Selected', result.message || 'Student has been successfully selected!');
+          setTimeout(() => location.reload(), 1300);
+        } else {
+          showToast('error', 'Selection Failed', result.message || 'Failed to update candidate status.');
+        }
+      } catch (error) {
+        showToast('error', 'Error', 'Failed to select student.');
+        console.error(error);
+      }
+    });
+  });
 </script>
 <?php print_resume_not_found_js(); ?>
 <?php page_shell_end(); ?>
