@@ -1,0 +1,78 @@
+<?php
+// send_hod_approval_email.php
+// Called via AJAX when HR triggers HOD approval for a pursuing student.
+
+session_start();
+include_once __DIR__ . '/includes/auth.php';
+if (!is_logged_in() || !has_role(['hr', 'admin'])) {
+    header('Content-Type: application/json');
+    echo json_encode(['success' => false, 'message' => 'Unauthorized']);
+    exit();
+}
+
+include 'db.php';
+
+$app_id = intval($_POST['application_id'] ?? 0);
+if ($app_id <= 0) {
+    echo json_encode(['success' => false, 'message' => 'Invalid application ID']);
+    exit();
+}
+
+// Fetch HOD email and student details
+$stmt = $conn->prepare('SELECT a.education_status, a.hod_email, a.hod_approval_status, i.title AS internship_title, sp.full_name, sp.email AS student_email, a.test_score, a.test_result FROM internship_applications a LEFT JOIN internships i ON a.internship_id = i.id LEFT JOIN student_profiles sp ON a.user_id = sp.user_id WHERE a.id = ?');
+$stmt->bind_param('i', $app_id);
+$stmt->execute();
+$res = $stmt->get_result();
+$app = $res->fetch_assoc();
+$stmt->close();
+
+if (!$app) {
+    echo json_encode(['success' => false, 'message' => 'Application not found']);
+    exit();
+}
+
+if ($app['education_status'] !== 'Pursuing') {
+    echo json_encode(['success' => false, 'message' => 'HOD approval not required for this student']);
+    exit();
+}
+
+$hod_email = $app['hod_email'];
+if (empty($hod_email)) {
+    echo json_encode(['success' => false, 'message' => 'HOD email not set for this application']);
+    exit();
+}
+
+// Generate a secure random token
+$token = bin2hex(random_bytes(32));
+$expires_at = date('Y-m-d H:i:s', strtotime('+7 days'));
+
+// Store token in the application row
+$update = $conn->prepare('UPDATE internship_applications SET hod_token = ?, hod_approval_status = ?, hod_approved_at = NULL WHERE id = ?');
+$update->bind_param('ssi', $token, $app['hod_approval_status'], $app_id);
+$update->execute();
+$update->close();
+
+// Prepare email
+$approval_link = "https://{$_SERVER['HTTP_HOST']}/hod_approval.php?token=$token";
+$subject = "HOD Approval Required for Internship Application #$app_id";
+$message = "<html><body>
+    <p>Dear HOD,</p>
+    <p>The student <strong>{$app['full_name']}</strong> (<a href='mailto:{$app['student_email']}'>{$app['student_email']}</a>) has completed the test for the internship <strong>{$app['internship_title']}</strong>.
+    Test Score: {$app['test_score']} (Result: {$app['test_result']}).</p>
+    <p>Please review and approve or reject the application using the link below:</p>
+    <p><a href='$approval_link'>Approve / Reject Application</a></p>
+    <p>This link will expire in 7 days.</p>
+    <p>Best regards,<br/>Internship Management System</p>
+</body></html>";
+$headers = "MIME-Version: 1.0\r\n" .
+    "Content-type: text/html; charset=UTF-8\r\n" .
+    "From: no-reply@internshipplatform.com\r\n";
+
+$mail_sent = mail($hod_email, $subject, $message, $headers);
+
+if ($mail_sent) {
+    echo json_encode(['success' => true, 'message' => 'HOD approval email sent']);
+} else {
+    echo json_encode(['success' => false, 'message' => 'Failed to send email']);
+}
+?>

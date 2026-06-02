@@ -127,7 +127,7 @@ $app_sql = "SELECT a.id as app_id, a.user_id, a.status, a.applied_date, a.educat
                    COALESCE(i.title, a.internship_name) as title,
                    COALESCE(i.duration, '') as duration,
                    COALESCE(i.mode, '') as mode,
-                   a.verification_status,
+                   a.verification_status, a.hod_approval_status,
                    sp.full_name, sp.email, sp.college_name, sp.course,
                    sp.resume_file, $resume_url_select,
                    sp.aadhaar_file, sp.pan_file,
@@ -292,7 +292,9 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
                 <th class="py-4 px-6">Internship</th>
                 <th class="py-4 px-6">Applied Date</th>
                 <th class="py-4 px-6">Education</th>
-                <th class="py-4 px-6">Status/Verification</th>
+                <th class="py-4 px-6">Status</th>
+                <th class="py-4 px-6">HOD</th>
+                <th class="py-4 px-6">Verification</th>
                 <th class="py-4 px-6">Test Score</th>
                 <th class="py-4 px-6">Test Result</th>
                 <th class="py-4 px-6">Update</th>
@@ -331,7 +333,27 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
                     <span class="inline-flex px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wide border uppercase <?php echo getStatusBadgeClass($app['status']); ?>">
                       <?php echo htmlspecialchars($app['status']); ?>
                     </span>
-                    <div class="mt-2 space-y-1">
+                  </td>
+                  <td class="py-4 px-6">
+                    <?php if ($app['education_status'] === 'Pursuing'): ?>
+                      <?php
+                        $hod_status = $app['hod_approval_status'] ?? 'Pending';
+                        $hod_display = $hod_status;
+                        if ($hod_status === 'Approved') {
+                            $hod_display = 'HOD Approved';
+                        } elseif ($hod_status === 'Rejected') {
+                            $hod_display = 'HOD Rejected';
+                        }
+                      ?>
+                      <span class="inline-flex px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wide border uppercase <?php echo getStatusBadgeClass($hod_status); ?>">
+                        <?php echo htmlspecialchars($hod_display); ?>
+                      </span>
+                    <?php else: ?>
+                      <span class="text-slate-400 text-xs">N/A</span>
+                    <?php endif; ?>
+                  </td>
+                  <td class="py-4 px-6">
+                    <div class="space-y-1">
                       <span class="inline-flex px-2 py-0.5 rounded text-[9px] font-bold uppercase border <?php echo getVerificationBadgeClass($app['verification_status'] ?? 'Pending'); ?>" title="Overall Document Verification">
                         DOCS: <?php echo htmlspecialchars($app['verification_status'] ?: 'Pending'); ?>
                       </span>
@@ -409,7 +431,7 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
                         <?php endif; ?>
                         
                         <!-- Send HOD Approval flow -->
-                        <?php if ($app['education_status'] === 'Pursuing' && in_array($app['status'], ['Test Completed', 'Documents Verified']) && $app['status'] !== 'HOD Approval Pending'): ?>
+                        <?php if ($app['education_status'] === 'Pursuing' && ($app['hod_approval_status'] ?? 'Pending') === 'Pending'): ?>
                           <button type="button" class="send-hod-approval-btn w-full text-center px-2 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-[10px] font-bold shadow-sm flex items-center justify-center gap-1 transition" data-app-id="<?php echo $app['app_id']; ?>">
                             <span class="material-symbols-outlined text-[12px]">send</span> Send HOD Approval
                           </button>
@@ -418,12 +440,19 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
                         <!-- Direct Select Student button -->
                         <?php 
                         $can_select = false;
-                        if ($app['education_status'] !== 'Pursuing' && (($app['verification_status'] ?? 'Pending') === 'Verified' || $app['status'] === 'Documents Verified')) {
-                            $can_select = true;
-                        } elseif ($app['education_status'] === 'Pursuing' && $app['status'] === 'HOD Approved') {
+                        // Non-pursuing students can be selected directly
+                        if ($app['education_status'] !== 'Pursuing' && $app['status'] !== 'Selected') {
                             $can_select = true;
                         }
-                        if ($can_select && $app['status'] !== 'Selected'): 
+                        // Pursuing students require HOD approval
+                        if ($app['education_status'] === 'Pursuing' && ($app['hod_approval_status'] ?? '') === 'Approved' && $app['status'] !== 'Selected') {
+                            $can_select = true;
+                        }
+                        // If HOD Rejected, selection is not allowed (can_select stays false)
+                        if ($app['education_status'] === 'Pursuing' && ($app['hod_approval_status'] ?? '') === 'Rejected') {
+                            $can_select = false;
+                        }
+                        if ($can_select): 
                         ?>
                           <button type="button" class="select-student-btn w-full text-center px-2 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10px] font-bold shadow-sm flex items-center justify-center gap-1 transition" data-app-id="<?php echo $app['app_id']; ?>">
                             <span class="material-symbols-outlined text-[12px]">check_circle</span> Select Student
@@ -611,6 +640,31 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
   </div>
 
   <script>
+    // Add HOD approval button handler
+    document.querySelectorAll('.send-hod-approval-btn').forEach(btn => {
+        btn.addEventListener('click', async function() {
+            const appId = this.dataset.appId;
+            const formData = new FormData();
+            formData.append('application_id', appId);
+            try {
+                const response = await fetch('send_hod_approval.php', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+                if (result.success) {
+                    showToast('success', 'Success', result.message);
+                    // Optionally refresh to show updated status
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showToast('error', 'Error', result.message);
+                }
+            } catch (e) {
+                showToast('error', 'Error', 'Failed to send HOD approval request');
+            }
+        });
+    });
+
     // Status update handler
     document.querySelectorAll('.status-update-select').forEach(select => {
       select.addEventListener('change', async function() {

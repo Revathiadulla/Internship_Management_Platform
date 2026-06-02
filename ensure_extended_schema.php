@@ -10,16 +10,13 @@ if (!isset($conn)) {
 
 // Add new columns to internship_applications if missing
 $extended_cols = [
-    'hod_approval_status' => "ALTER TABLE internship_applications ADD COLUMN hod_approval_status VARCHAR(20) DEFAULT NULL",
-    'coordinator_id'      => "ALTER TABLE internship_applications ADD COLUMN coordinator_id INT DEFAULT NULL",
-    'mentor_id'           => "ALTER TABLE internship_applications ADD COLUMN mentor_id INT DEFAULT NULL",
-    'dropout_status'      => "ALTER TABLE internship_applications ADD COLUMN dropout_status VARCHAR(20) DEFAULT NULL",
-    // New test-related columns
-    'test_score'          => "ALTER TABLE internship_applications ADD COLUMN test_score INT DEFAULT NULL",
-    'test_result'         => "ALTER TABLE internship_applications ADD COLUMN test_result VARCHAR(20) DEFAULT NULL",
-    'test_submitted_date'=> "ALTER TABLE internship_applications ADD COLUMN test_submitted_date DATETIME DEFAULT NULL",
-    'aadhaar_verification_status' => "ALTER TABLE internship_applications ADD COLUMN aadhaar_verification_status VARCHAR(20) DEFAULT 'Pending'",
-    'pan_verification_status' => "ALTER TABLE internship_applications ADD COLUMN pan_verification_status VARCHAR(20) DEFAULT 'Pending'"
+    'education_status'       => "ALTER TABLE internship_applications ADD COLUMN education_status VARCHAR(50) NOT NULL DEFAULT 'pursuing'",
+    'hod_email'              => "ALTER TABLE internship_applications ADD COLUMN hod_email VARCHAR(150) DEFAULT NULL",
+    'hod_approval_status'    => "ALTER TABLE internship_applications ADD COLUMN hod_approval_status VARCHAR(50) NOT NULL DEFAULT 'Not Required'",
+    'final_selection_status' => "ALTER TABLE internship_applications ADD COLUMN final_selection_status VARCHAR(50) NOT NULL DEFAULT 'Pending'",
+    'hod_approved_at'        => "ALTER TABLE internship_applications ADD COLUMN hod_approved_at DATETIME NULL",
+    'hr_reviewed_at'         => "ALTER TABLE internship_applications ADD COLUMN hr_reviewed_at DATETIME NULL",
+    'hod_token'              => "ALTER TABLE internship_applications ADD COLUMN hod_token VARCHAR(64) NULL"
 ];
 foreach ($extended_cols as $col => $sql) {
     $check = mysqli_query($conn, "SHOW COLUMNS FROM internship_applications LIKE '$col'");
