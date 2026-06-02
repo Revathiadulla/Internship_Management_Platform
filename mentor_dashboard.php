@@ -103,7 +103,7 @@ $res = mysqli_query($conn, "SELECT COUNT(*) as cnt FROM dropout_requests dr JOIN
 $overview['dropout_requests'] = (int) mysqli_fetch_assoc($res)['cnt'];
 
 // Assigned interns list
-$assigned_sql = "SELECT ma.id as assign_id, u.full_name, u.email, i.title as internship_title, jp.title as project_title, a.status as current_phase, a.progress_percent, a.status as app_status, a.test_status, dl.last_log_date
+$assigned_sql = "SELECT ma.id as assign_id, u.full_name, u.email, i.title as internship_title, jp.title as project_title, a.status as current_phase, 0 AS progress_percent, a.status as app_status, a.test_status, dl.last_log_date
 FROM mentor_assignments ma
 JOIN internship_applications a ON ma.application_id = a.id
 JOIN users u ON a.user_id = u.id
