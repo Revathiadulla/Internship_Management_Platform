@@ -447,9 +447,12 @@ if ($candidates_res) {
                         Subscription: <strong class="uppercase"><?php echo htmlspecialchars($plan_selected); ?></strong> 
                         (<?php echo $views_count; ?>/<?php echo $max_views; ?> views)
                     </span>
+<<<<<<< HEAD
                     <button onclick="window.location.href='browse_talent_pool.php?filter=shortlist'" class="bg-white border border-gray-200 text-gray-700 px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-gray-50 transition-all shadow-sm">
                         <span class="material-symbols-outlined text-lg">fact_check</span> View Shortlisted (<?php echo $shortlist_count; ?>)
                     </button>
+=======
+>>>>>>> dd7d2df (Add HR Mentor Company modules)
                 </div>
             </div>
 
