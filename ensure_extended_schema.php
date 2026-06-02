@@ -80,7 +80,7 @@ $create_dropout = "CREATE TABLE IF NOT EXISTS dropout_requests (
     FOREIGN KEY (mentor_id) REFERENCES mentors(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
 mysqli_query($conn, $create_dropout);
-<?php
+
 // Ensure daily_logs has required columns for mentor dashboard
 $dl_needed = [
     'is_reviewed' => "ALTER TABLE daily_logs ADD COLUMN is_reviewed TINYINT(1) DEFAULT 0",
