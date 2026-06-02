@@ -112,17 +112,13 @@ $create_feedback = "CREATE TABLE IF NOT EXISTS mentor_feedback (
 mysqli_query($conn, $create_feedback);
 
 // Create mentor_assignments table if not exists
-$create_assignments = "CREATE TABLE IF NOT EXISTS mentor_assignments (\
-    id INT AUTO_INCREMENT PRIMARY KEY,\
-    mentor_id INT NOT NULL,\
-    student_id INT NOT NULL,\
-    application_id INT NOT NULL,\
-    status VARCHAR(20) DEFAULT 'active',\
-    assigned_at DATETIME DEFAULT CURRENT_TIMESTAMP,\
-    UNIQUE KEY unique_assignment (mentor_id, student_id, application_id),\
-    FOREIGN KEY (mentor_id) REFERENCES mentors(id) ON DELETE CASCADE,\
-    FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE,\
-    FOREIGN KEY (application_id) REFERENCES internship_applications(id) ON DELETE CASCADE\
+$create_assignments = "CREATE TABLE IF NOT EXISTS mentor_assignments (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    mentor_id INT NOT NULL,
+    student_id INT NOT NULL,
+    internship_id INT NULL,
+    status VARCHAR(50) DEFAULT 'active',
+    assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_assignment (mentor_id, student_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
 mysqli_query($conn, $create_assignments);
-
