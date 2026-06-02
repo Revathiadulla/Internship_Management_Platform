@@ -85,7 +85,7 @@ $overview['assigned_interns'] = (int) mysqli_fetch_assoc($res)['cnt'];
 $res = mysqli_query($conn, "SELECT COUNT(DISTINCT i.id) as cnt FROM mentor_assignments ma JOIN internship_applications a ON ma.application_id = a.id JOIN internships i ON a.internship_id = i.id WHERE ma.mentor_id = $mentor_id AND a.status = 'Active Intern'");
 $overview['active_projects'] = (int) mysqli_fetch_assoc($res)['cnt'];
 // Pending daily logs (logs not reviewed)
-$res = mysqli_query($conn, "SELECT COUNT(*) as cnt FROM daily_logs dl JOIN mentor_assignments ma ON dl.student_id = ma.student_id WHERE ma.mentor_id = $mentor_id AND dl.is_reviewed = 0");
+$res = mysqli_query($conn, "SELECT COUNT(*) as cnt FROM daily_logs dl JOIN mentor_assignments ma ON dl.user_id = ma.student_id WHERE ma.mentor_id = $mentor_id AND dl.is_reviewed = 0");
 $overview['pending_logs'] = (int) mysqli_fetch_assoc($res)['cnt'];
 // Completed reviews (feedback entries by this mentor)
 $res = mysqli_query($conn, "SELECT COUNT(*) as cnt FROM mentor_feedback WHERE mentor_id = $mentor_id");
@@ -101,16 +101,16 @@ JOIN internship_applications a ON ma.application_id = a.id
 JOIN users u ON a.user_id = u.id
 LEFT JOIN internships i ON a.internship_id = i.id
 LEFT JOIN job_postings jp ON a.job_posting_id = jp.id
-LEFT JOIN (SELECT student_id, MAX(log_date) as last_log_date FROM daily_logs GROUP BY student_id) dl ON a.user_id = dl.student_id
+LEFT JOIN (SELECT user_id, MAX(log_date) as last_log_date FROM daily_logs GROUP BY user_id) dl ON a.user_id = dl.user_id
 WHERE ma.mentor_id = $mentor_id";
 $assigned_res = mysqli_query($conn, $assigned_sql);
 
 // Pending daily logs details
-$logs_sql = "SELECT dl.id, dl.student_id, u.full_name, u.email, i.title as internship_title, dl.log_date, dl.tasks_completed, dl.time_spent, dl.focus_level, dl.issues_faced, dl.next_plan
+$logs_sql = "SELECT dl.id, dl.user_id as student_id, u.full_name, u.email, i.title as internship_title, dl.log_date, dl.tasks_completed, dl.time_spent, dl.focus_level, dl.issues_faced, dl.next_plan
 FROM daily_logs dl
-JOIN mentor_assignments ma ON dl.student_id = ma.student_id
-JOIN users u ON dl.student_id = u.id
-LEFT JOIN internship_applications a ON dl.student_id = a.user_id
+JOIN mentor_assignments ma ON dl.user_id = ma.student_id
+JOIN users u ON dl.user_id = u.id
+LEFT JOIN internship_applications a ON dl.user_id = a.user_id
 LEFT JOIN internships i ON a.internship_id = i.id
 WHERE ma.mentor_id = $mentor_id AND dl.is_reviewed = 0";
 $logs_res = mysqli_query($conn, $logs_sql);
