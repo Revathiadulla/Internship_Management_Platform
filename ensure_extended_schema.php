@@ -80,4 +80,33 @@ $create_dropout = "CREATE TABLE IF NOT EXISTS dropout_requests (
     FOREIGN KEY (mentor_id) REFERENCES mentors(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
 mysqli_query($conn, $create_dropout);
-?>
+<?php
+// Ensure daily_logs has required columns for mentor dashboard
+$dl_needed = [
+    'is_reviewed' => "ALTER TABLE daily_logs ADD COLUMN is_reviewed TINYINT(1) DEFAULT 0",
+    'review_status' => "ALTER TABLE daily_logs ADD COLUMN review_status VARCHAR(20) DEFAULT NULL",
+    'reviewed_at' => "ALTER TABLE daily_logs ADD COLUMN reviewed_at DATETIME NULL",
+    'reviewer_remarks' => "ALTER TABLE daily_logs ADD COLUMN reviewer_remarks TEXT NULL"
+];
+foreach ($dl_needed as $col => $sql) {
+    $check = mysqli_query($conn, "SHOW COLUMNS FROM daily_logs LIKE '$col'");
+    if ($check && mysqli_num_rows($check) == 0) {
+        mysqli_query($conn, $sql);
+    }
+}
+// Create mentor_feedback table if not exists
+$create_feedback = "CREATE TABLE IF NOT EXISTS mentor_feedback (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    mentor_id INT NOT NULL,
+    student_id INT NOT NULL,
+    internship_id INT NOT NULL,
+    rating INT NOT NULL,
+    comments TEXT NULL,
+    phase VARCHAR(255) NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (mentor_id) REFERENCES mentors(id) ON DELETE CASCADE,
+    FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (internship_id) REFERENCES internships(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
+mysqli_query($conn, $create_feedback);
+
