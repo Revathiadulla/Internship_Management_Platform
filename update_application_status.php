@@ -195,7 +195,8 @@ if ($new_status === 'Selected' && $education_status === 'Currently Pursuing') {
 
 // ── Standard status update ────────────────────────────────────────────────
 $selected_at_sql = ($new_status === 'Selected') ? ", selected_by = $user_id, selected_at = NOW()" : '';
-$update_sql = "UPDATE internship_applications SET status = '$new_status' $selected_at_sql WHERE id = $app_id";
+$final_status_sql = ($new_status === 'Selected' || $new_status === 'Rejected') ? ", final_selection_status = '$new_status'" : '';
+$update_sql = "UPDATE internship_applications SET status = '$new_status' $selected_at_sql $final_status_sql WHERE id = $app_id";
 
 if (mysqli_query($conn, $update_sql)) {
     checkAndAddToTalentPool($conn, $app_id);
@@ -213,30 +214,25 @@ if (mysqli_query($conn, $update_sql)) {
                     VALUES ($app_id, '$old_status', '$new_status', '$user_role', '$updated_by_name', '$notes_escaped')";
     mysqli_query($conn, $history_sql);
 
-    // Notify the student
-    $notif_msg = mysqli_real_escape_string($conn, "Your application status has been updated to: $new_status.");
-    $notif_title = mysqli_real_escape_string($conn, "Application Status: $new_status");
-    mysqli_query($conn, "INSERT INTO student_notifications (user_id, title, type, message) 
-                         SELECT user_id, '$notif_title', 'Application Update', '$notif_msg'
-                         FROM internship_applications WHERE id = $app_id");
-
-    // Send email to student
-    $status_subject = "IMP Application Status Update: $new_status for $internship_title";
-    $status_message = "Dear $student_name,\n\nYour application status for the \"$internship_title\" internship has been updated.\n\n- Previous Status: **$old_status**\n- New Status: **$new_status**\n" . 
-                      (!empty($notes) ? "- Coordinator/HR Notes: *$notes*\n" : "") . "\n" .
-                      ($new_status === 'Selected' ? "Congratulations! Please log in to your student dashboard to confirm and start your internship immediately." : "Please log in to your dashboard to review your status and check any further actions.");
-    
-    sendEmailNotification($student_user_id, $status_subject, $status_message, [
-        'event' => 'Application Status Update',
-        'internship_position' => $internship_title,
-        'previous_status' => $old_status,
-        'new_status' => $new_status,
-        'notes' => $notes ?: 'Status updated by ' . $user_role,
-        'action_url' => 'http://localhost/IMP/student_applications.php',
-        'action_label' => 'View Application Status'
-    ]);
-
-    echo json_encode(['success' => true, 'message' => "Status updated to $new_status"]);
+    // Post-update actions
+    if ($new_status === 'Selected') {
+        // Send selection email to student
+        $subject = "Congratulations! You have been selected for the internship";
+        $message = "Dear $student_name,\n\nWe are pleased to inform you that you have been selected for the internship: $internship_title.\n\nPlease await further instructions from HR.\n\nBest regards,\nIMP Team";
+        if (function_exists('sendEmail')) {
+            sendEmail($student_email, $student_name, $subject, nl2br($message));
+        }
+        // Notification
+        $notif_msg = mysqli_real_escape_string($conn, "Congratulations! You have been selected for the internship.");
+        mysqli_query($conn, "INSERT INTO student_notifications (user_id, title, type, message) VALUES ($student_user_id, 'Internship Selected', 'success', '$notif_msg')");
+    } elseif ($new_status === 'Rejected') {
+        // Notification for rejection
+        $notif_msg = mysqli_real_escape_string($conn, "Your internship application was not selected.");
+        mysqli_query($conn, "INSERT INTO student_notifications (user_id, title, type, message) VALUES ($student_user_id, 'Application Rejected', 'info', '$notif_msg')");
+    }
+    echo json_encode(['success' => true, 'message' => "Application status updated to $new_status."]); 
+    exit();
 } else {
     echo json_encode(['success' => false, 'message' => 'Failed to update status: ' . mysqli_error($conn)]);
+    exit();
 }
