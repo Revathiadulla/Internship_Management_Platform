@@ -22,6 +22,7 @@ function has_role($allowed_roles): bool {
 }
 
 function role_default_modules(?string $role): array {
+    switch (strtolower((string) $role)) {
         case 'admin':
             return ['dashboard', 'applications', 'candidates', 'workflows', 'reports', 'users', 'hiring_requests', 'student_logs'];
         case 'hr':
@@ -32,6 +33,7 @@ function role_default_modules(?string $role): array {
             return ['mentor_dashboard'];
         default:
             return [];
+    }
 }
 
 function current_user_permissions(): array {
