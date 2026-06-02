@@ -3,9 +3,9 @@
 // This script adds new columns/tables required for the extended internship workflow.
 // It is safe to include multiple times; it checks existence before altering.
 
-if (!isset($conn)) {
-    // Expect $conn from the including script.
-    exit('Database connection not available');
+if (!isset($conn) || !($conn instanceof mysqli)) {
+    // Expect a valid mysqli connection from the including script.
+    die('Database connection not available');
 }
 
 // Add new columns to internship_applications if missing

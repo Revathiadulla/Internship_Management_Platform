@@ -2,8 +2,8 @@
 // student_test.php
 // Handles test submission, calculates score, updates application, sends notifications.
 
-include_once __DIR__ . '/ensure_extended_schema.php';
-include_once __DIR__ . '/db.php'; // Assuming this provides $conn
+require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/ensure_extended_schema.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Expected POST fields: application_id, answers (array of answer IDs), optional other data
