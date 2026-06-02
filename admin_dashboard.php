@@ -1,3 +1,10 @@
+<?php
+session_start();
+if (!isset($_SESSION['user_id']) || !isset($_SESSION['role']) || strtolower($_SESSION['role']) !== 'admin') {
+    header("Location: login.php?error=" . urlencode("Unauthorized access. Admin role required."));
+    exit();
+}
+?>
 <!DOCTYPE html><html class="light" lang="en"><head>
 <meta charset="utf-8">
 <meta content="width=device-width, initial-scale=1.0" name="viewport">
@@ -50,9 +57,35 @@ tailwind.config = {
       </div>
     </div>
     <div class="flex items-center gap-4 text-sm font-medium">
-      <div class="flex items-center gap-2 text-gray-600">
+      <div class="flex items-center gap-2 text-gray-600 mr-2">
         <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
         System Online
+      </div>
+      <div class="h-8 w-px bg-gray-200"></div>
+      <?php 
+      $admin_name = $_SESSION['full_name'] ?? 'Admin User';
+      $admin_email = $_SESSION['email'] ?? 'admin@example.com';
+      $admin_initial = strtoupper(substr($admin_name, 0, 1)) ?: 'A';
+      ?>
+      <div class="relative">
+          <button id="profile-toggle" class="flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-gray-50 transition-colors cursor-pointer text-left focus:outline-none">
+              <span class="grid h-9 w-9 place-items-center rounded-full bg-blue-600 text-sm font-bold text-white"><?php echo $admin_initial; ?></span>
+              <span class="hidden text-left lg:block">
+                  <span class="block text-sm font-bold text-gray-900 leading-none"><?php echo htmlspecialchars($admin_name); ?></span>
+                  <span class="block text-xs text-gray-500 mt-1">Platform Admin</span>
+              </span>
+              <span class="material-symbols-outlined text-slate-400">expand_more</span>
+          </button>
+          
+          <!-- Dropdown -->
+          <div id="profile-dropdown" class="hidden absolute right-0 mt-2 min-w-[220px] bg-white rounded-xl shadow-xl border border-gray-150 py-2 z-50">
+              <div class="border-b border-gray-100 px-4 py-3 bg-gray-50/50">
+                  <p class="text-sm font-bold text-gray-900"><?php echo htmlspecialchars($admin_name); ?></p>
+                  <p class="truncate text-xs text-gray-500 mt-0.5"><?php echo htmlspecialchars($admin_email); ?></p>
+                  <span class="inline-block px-2 py-0.5 bg-blue-100 text-blue-700 text-[9px] font-bold rounded uppercase mt-1.5 tracking-wider">Admin</span>
+              </div>
+              <a href="logout.php" class="block px-4 py-2.5 text-sm font-bold text-red-600 hover:bg-red-50 hover:text-red-700 transition">Logout</a>
+          </div>
       </div>
     </div>
   </header>
@@ -104,7 +137,7 @@ tailwind.config = {
             <span class="material-symbols-outlined text-xl">help</span>
             Help Center
           </a>
-          <a href="index.html" class="flex items-center gap-3 text-red-600 px-4 py-2.5 rounded-lg hover:bg-red-50 text-sm font-medium mt-4">
+          <a href="logout.php" class="flex items-center gap-3 text-red-600 px-4 py-2.5 rounded-lg hover:bg-red-50 text-sm font-medium mt-4">
             <span class="material-symbols-outlined text-xl">logout</span>
             Logout
           </a>
@@ -527,5 +560,14 @@ tailwind.config = {
       </footer>
     </main>
   </div>
+  <script>
+    const profileToggle = document.getElementById('profile-toggle');
+    const profileDropdown = document.getElementById('profile-dropdown');
+    if (profileToggle && profileDropdown) {
+      profileToggle.addEventListener('click', e => { e.stopPropagation(); profileDropdown.classList.toggle('hidden'); });
+      document.addEventListener('click', e => { if (!profileToggle.contains(e.target) && !profileDropdown.contains(e.target)) profileDropdown.classList.add('hidden'); });
+      profileDropdown.querySelectorAll('a').forEach(link => { link.addEventListener('click', () => profileDropdown.classList.add('hidden')); });
+    }
+  </script>
 </body>
 </html>

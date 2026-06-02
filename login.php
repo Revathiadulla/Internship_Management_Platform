@@ -5,20 +5,26 @@ include 'db.php';
 
 // ── POST: process login ──
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $email    = $_POST['email'];
+    $email    = trim($_POST['email'] ?? '');
     $password = $_POST['password'];
 
-    $sql    = "SELECT * FROM users WHERE email='$email'";
+    $email_safe = mysqli_real_escape_string($conn, $email);
+    $sql    = "SELECT * FROM users WHERE email='$email_safe'";
     $result = mysqli_query($conn, $sql);
 
     if (mysqli_num_rows($result) > 0) {
         $user = mysqli_fetch_assoc($result);
 
         if (password_verify($password, $user['password'])) {
+            if (isset($user['status']) && strtolower((string) $user['status']) !== 'active') {
+                header("Location: login.php?error=" . urlencode("Your account is inactive. Please contact the administrator."));
+                exit();
+            }
             $_SESSION['user_id']   = $user['id'];
             $_SESSION['full_name'] = $user['full_name'];
             $_SESSION['email']     = $user['email'];
             $_SESSION['role']      = $user['role'];
+            $_SESSION['permissions'] = $user['permissions'] ?? '';
 
             // Role-based redirection
             $role = strtolower($user['role']);
@@ -33,7 +39,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     header("Location: student_profile_form.php");
                 }
             } elseif ($role == "hr") {
-                header("Location: hr_applications.php");
+                header("Location: hr_dashboard.php");
+            } elseif ($role == "recruiter") {
+                header("Location: postings.php");
             } elseif ($role == "mentor") {
                 header("Location: mentor_dashboard.php");
             } elseif ($role == "coordinator") {
@@ -264,7 +272,7 @@ if (isset($_GET['success'])) $success_msg = htmlspecialchars(urldecode($_GET['su
 <div>
 <div class="flex justify-between mb-1.5">
 <label class="block font-label-md text-label-md text-on-surface-variant">Password</label>
-<a class="font-label-sm text-label-sm text-primary hover:underline" href="#">Forgot?</a>
+<a class="font-label-sm text-label-sm text-primary hover:underline" href="forgot_password.php">Forgot?</a>
 </div>
 <div class="relative">
 <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-lg" data-icon="lock">lock</span>
@@ -328,9 +336,6 @@ document.getElementById('login-form').addEventListener('submit', function(e) {
             iconSpan.textContent = 'sync';
             iconSpan.classList.add('animate-spin');
         }
-        setTimeout(() => {
-            btn.disabled = true;
-        }, 10);
     }
 });
 </script>

@@ -1,426 +1,746 @@
-<!DOCTYPE html><html class="light" lang="en"><head>
-<meta charset="utf-8">
-<meta content="width=device-width, initial-scale=1.0" name="viewport">
-<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
-<script id="tailwind-config">
-      tailwind.config = {
-        darkMode: "class",
-        theme: {
-          extend: {
-            "colors": {
-                    "on-surface-variant": "#434655",
-                    "secondary-fixed-dim": "#c0c7d0",
-                    "on-primary-container": "#eeefff",
-                    "surface-container-low": "#f3f4f5",
-                    "primary-fixed": "#dbe1ff",
-                    "outline": "#737686",
-                    "secondary": "#585f67",
-                    "tertiary-container": "#bc4800",
-                    "error": "#ba1a1a",
-                    "primary-container": "#2563eb",
-                    "surface": "#f8f9fa",
-                    "on-primary-fixed-variant": "#003ea8",
-                    "on-primary": "#ffffff",
-                    "on-secondary-container": "#5e656d",
-                    "on-background": "#191c1d",
-                    "surface-container": "#edeeef",
-                    "on-tertiary": "#ffffff",
-                    "on-secondary": "#ffffff",
-                    "secondary-fixed": "#dce3ec",
-                    "on-tertiary-container": "#ffede6",
-                    "on-tertiary-fixed-variant": "#7d2d00",
-                    "outline-variant": "#c3c6d7",
-                    "inverse-primary": "#b4c5ff",
-                    "secondary-container": "#dce3ec",
-                    "surface-dim": "#d9dadb",
-                    "on-surface": "#191c1d",
-                    "on-secondary-fixed-variant": "#40484f",
-                    "inverse-surface": "#2e3132",
-                    "on-error": "#ffffff",
-                    "background": "#f8f9fa",
-                    "primary": "#004ac6",
-                    "tertiary": "#943700",
-                    "tertiary-fixed": "#ffdbcd",
-                    "surface-variant": "#e1e3e4",
-                    "surface-container-highest": "#e1e3e4",
-                    "on-tertiary-fixed": "#360f00",
-                    "surface-container-lowest": "#ffffff",
-                    "error-container": "#ffdad6",
-                    "on-primary-fixed": "#00174b",
-                    "surface-tint": "#0053db",
-                    "primary-fixed-dim": "#b4c5ff",
-                    "on-error-container": "#93000a",
-                    "surface-bright": "#f8f9fa",
-                    "inverse-on-surface": "#f0f1f2",
-                    "on-secondary-fixed": "#151c23",
-                    "surface-container-high": "#e7e8e9",
-                    "tertiary-fixed-dim": "#ffb596"
-            },
-            "borderRadius": {
-                    "DEFAULT": "0.25rem",
-                    "lg": "0.5rem",
-                    "xl": "0.75rem",
-                    "full": "9999px"
-            },
-            "spacing": {
-                    "xl": "32px",
-                    "lg": "24px",
-                    "container-margin": "40px",
-                    "md": "16px",
-                    "sm": "8px",
-                    "xs": "4px",
-                    "gutter": "20px",
-                    "unit": "4px"
-            },
-            "fontFamily": {
-                    "body-lg": ["Inter"],
-                    "label-md": ["Inter"],
-                    "body-md": ["Inter"],
-                    "h1": ["Inter"],
-                    "label-sm": ["Inter"],
-                    "h3": ["Inter"],
-                    "h2": ["Inter"]
-            },
-            "fontSize": {
-                    "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
-                    "label-md": ["14px", {"lineHeight": "20px", "fontWeight": "500"}],
-                    "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
-                    "h1": ["30px", {"lineHeight": "38px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
-                    "label-sm": ["12px", {"lineHeight": "16px", "fontWeight": "600"}],
-                    "h3": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
-                    "h2": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}]
+<?php
+session_start();
+include_once __DIR__ . '/includes/auth.php';
+require_role('mentor');
+include 'db.php';
+include_once __DIR__ . '/includes/hr_module_helpers.php';
+ensure_module_schema($conn);
+
+$mentor_id = current_user_id();
+$success_msg = "";
+$error_msg = "";
+
+// Generate CSRF token if not set
+generate_csrf_token();
+
+// Handle Quick Feedback Form Submission
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_feedback'])) {
+    if (!validate_csrf_token($_POST['csrf_token'] ?? '')) {
+        $error_msg = "CSRF security check failed.";
+    } else {
+        $student_id = intval($_POST['student_id']);
+        $status = $_POST['status'] ?? 'Reviewed';
+        $comments = trim($_POST['comments'] ?? '');
+        
+        // Find latest daily log for this student
+        $log_stmt = $conn->prepare("SELECT id, internship_id, application_id FROM daily_logs WHERE user_id = ? ORDER BY log_date DESC LIMIT 1");
+        $log_stmt->bind_param('i', $student_id);
+        $log_stmt->execute();
+        $latest_log = $log_stmt->get_result()->fetch_assoc();
+        
+        if ($latest_log) {
+            $log_id = $latest_log['id'];
+            $app_id = $latest_log['application_id'];
+            $internship_id = $latest_log['internship_id'];
+            
+            mysqli_begin_transaction($conn);
+            try {
+                // Update daily logs
+                $up_stmt = $conn->prepare("UPDATE daily_logs SET status = ?, mentor_feedback = ?, reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP WHERE id = ?");
+                $up_stmt->bind_param('ssii', $status, $comments, $mentor_id, $log_id);
+                $up_stmt->execute();
+                
+                // Insert into mentor_feedback
+                $fb_title = "Quick Evaluation (" . date('Y-m-d') . ")";
+                $mentor_name = $_SESSION['full_name'] ?? 'Mentor';
+                $fb_stmt = $conn->prepare("INSERT INTO mentor_feedback (user_id, log_id, feedback_title, given_by, comments, status) VALUES (?, ?, ?, ?, ?, ?)");
+                $fb_stmt->bind_param('iissss', $student_id, $log_id, $fb_title, $mentor_name, $comments, $status);
+                $fb_stmt->execute();
+                
+                // Log action in activity logs
+                $act_details = "Submitted quick evaluation for student #" . $student_id . " log ID " . $log_id . " as status: " . $status;
+                log_activity($conn, 'Mentor Log Review', $act_details);
+                $act_stmt = $conn->prepare("INSERT INTO mentor_activity_logs (mentor_id, action_type, student_id, log_id, details) VALUES (?, 'review', ?, ?, ?)");
+                $act_stmt->bind_param('iiis', $mentor_id, $student_id, $log_id, $act_details);
+                $act_stmt->execute();
+
+                
+                // Notify student
+                $notif_msg = "Your mentor reviewed your latest daily log and marked it: " . $status;
+                $notif_stmt = $conn->prepare("INSERT INTO student_notifications (user_id, title, type, message) VALUES (?, 'Log Evaluated', 'mentor', ?)");
+                $notif_stmt->bind_param('is', $student_id, $notif_msg);
+                $notif_stmt->execute();
+                
+                mysqli_commit($conn);
+                $success_msg = "Feedback submitted successfully!";
+            } catch (Exception $e) {
+                mysqli_rollback($conn);
+                $error_msg = "Failed to submit feedback: " . $e->getMessage();
             }
-          },
-        },
-      }
-    </script>
-<style>
-        .material-symbols-outlined {
-            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        } else {
+            $error_msg = "No daily logs found for the selected student to evaluate.";
         }
-        body { font-family: 'Inter', sans-serif; }
-    </style>
-</head>
-<body class="bg-background text-on-background" data-mode="connect">
-<!-- SideNavBar -->
-<aside class="fixed left-0 top-0 h-screen w-60 z-50 bg-gray-50 border-r border-gray-200 flex flex-col py-6">
-<div class="px-6 mb-8">
-    <a href="index.html" class="flex items-center gap-2 hover:opacity-95 transition-opacity">
-        <svg class="w-8 h-8 text-blue-600 shrink-0" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect width="32" height="32" rx="8" fill="currentColor"/>
-            <circle cx="16" cy="16" r="3" fill="white"/>
-            <line x1="16" y1="13" x2="16" y2="9" stroke="white" stroke-width="1.5"/>
-            <circle cx="16" cy="8" r="1.5" fill="white"/>
-            <line x1="18.5" y1="15.1" x2="22.5" y2="13.8" stroke="white" stroke-width="1.5"/>
-            <circle cx="23.5" cy="13.5" r="1.5" fill="white"/>
-            <line x1="17.8" y1="18.4" x2="20.0" y2="21.5" stroke="white" stroke-width="1.5"/>
-            <circle cx="20.7" cy="22.5" r="1.5" fill="white"/>
-            <line x1="14.2" y1="18.4" x2="12.0" y2="21.5" stroke="white" stroke-width="1.5"/>
-            <circle cx="11.3" cy="22.5" r="1.5" fill="white"/>
-            <line x1="13.5" y1="15.1" x2="9.5" y2="13.8" stroke="white" stroke-width="1.5"/>
-            <circle cx="8.5" cy="13.5" r="1.5" fill="white"/>
-        </svg>
-        <span class="text-xl font-bold text-blue-600 tracking-tight">IMP</span>
-    </a>
-    <p class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-2 ml-1">Mentor Portal</p>
-</div>
-<nav class="flex-1 space-y-1">
-<a class="flex items-center gap-3 bg-blue-50 text-blue-700 border-l-4 border-blue-600 px-4 py-3 font-sans text-sm font-medium duration-200 ease-in-out" href="#">
-<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
-                Dashboard
-            </a>
-<a class="flex items-center gap-3 text-gray-600 px-4 py-3 font-sans text-sm font-medium hover:bg-gray-100 duration-200 ease-in-out" href="#">
-<span class="material-symbols-outlined" data-icon="work">work</span>
-                Postings
-            </a>
-<a class="flex items-center gap-3 text-gray-600 px-4 py-3 font-sans text-sm font-medium hover:bg-gray-100 duration-200 ease-in-out" href="#">
-<span class="material-symbols-outlined" data-icon="group">group</span>
-                Candidates
-            </a>
-<a class="flex items-center gap-3 text-gray-600 px-4 py-3 font-sans text-sm font-medium hover:bg-gray-100 duration-200 ease-in-out" href="#">
-<span class="material-symbols-outlined" data-icon="account_tree">account_tree</span>
-                Workflows
-            </a>
-<a class="flex items-center gap-3 text-gray-600 px-4 py-3 font-sans text-sm font-medium hover:bg-gray-100 duration-200 ease-in-out" href="mentor_daily_logs.html">
-<span class="material-symbols-outlined" data-icon="rate_review">rate_review</span>
-                Review Daily Logs
-            </a>
-<a class="flex items-center gap-3 text-gray-600 px-4 py-3 font-sans text-sm font-medium hover:bg-gray-100 duration-200 ease-in-out" href="#">
-<span class="material-symbols-outlined" data-icon="analytics">analytics</span>
-                Reports
-            </a>
-<a class="flex items-center gap-3 text-gray-600 px-4 py-3 font-sans text-sm font-medium hover:bg-gray-100 duration-200 ease-in-out" href="#">
-<span class="material-symbols-outlined" data-icon="manage_accounts">manage_accounts</span>
-                Users
-            </a>
-</nav>
-<div class="mt-auto border-t border-gray-200 pt-4">
-<a class="flex items-center gap-3 text-gray-600 px-4 py-3 font-sans text-sm font-medium hover:bg-gray-100 duration-200 ease-in-out" href="#">
-<span class="material-symbols-outlined" data-icon="help">help</span>
-                Help Center
-            </a>
-<a class="flex items-center gap-3 text-gray-600 px-4 py-3 font-sans text-sm font-medium hover:bg-gray-100 duration-200 ease-in-out" href="index.html">
-<span class="material-symbols-outlined" data-icon="logout">logout</span>
-                Logout
-            </a>
-</div>
-</aside>
-<main class="ml-60 min-h-screen">
-<!-- TopNavBar -->
-<header class="w-full sticky top-0 z-40 bg-white border-b border-gray-200 shadow-sm flex items-center justify-between px-6 py-3">
-<div class="flex items-center gap-4">
-<a href="index.html" class="text-xl font-bold text-blue-600 font-sans hover:opacity-80 transition-opacity cursor-pointer block">IMP</a>
-<div class="relative">
-<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-sm" data-icon="search">search</span>
-<input class="pl-10 pr-4 py-1.5 bg-surface-container-low border-none rounded-lg text-sm w-64 focus:ring-2 focus:ring-primary" placeholder="Search interns or logs..." type="text">
-</div>
-</div>
-<div class="flex items-center gap-4">
-<button class="p-2 text-gray-500 hover:bg-gray-50 rounded-full transition-colors cursor-pointer active:opacity-80">
-<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
-</button>
-<button class="p-2 text-gray-500 hover:bg-gray-50 rounded-full transition-colors cursor-pointer active:opacity-80">
-<span class="material-symbols-outlined" data-icon="settings">settings</span>
-</button>
-<div class="h-8 w-8 rounded-full overflow-hidden border border-gray-200 cursor-pointer active:opacity-80">
-<img alt="User profile" data-alt="A professional headshot of a corporate mentor in a bright, modern office setting. The lighting is soft and natural, emphasizing a friendly but authoritative demeanor. The background features blurred architectural glass and steel elements typical of a high-end tech firm in light mode." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDH3mrV27J_1bJrhVVbd0ZWHTNHxSwwZtuMBXhoYsUzk1WQUTFep1Clc8Ajggrn92eRa1b8XMISEXvvbeBbXxESFa-cn4N8yMkXaJCB4U5HHdemi525yQaUBEi2wF1paKEUJ1kvtGeQir2UR0636kFnK6Swgz7xicReWvy3-NsmWkvWVD9HD2LMsZFVMJwCKskA_4jh2BYQNME8r0xi58_lMe59TdX4eWD6nPfWI8gNF-hzLlzmRhc-dvINpy8kzDaHaNWdZgDWng" class="">
-</div>
-</div>
-</header>
-<div class="p-xl space-y-lg">
-<!-- Welcome Section -->
-<section class="flex justify-between items-end">
-<div>
-<h1 class="font-h1 text-h1 text-on-surface">Mentor<span style="letter-spacing: -0.02em;" class="">&nbsp;Dashboard</span></h1>
-<p class="font-body-md text-body-md text-on-surface-variant">Welcome back, Sarah. You have 3 pending log reviews and a 1:1 scheduled today.</p>
-</div>
-<div class="flex gap-sm">
-<button class="bg-primary-container text-white px-lg py-sm rounded-lg font-label-md text-label-md shadow-sm hover:brightness-110 transition-all flex items-center gap-2">
-<span class="material-symbols-outlined" data-icon="add" style="font-size: 18px;">add</span>
-                        New Feedback
-                    </button>
-</div>
-</section>
-<!-- Main Bento Grid -->
-<div class="grid grid-cols-12 gap-gutter">
-<!-- Assigned Interns - High Density Cards -->
-<div class="col-span-12 lg:col-span-8 bg-surface-container-lowest rounded-xl shadow-sm p-lg">
-<div class="flex justify-between items-center mb-md">
-<h3 class="font-h3 text-h3 text-on-surface">Assigned Interns</h3>
-<a class="text-primary font-label-sm text-label-sm" href="#">View All</a>
-</div>
-<div class="grid grid-cols-1 md:grid-cols-2 gap-md">
-<!-- Intern Card 1 -->
-<div class="border border-outline-variant rounded-lg p-md hover:shadow-md transition-shadow">
-<div class="flex items-start justify-between">
-<div class="flex gap-md">
-<img class="w-12 h-12 rounded-full object-cover" data-alt="A candid, professional portrait of a young male intern smiling confidently. He is wearing a smart-casual blazer against a clean, minimalist white brick wall. The aesthetic is professional, bright, and modern, fitting a high-end corporate internship program." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCA1fvZd920qzy5qvjzoE7xGgavXO_Qv8citNDOw9ktIZeVvZVfGJhkVegrr_dq1qjOULsqaO3R9jHVv0QgC2OEGDyTb2n39IbFDhgeuKU9I1oNVVvScBrmqUlL6PwMMyWHnZynxPLboRe4Lz7WjZ1AMbqfYs9KxTXyNOLNyr-kVLaD6ttTRjDbQGPztWcS5bLPa-xdI5EI-hjBsjIZeucq_szTUHNNuEDQF2Vrt8x_XmkRWh2w_gRv-ReWV8KgXt756jwd68_ydg">
-<div>
-<h4 class="font-label-md text-label-md text-on-surface">Marcus Chen</h4>
-<p class="font-body-md text-body-md text-on-surface-variant">Product Design Intern</p>
-</div>
-</div>
-<span class="bg-green-100 text-green-700 px-xs py-[2px] rounded font-label-sm text-[10px] uppercase tracking-wider">Active</span>
-</div>
-<div class="mt-md space-y-xs">
-<div class="flex justify-between text-[11px] font-label-sm text-on-surface-variant">
-<span class="">Weekly Progress</span>
-<span class="">85%</span>
-</div>
-<div class="w-full bg-surface-container h-1.5 rounded-full overflow-hidden">
-<div class="bg-primary h-full" style="width: 85%"></div>
-</div>
-</div>
-</div>
-<!-- Intern Card 2 -->
-<div class="border border-outline-variant rounded-lg p-md hover:shadow-md transition-shadow">
-<div class="flex items-start justify-between">
-<div class="flex gap-md">
-<img class="w-12 h-12 rounded-full object-cover" data-alt="A portrait of a young female intern with a bright, enthusiastic expression. She is in a collaborative office environment with soft focus plants and warm lighting in the background. The visual style is professional and energetic, representing a thriving corporate culture." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAMh-JsdYyAb-doNQ-r1LQNKWXcYqNnghM-204CUvZ1EkUKITwgH-TFnINyoRsKvPPMvQH4gv38O2SS2S64HijEYp2h_s2j0uiNFF5WiBVUFukcPArsmSkgFiPdIqYcuZNVPLcl10Rqk6KXH5Rv7NnSNkoFORVXY6-IghVQRYIrJngSlS5QvPtJ-0jXnrmGVuD-4t-Wq1Tbl5UcIcCO6DOoz2C8qsx2GuchIKWC2Fa7m3IKMm9FGHapfVq3DD3wb7yccrbzereKBA">
-<div>
-<h4 class="font-label-md text-label-md text-on-surface">Elena Rodriguez</h4>
-<p class="font-body-md text-body-md text-on-surface-variant">Software Eng Intern</p>
-</div>
-</div>
-<span class="bg-amber-100 text-amber-700 px-xs py-[2px] rounded font-label-sm text-[10px] uppercase tracking-wider">Pending Log</span>
-</div>
-<div class="mt-md space-y-xs">
-<div class="flex justify-between text-[11px] font-label-sm text-on-surface-variant">
-<span class="">Weekly Progress</span>
-<span class="">62%</span>
-</div>
-<div class="w-full bg-surface-container h-1.5 rounded-full overflow-hidden">
-<div class="bg-primary h-full" style="width: 62%"></div>
-</div>
-</div>
-</div>
-</div>
-</div>
-<!-- Calendar View - Asymmetric Layout -->
-<div class="col-span-12 lg:col-span-4 bg-surface-container-lowest rounded-xl shadow-sm p-lg">
-<h3 class="font-h3 text-h3 text-on-surface mb-md">1:1 Schedule</h3>
-<div class="space-y-md">
-<div class="flex items-center gap-md p-md bg-surface-container-low rounded-lg border-l-4 border-primary">
-<div class="text-center min-w-[40px]">
-<span class="block font-label-sm text-label-sm text-primary">TODAY</span>
-<span class="block font-h2 text-h2 text-on-surface">14</span>
-</div>
-<div class="flex-1">
-<p class="font-label-md text-label-md text-on-surface">Elena Rodriguez</p>
-<p class="font-body-md text-body-md text-on-surface-variant">Weekly Sync • 2:00 PM</p>
-</div>
-<button class="p-2 text-primary hover:bg-primary/5 rounded-full">
-<span class="material-symbols-outlined" data-icon="videocam">videocam</span>
-</button>
-</div>
-<div class="flex items-center gap-md p-md border border-outline-variant rounded-lg">
-<div class="text-center min-w-[40px]">
-<span class="block font-label-sm text-label-sm text-on-surface-variant">WED</span>
-<span class="block font-h2 text-h2 text-on-surface-variant">16</span>
-</div>
-<div class="flex-1">
-<p class="font-label-md text-label-md text-on-surface">Marcus Chen</p>
-<p class="font-body-md text-body-md text-on-surface-variant">Sprint Review • 10:30 AM</p>
-</div>
-</div>
-</div>
-</div>
-<!-- Daily Log Review Section - Data Table Style -->
-<div class="col-span-12 lg:col-span-7 bg-surface-container-lowest rounded-xl shadow-sm overflow-hidden">
-<div class="p-lg flex justify-between items-center">
-<h3 class="font-h3 text-h3 text-on-surface">Recent Logs</h3>
-<div class="flex gap-xs">
-<button class="p-1.5 bg-surface-container-high rounded text-on-surface-variant">
-<span class="material-symbols-outlined text-[18px]" data-icon="filter_list">filter_list</span>
-</button>
-</div>
-</div>
-<table class="w-full">
-<thead class="bg-surface-container-low">
-<tr>
-<th class="text-left py-3 px-lg font-label-sm text-label-sm text-on-surface-variant">Intern</th>
-<th class="text-left py-3 px-lg font-label-sm text-label-sm text-on-surface-variant">Date</th>
-<th class="text-left py-3 px-lg font-label-sm text-label-sm text-on-surface-variant">Status</th>
-<th class="text-right py-3 px-lg font-label-sm text-label-sm text-on-surface-variant">Action</th>
-</tr>
-</thead>
-<tbody class="divide-y divide-surface-container">
-<tr class="hover:bg-gray-50 transition-colors">
-<td class="py-md px-lg">
-<div class="flex items-center gap-sm">
-<div class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-xs">MC</div>
-<span class="font-body-md text-body-md text-on-surface">Marcus Chen</span>
-</div>
-</td>
-<td class="py-md px-lg font-body-md text-body-md text-on-surface-variant">Oct 12, 2023</td>
-<td class="py-md px-lg">
-<span class="inline-flex items-center gap-1.5 py-0.5 px-2 rounded-full bg-blue-50 text-blue-700 text-[11px] font-label-sm">
-<span class="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
-                                        REVIEWED
-                                    </span>
-</td>
-<td class="py-md px-lg text-right">
-<button class="text-primary font-label-sm text-label-sm hover:underline">Review</button>
-</td>
-</tr>
-<tr class="hover:bg-gray-50 transition-colors">
-<td class="py-md px-lg">
-<div class="flex items-center gap-sm">
-<div class="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-700 font-bold text-xs">ER</div>
-<span class="font-body-md text-body-md text-on-surface">Elena Rodriguez</span>
-</div>
-</td>
-<td class="py-md px-lg font-body-md text-body-md text-on-surface-variant">Oct 14, 2023</td>
-<td class="py-md px-lg">
-<span class="inline-flex items-center gap-1.5 py-0.5 px-2 rounded-full bg-amber-50 text-amber-700 text-[11px] font-label-sm">
-<span class="w-1.5 h-1.5 rounded-full bg-amber-600"></span>
-                                        SUBMITTED
-                                    </span>
-</td>
-<td class="py-md px-lg text-right">
-<button class="bg-primary text-white py-1 px-3 rounded text-label-sm shadow-sm hover:brightness-110">Grade</button>
-</td>
-</tr>
-</tbody>
-</table>
-</div>
-<!-- Feedback Submission Form - Minimalist Sidebar-style Card -->
-<div class="col-span-12 lg:col-span-5 flex flex-col gap-gutter">
+    }
+}
 
-<!-- Mentor Notifications -->
-<div class="bg-surface-container-lowest rounded-xl shadow-sm p-lg border border-gray-100">
-    <div class="flex items-center justify-between mb-4">
-        <h3 class="font-h3 text-h3 text-on-surface flex items-center gap-2"><span class="material-symbols-outlined text-orange-500">notifications_active</span> Alerts</h3>
-        <span class="bg-red-100 text-red-700 text-[10px] font-bold px-2 py-0.5 rounded-full">2 New</span>
+// Compute Statistics
+// 1. Assigned Interns
+$assigned_stmt = $conn->prepare("SELECT COUNT(*) as count FROM mentor_assignments WHERE mentor_id = ? AND status = 'active'");
+$assigned_stmt->bind_param('i', $mentor_id);
+$assigned_stmt->execute();
+$assigned_count = $assigned_stmt->get_result()->fetch_assoc()['count'] ?? 0;
+
+// 2. Active Interns (Submitted log in the last 7 days)
+$active_stmt = $conn->prepare("SELECT COUNT(DISTINCT ma.student_id) as count FROM mentor_assignments ma JOIN daily_logs dl ON ma.student_id = dl.user_id WHERE ma.mentor_id = ? AND ma.status = 'active' AND dl.log_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)");
+$active_stmt->bind_param('i', $mentor_id);
+$active_stmt->execute();
+$active_count = $active_stmt->get_result()->fetch_assoc()['count'] ?? 0;
+
+// Consolidated counts from daily_logs grouped by status
+$status_counts_stmt = $conn->prepare("
+    SELECT dl.status, COUNT(*) as count
+    FROM daily_logs dl
+    JOIN mentor_assignments ma ON dl.user_id = ma.student_id AND dl.application_id = ma.application_id
+    WHERE ma.mentor_id = ? AND ma.status = 'active'
+    GROUP BY dl.status
+");
+$status_counts_stmt->bind_param('i', $mentor_id);
+$status_counts_stmt->execute();
+$status_rows = $status_counts_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+
+$log_counts = [
+    LOG_STATUS_SUBMITTED => 0,
+    LOG_STATUS_APPROVED => 0,
+    LOG_STATUS_REVIEWED => 0,
+    LOG_STATUS_NEEDS_UPDATE => 0
+];
+$total_logs = 0;
+foreach ($status_rows as $row) {
+    if (array_key_exists($row['status'], $log_counts)) {
+        $log_counts[$row['status']] = intval($row['count']);
+    }
+    $total_logs += intval($row['count']);
+}
+
+// 3. Pending Daily Logs (Submitted status)
+$pending_count = $log_counts[LOG_STATUS_SUBMITTED];
+
+// 4. Reviewed Logs (Reviewed + Approved statuses)
+$reviewed_count = $log_counts[LOG_STATUS_REVIEWED] + $log_counts[LOG_STATUS_APPROVED];
+
+// 5. Needs Update Count (Revisions status)
+$needs_update_count = $log_counts[LOG_STATUS_NEEDS_UPDATE];
+
+// 6. Completion Percentage (Approved / Total logs)
+$completion_pct = 0.0;
+if ($total_logs > 0) {
+    $completion_pct = round(($log_counts[LOG_STATUS_APPROVED] / $total_logs) * 100, 1);
+}
+// 7. Overdue Submissions
+$yesterday = date('Y-m-d', strtotime('-1 day'));
+$today = date('Y-m-d');
+$day_of_week = date('N');
+if ($day_of_week == 1) { // Monday
+    $yesterday = date('Y-m-d', strtotime('-3 days')); // Friday
+}
+$overdue_stmt = $conn->prepare("
+    SELECT COUNT(DISTINCT ma.student_id) as count 
+    FROM mentor_assignments ma 
+    WHERE ma.mentor_id = ? AND ma.status = 'active'
+    AND ma.student_id NOT IN (
+        SELECT DISTINCT user_id 
+        FROM daily_logs 
+        WHERE log_date IN (?, ?)
+    )
+");
+$overdue_stmt->bind_param('iss', $mentor_id, $yesterday, $today);
+$overdue_stmt->execute();
+$overdue_count = $overdue_stmt->get_result()->fetch_assoc()['count'] ?? 0;
+
+// Alerts - Inactive Interns (no logs in last 3 days)
+$inactive_interns_stmt = $conn->prepare("
+    SELECT u.id, u.full_name, MAX(dl.log_date) as last_log_date
+    FROM mentor_assignments ma
+    JOIN users u ON ma.student_id = u.id
+    LEFT JOIN daily_logs dl ON u.id = dl.user_id
+    WHERE ma.mentor_id = ? AND ma.status = 'active'
+    GROUP BY u.id, u.full_name
+    HAVING last_log_date IS NULL OR last_log_date < DATE_SUB(CURDATE(), INTERVAL 3 DAY)
+");
+$inactive_interns_stmt->bind_param('i', $mentor_id);
+$inactive_interns_stmt->execute();
+$inactive_interns = $inactive_interns_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+
+// Alerts - Pending reviews older than 24 hours
+$old_pending_stmt = $conn->prepare("
+    SELECT dl.id, u.full_name, dl.log_date, dl.created_at
+    FROM daily_logs dl
+    JOIN users u ON dl.user_id = u.id
+    JOIN mentor_assignments ma ON dl.user_id = ma.student_id AND dl.application_id = ma.application_id
+    WHERE ma.mentor_id = ? AND ma.status = 'active' AND dl.status = 'Submitted'
+    AND dl.created_at < DATE_SUB(NOW(), INTERVAL 24 HOUR)
+");
+$old_pending_stmt->bind_param('i', $mentor_id);
+$old_pending_stmt->execute();
+$old_pendings = $old_pending_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+
+// Fetch assigned interns list with average ratings and last log dates
+$interns_stmt = $conn->prepare("
+    SELECT 
+        u.id, 
+        u.full_name, 
+        u.email, 
+        app.internship_name, 
+        app.id as application_id,
+        COUNT(dl.id) as total_logs,
+        COUNT(CASE WHEN dl.status = 'Approved' THEN 1 END) as approved_logs,
+        AVG(CASE WHEN dl.mentor_rating > 0 THEN dl.mentor_rating ELSE NULL END) as avg_rating,
+        MAX(dl.log_date) as last_log_date
+    FROM mentor_assignments ma
+    JOIN users u ON ma.student_id = u.id
+    JOIN internship_applications app ON ma.application_id = app.id
+    LEFT JOIN daily_logs dl ON u.id = dl.user_id AND app.id = dl.application_id
+    WHERE ma.mentor_id = ? AND ma.status = 'active'
+    GROUP BY u.id, u.full_name, u.email, app.internship_name, app.id
+");
+$interns_stmt->bind_param('i', $mentor_id);
+$interns_stmt->execute();
+$interns_list = $interns_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+
+// Fetch recent log submissions
+$recent_logs_stmt = $conn->prepare("
+    SELECT 
+        dl.id, 
+        dl.log_date, 
+        dl.status, 
+        u.full_name as student_name,
+        u.id as student_id
+    FROM daily_logs dl
+    JOIN users u ON dl.user_id = u.id
+    JOIN mentor_assignments ma ON dl.user_id = ma.student_id AND dl.application_id = ma.application_id
+    WHERE ma.mentor_id = ? AND ma.status = 'active'
+    ORDER BY dl.log_date DESC, dl.created_at DESC
+    LIMIT 5
+");
+$recent_logs_stmt->bind_param('i', $mentor_id);
+$recent_logs_stmt->execute();
+$recent_logs = $recent_logs_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+
+// Fetch recent activity
+$activity_stmt = $conn->prepare("
+    SELECT action_type, details, created_at
+    FROM mentor_activity_logs
+    WHERE mentor_id = ?
+    ORDER BY created_at DESC
+    LIMIT 4
+");
+$activity_stmt->bind_param('i', $mentor_id);
+$activity_stmt->execute();
+$activities = $activity_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+
+// Fetch HOD pending applications where candidate's status is 'HR Round' and education_status is 'Pursuing' and hod_email matches mentor's email
+$mentor_email = $_SESSION['email'] ?? '';
+$hod_pending_list = [];
+if (!empty($mentor_email)) {
+    $hod_pending_stmt = $conn->prepare("
+        SELECT 
+            a.id, 
+            a.user_id, 
+            a.internship_name, 
+            a.education_status,
+            a.hod_name,
+            a.hod_email,
+            u.full_name as student_name, 
+            u.email as student_email
+        FROM internship_applications a
+        JOIN users u ON a.user_id = u.id
+        WHERE a.status = 'HR Round' 
+          AND a.education_status = 'Pursuing'
+          AND LOWER(TRIM(a.hod_email)) = LOWER(TRIM(?))
+          AND a.is_deleted = 0
+    ");
+    if ($hod_pending_stmt) {
+        $hod_pending_stmt->bind_param('s', $mentor_email);
+        $hod_pending_stmt->execute();
+        $hod_pending_list = $hod_pending_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    }
+}
+?>
+<?php
+$action_html = '<a href="export_logs.php" class="bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm">
+    <span class="material-symbols-outlined text-[16px]">download</span> Export Logs CSV
+</a>
+<a href="mentor_daily_logs.php" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm">
+    <span class="material-symbols-outlined text-[16px]">rate_review</span> Review Submissions
+</a>';
+
+page_shell_start('dashboard', 'Mentor Dashboard', 'Welcome back, ' . htmlspecialchars($_SESSION['full_name'] ?? 'Mentor') . '. You have ' . $pending_count . ' pending log reviews.', $action_html);
+?>
+<!-- Include Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<div class="space-y-6">
+    <!-- Toast alerts -->
+    <?php if ($success_msg !== ''): ?>
+        <div class="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-medium text-green-800 flex items-center gap-2">
+            <span class="material-symbols-outlined text-green-600">check_circle</span>
+            <span><?php echo htmlspecialchars($success_msg); ?></span>
+        </div>
+    <?php endif; ?>
+    <?php if ($error_msg !== ''): ?>
+        <div class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800 flex items-center gap-2">
+            <span class="material-symbols-outlined text-red-600">error</span>
+            <span><?php echo htmlspecialchars($error_msg); ?></span>
+        </div>
+    <?php endif; ?>
+
+    <!-- Stats Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <!-- Assigned Interns -->
+        <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-[0_4px_20px_rgba(241,245,249,0.5)] flex items-start justify-between">
+            <div>
+                <p class="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Assigned Interns</p>
+                <p class="text-2xl font-black text-slate-800 mt-1.5"><?php echo $assigned_count; ?></p>
+                <span class="text-[10px] text-blue-600 font-bold block mt-1">Active assignments</span>
+            </div>
+            <div class="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                <span class="material-symbols-outlined text-[20px]">group</span>
+            </div>
+        </div>
+        <!-- Active Interns -->
+        <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-[0_4px_20px_rgba(241,245,249,0.5)] flex items-start justify-between">
+            <div>
+                <p class="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Active (7d)</p>
+                <p class="text-2xl font-black text-emerald-600 mt-1.5"><?php echo $active_count; ?></p>
+                <span class="text-[10px] text-emerald-600 font-bold block mt-1">Logs sent recently</span>
+            </div>
+            <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                <span class="material-symbols-outlined text-[20px]">bolt</span>
+            </div>
+        </div>
+        <!-- Pending Logs -->
+        <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-[0_4px_20px_rgba(241,245,249,0.5)] flex items-start justify-between">
+            <div>
+                <p class="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Pending Logs</p>
+                <p class="text-2xl font-black text-amber-500 mt-1.5"><?php echo $pending_count; ?></p>
+                <span class="text-[10px] text-amber-650 font-bold block mt-1">Awaiting evaluation</span>
+            </div>
+            <div class="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+                <span class="material-symbols-outlined text-[20px]">hourglass_empty</span>
+            </div>
+        </div>
+        <!-- Reviewed Logs -->
+        <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-[0_4px_20px_rgba(241,245,249,0.5)] flex items-start justify-between">
+            <div>
+                <p class="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Reviewed Logs</p>
+                <p class="text-2xl font-black text-blue-600 mt-1.5"><?php echo $reviewed_count; ?></p>
+                <span class="text-[10px] text-slate-400 font-bold block mt-1">Approved & reviewed</span>
+            </div>
+            <div class="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
+                <span class="material-symbols-outlined text-[20px]">done_all</span>
+            </div>
+        </div>
+        <!-- Overdue Interns -->
+        <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-[0_4px_20px_rgba(241,245,249,0.5)] flex items-start justify-between">
+            <div>
+                <p class="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Overdue Interns</p>
+                <p class="text-2xl font-black text-red-600 mt-1.5"><?php echo $overdue_count; ?></p>
+                <span class="text-[10px] text-red-600 font-bold block mt-1">No logs > 3 days</span>
+            </div>
+            <div class="w-10 h-10 rounded-xl bg-red-50 text-red-600 flex items-center justify-center shrink-0">
+                <span class="material-symbols-outlined text-[20px]">warning</span>
+            </div>
+        </div>
+        <!-- Completion -->
+        <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-[0_4px_20px_rgba(241,245,249,0.5)] flex items-start justify-between">
+            <div>
+                <p class="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Completion</p>
+                <p class="text-2xl font-black text-indigo-600 mt-1.5"><?php echo $completion_pct; ?>%</p>
+                <span class="text-[10px] text-slate-400 font-bold block mt-1">Avg progress rate</span>
+            </div>
+            <div class="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                <span class="material-symbols-outlined text-[20px]">stars</span>
+            </div>
+        </div>
     </div>
-    <div class="space-y-3">
-        <div class="flex items-start gap-3 p-3 bg-red-50 rounded-lg">
-            <span class="material-symbols-outlined text-red-500 text-sm mt-0.5">error</span>
-            <div><p class="text-xs font-bold text-red-800">Issue/Blocker Reported</p><p class="text-[11px] text-red-600 mt-0.5">Marcus Chen is blocked on API integration.</p></div>
+
+            <!-- Main Grid -->
+            <div class="grid grid-cols-12 gap-6">
+                <!-- Academic Approvals (HOD Role) -->
+                <div class="col-span-12 bg-white rounded-2xl shadow-sm border border-slate-100 p-6 space-y-4">
+                    <div class="flex justify-between items-center">
+                        <h3 class="text-lg font-black text-slate-800 tracking-tight flex items-center gap-2">
+                            <span class="material-symbols-outlined text-blue-600">verified_user</span>
+                            Academic Approvals (HOD Role)
+                        </h3>
+                        <span class="text-xs font-bold text-slate-400 bg-slate-50 px-2.5 py-0.5 rounded-lg border border-slate-100"><?php echo count($hod_pending_list); ?> Pending</span>
+                    </div>
+                    
+                    <?php if (empty($hod_pending_list)): ?>
+                        <p class="text-xs text-slate-400 font-bold py-2">No pending applications requiring academic approval.</p>
+                    <?php else: ?>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-sm">
+                                <thead class="bg-slate-50 border-b border-slate-100">
+                                    <tr>
+                                        <th class="py-3 px-4 text-slate-500 font-bold text-xs">Student</th>
+                                        <th class="py-3 px-4 text-slate-500 font-bold text-xs">Email</th>
+                                        <th class="py-3 px-4 text-slate-500 font-bold text-xs">Internship</th>
+                                        <th class="py-3 px-4 text-slate-500 font-bold text-xs">HOD Info</th>
+                                        <th class="py-3 px-4 text-slate-500 font-bold text-xs text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100">
+                                    <?php foreach ($hod_pending_list as $app): ?>
+                                        <tr class="hover:bg-slate-50/50 transition-colors" id="hod-row-<?php echo $app['id']; ?>">
+                                            <td class="py-4 px-4 font-semibold text-slate-800"><?php echo htmlspecialchars($app['student_name']); ?></td>
+                                            <td class="py-4 px-4 text-slate-500"><?php echo htmlspecialchars($app['student_email']); ?></td>
+                                            <td class="py-4 px-4 text-slate-550"><?php echo htmlspecialchars($app['internship_name']); ?></td>
+                                            <td class="py-4 px-4 text-xs text-slate-400">
+                                                <strong>Name:</strong> <?php echo htmlspecialchars($app['hod_name'] ?? ''); ?><br>
+                                                <strong>Email:</strong> <?php echo htmlspecialchars($app['hod_email'] ?? ''); ?>
+                                            </td>
+                                            <td class="py-4 px-4 text-right space-x-2 whitespace-nowrap">
+                                                <button onclick="handleHodApproval(<?php echo $app['id']; ?>, 'HOD Approved')" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition shadow-sm cursor-pointer">
+                                                    Approve
+                                                </button>
+                                                <button onclick="handleHodApproval(<?php echo $app['id']; ?>, 'Rejected')" class="bg-red-650 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition shadow-sm cursor-pointer">
+                                                    Reject
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    <?php endif; ?>
+                </div>
+
+                <!-- Assigned Interns -->
+                <div class="col-span-12 lg:col-span-8 bg-white rounded-2xl shadow-sm border border-slate-100 p-6 space-y-4">
+                    <div class="flex justify-between items-center">
+                        <h3 class="text-lg font-black text-slate-800 tracking-tight">Assigned Interns</h3>
+                        <span class="text-xs font-bold text-slate-400 bg-slate-50 px-2.5 py-0.5 rounded-lg border border-slate-100"><?php echo count($interns_list); ?> Active</span>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <?php foreach ($interns_list as $intern): 
+                            $initial = strtoupper(substr($intern['full_name'], 0, 2));
+                            // Assume target 40 logs for program completion
+                            $progress_pct = 0;
+                            if ($intern['total_logs'] > 0) {
+                                $progress_pct = min(100, round(($intern['approved_logs'] / 40) * 100));
+                            }
+                            
+                            // Last seen indicator
+                            $last_active_str = 'No logs';
+                            $is_inactive_warning = false;
+                            if ($intern['last_log_date']) {
+                                $days_diff = (time() - strtotime($intern['last_log_date'])) / (60 * 60 * 24);
+                                if ($days_diff < 1) {
+                                    $last_active_str = 'Active Today';
+                                } else {
+                                    $days_int = floor($days_diff);
+                                    $last_active_str = "Active $days_int day" . ($days_int > 1 ? 's' : '') . ' ago';
+                                    if ($days_int >= 4) {
+                                        $is_inactive_warning = true;
+                                    }
+                                }
+                            }
+                            
+                            // Rating stars display
+                            $stars_html = '';
+                            if ($intern['avg_rating'] > 0) {
+                                $rating = round($intern['avg_rating'], 1);
+                                $full_stars = floor($rating);
+                                for ($i = 0; $i < 5; $i++) {
+                                    if ($i < $full_stars) {
+                                        $stars_html .= '★';
+                                    } else {
+                                        $stars_html .= '☆';
+                                    }
+                                }
+                                $rating_display = '<span class="text-amber-500 text-xs font-bold" title="Avg Rating: ' . $rating . '">' . $stars_html . ' <span class="text-[10px] text-slate-500 font-semibold">(' . $rating . ')</span></span>';
+                            } else {
+                                $rating_display = '<span class="text-slate-300 text-[10px] font-bold">No rating yet</span>';
+                            }
+                        ?>
+                            <div class="border border-slate-100 bg-slate-50/20 rounded-2xl p-4 flex flex-col justify-between hover:shadow-md transition-all duration-200">
+                                <div class="flex items-start justify-between gap-2">
+                                    <div class="flex gap-3">
+                                        <div class="w-10 h-10 rounded-xl bg-blue-50 text-blue-750 flex items-center justify-center font-bold text-sm shrink-0"><?php echo $initial; ?></div>
+                                        <div>
+                                            <h4 class="font-bold text-sm text-slate-800"><?php echo htmlspecialchars($intern['full_name']); ?></h4>
+                                            <p class="text-xs text-slate-400 font-semibold mt-0.5"><?php echo htmlspecialchars($intern['internship_name']); ?></p>
+                                        </div>
+                                    </div>
+                                    <div class="text-right">
+                                        <?php if ($is_inactive_warning): ?>
+                                            <span class="inline-flex items-center gap-0.5 text-[9px] font-bold text-red-600 bg-red-50 border border-red-100 px-1.5 py-0.5 rounded-md animate-pulse">
+                                                <span class="material-symbols-outlined text-[11px]">warning</span> Overdue
+                                            </span>
+                                        <?php else: ?>
+                                            <span class="text-[9px] font-bold text-slate-400 bg-slate-50 border border-slate-100 px-1.5 py-0.5 rounded-md">
+                                                <?php echo $last_active_str; ?>
+                                            </span>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                                <div class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+                                    <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Average Rating</div>
+                                    <?php echo $rating_display; ?>
+                                </div>
+                                <div class="mt-3 space-y-1">
+                                    <div class="flex justify-between text-[10px] font-bold text-slate-500">
+                                        <span>Logs: <?php echo $intern['total_logs']; ?></span>
+                                        <span>Approved: <?php echo $intern['approved_logs']; ?> (<?php echo $progress_pct; ?>%)</span>
+                                    </div>
+                                    <div class="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                                        <div class="bg-blue-600 h-full transition-all" style="width: <?php echo $progress_pct; ?>%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                        <?php if (empty($interns_list)): ?>
+                            <div class="col-span-2 text-center py-6 text-slate-400 text-sm">No interns assigned to you yet.</div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+
+                <!-- Alerts & Warnings -->
+                <div class="col-span-12 lg:col-span-4 bg-white rounded-2xl shadow-sm border border-slate-100 p-6 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-lg font-black text-slate-850 flex items-center gap-1.5"><span class="material-symbols-outlined text-orange-500">notifications_active</span> Overdue Alerts</h3>
+                            <?php 
+                                $total_alerts = count($inactive_interns) + count($old_pendings);
+                            ?>
+                            <span class="bg-red-100 text-red-700 text-[10px] font-bold px-2.5 py-0.5 rounded-full"><?php echo $total_alerts; ?> Alert(s)</span>
+                        </div>
+                        <div class="space-y-3">
+                            <!-- Inactive Interns -->
+                            <?php foreach ($inactive_interns as $alert): ?>
+                                <div class="flex items-start gap-3 p-3 bg-red-50 rounded-xl border border-red-100">
+                                    <span class="material-symbols-outlined text-red-500 text-sm mt-0.5">warning</span>
+                                    <div>
+                                        <p class="text-xs font-bold text-red-800">Student Inactive (3+ Days)</p>
+                                        <p class="text-[11px] text-red-600 mt-0.5"><?php echo htmlspecialchars($alert['full_name']); ?> has not submitted a log since <?php echo $alert['last_log_date'] ? date('M d, Y', strtotime($alert['last_log_date'])) : 'beginning'; ?>.</p>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+
+                            <!-- Pending Reviews > 24h -->
+                            <?php foreach ($old_pendings as $alert): ?>
+                                <div class="flex items-start gap-3 p-3 bg-amber-50 rounded-xl border border-amber-100">
+                                    <span class="material-symbols-outlined text-amber-500 text-sm mt-0.5">hourglass_empty</span>
+                                    <div>
+                                        <p class="text-xs font-bold text-amber-800">Pending Review > 24 Hours</p>
+                                        <p class="text-[11px] text-amber-600 mt-0.5"><?php echo htmlspecialchars($alert['full_name']); ?> log for <?php echo date('M d, Y', strtotime($alert['log_date'])); ?> is awaiting evaluation.</p>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+
+                            <?php if ($total_alerts === 0): ?>
+                                <div class="flex flex-col items-center justify-center py-6 text-center text-slate-400">
+                                    <span class="material-symbols-outlined text-3xl text-slate-200">verified</span>
+                                    <p class="text-xs mt-1">All clear! No overdue logs or inactive interns.</p>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Activity Logs Table -->
+                <div class="col-span-12 lg:col-span-7 bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div class="p-6 border-b border-slate-100 flex justify-between items-center">
+                        <h3 class="text-lg font-black text-slate-800 tracking-tight">Recent Logs</h3>
+                        <a href="mentor_daily_logs.php" class="text-blue-600 text-xs font-bold hover:underline">View All</a>
+                    </div>
+                    <table class="w-full text-left text-sm">
+                        <thead class="bg-slate-50 border-b border-slate-100">
+                            <tr>
+                                <th class="py-3 px-6 text-slate-500 font-bold text-xs">Intern</th>
+                                <th class="py-3 px-6 text-slate-500 font-bold text-xs">Date</th>
+                                <th class="py-3 px-6 text-slate-500 font-bold text-xs">Status</th>
+                                <th class="py-3 px-6 text-slate-500 font-bold text-xs text-right">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            <?php foreach ($recent_logs as $log): 
+                                $initial = strtoupper(substr($log['student_name'], 0, 2));
+                                $status_color = 'bg-amber-50 text-amber-700 border-amber-200';
+                                if ($log['status'] === 'Approved') $status_color = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+                                if ($log['status'] === 'Needs Update') $status_color = 'bg-red-50 text-red-700 border-red-200';
+                                if ($log['status'] === 'Reviewed') $status_color = 'bg-blue-50 text-blue-700 border-blue-200';
+                            ?>
+                                <tr class="hover:bg-slate-50/50 transition-colors">
+                                    <td class="py-4 px-6">
+                                        <div class="flex items-center gap-2">
+                                            <span class="w-7 h-7 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center font-bold text-[10px]"><?php echo $initial; ?></span>
+                                            <span class="font-semibold text-slate-800"><?php echo htmlspecialchars($log['student_name']); ?></span>
+                                        </div>
+                                    </td>
+                                    <td class="py-4 px-6 text-slate-500"><?php echo date('M d, Y', strtotime($log['log_date'])); ?></td>
+                                    <td class="py-4 px-6">
+                                        <span class="inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider <?php echo $status_color; ?>">
+                                            <?php echo htmlspecialchars($log['status']); ?>
+                                        </span>
+                                    </td>
+                                    <td class="py-4 px-6 text-right">
+                                        <a href="mentor_daily_logs.php?search=<?php echo urlencode($log['student_name']); ?>" class="text-blue-600 font-bold text-xs hover:underline">Review</a>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                            <?php if (empty($recent_logs)): ?>
+                                <tr>
+                                    <td colspan="4" class="text-center py-6 text-slate-400">No logs submitted yet.</td>
+                                </tr>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Quick Feedback Submission Form -->
+                <div class="col-span-12 lg:col-span-5 bg-white rounded-2xl shadow-sm border border-slate-100 p-6 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center gap-2 mb-4">
+                            <span class="material-symbols-outlined text-blue-600">rate_review</span>
+                            <h3 class="text-lg font-black text-slate-800 tracking-tight">Quick Feedback</h3>
+                        </div>
+                        <form action="mentor_dashboard.php" method="POST" class="space-y-4" onsubmit="return confirm('Are you sure you want to submit this quick feedback?');">
+                            <?php echo csrf_token_field(); ?>
+                            <div>
+                                <label class="block font-bold text-xs text-slate-500 uppercase tracking-wider mb-2">Select Intern</label>
+                                <select name="student_id" required class="w-full rounded-xl border border-slate-200 text-sm py-2.5 focus:border-blue-600 focus:ring-blue-600/10">
+                                    <option value="">-- Choose Intern Student --</option>
+                                    <?php foreach ($interns_list as $intern): ?>
+                                        <option value="<?php echo $intern['id']; ?>"><?php echo htmlspecialchars($intern['full_name']); ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="block font-bold text-xs text-slate-500 uppercase tracking-wider mb-2">Log Status</label>
+                                <select name="status" required class="w-full rounded-xl border border-slate-200 text-sm py-2.5 focus:border-blue-600 focus:ring-blue-600/10">
+                                    <option value="Approved">Approved (Progress Approved)</option>
+                                    <option value="Reviewed">Reviewed (No further actions)</option>
+                                    <option value="Needs Update">Needs Update (Requests revisions)</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="block font-bold text-xs text-slate-500 uppercase tracking-wider mb-2">Comments / Feedback</label>
+                                <textarea name="comments" required class="w-full rounded-xl border border-slate-200 text-xs py-2.5 focus:border-blue-600 focus:ring-blue-600/10" placeholder="Share specific insights or instructions..." rows="3"></textarea>
+                            </div>
+
+                            <button type="submit" name="submit_feedback" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 mt-2 rounded-xl font-bold text-xs shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer">
+                                <span class="material-symbols-outlined text-sm">send</span>
+                                Submit Evaluation
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Audit/Activity Logs and Charts -->
+                <div class="col-span-12 lg:col-span-6 bg-white rounded-2xl shadow-sm border border-slate-100 p-6 space-y-4">
+                    <h3 class="text-lg font-black text-slate-800 tracking-tight">Submission & Evaluation Trends</h3>
+                    <div class="relative h-[250px] w-full">
+                        <canvas id="trendsChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="col-span-12 lg:col-span-6 bg-white rounded-2xl shadow-sm border border-slate-100 p-6 space-y-4">
+                    <h3 class="text-lg font-black text-slate-800 tracking-tight">Recent Supervision Activity</h3>
+                    <div class="relative pl-6 border-l border-slate-100 space-y-6 mt-4">
+                        <?php foreach ($activities as $act): 
+                            $icon = 'rate_review';
+                            $icon_color = 'bg-blue-50 text-blue-700 ring-4 ring-white';
+                            if ($act['action_type'] === 'assignment') {
+                                $icon = 'person_add';
+                                $icon_color = 'bg-green-50 text-green-700 ring-4 ring-white';
+                            }
+                            $time_ago = date('M d, Y · g:i A', strtotime($act['created_at']));
+                        ?>
+                            <div class="relative">
+                                <!-- Dot indicator on the line -->
+                                <div class="absolute -left-[37px] top-0.5 flex h-7 w-7 items-center justify-center rounded-full <?php echo $icon_color; ?> shadow-sm">
+                                    <span class="material-symbols-outlined text-[13px] font-bold"><?php echo $icon; ?></span>
+                                </div>
+                                <div>
+                                    <p class="text-xs font-semibold text-slate-700 leading-snug"><?php echo htmlspecialchars($act['details']); ?></p>
+                                    <span class="text-[10px] text-slate-400 font-medium mt-1 flex items-center gap-1">
+                                        <span class="material-symbols-outlined text-[12px]">schedule</span> <?php echo $time_ago; ?>
+                                    </span>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                        <?php if (empty($activities)): ?>
+                            <div class="text-center py-6 text-slate-400 text-xs font-bold">No supervision logs recorded yet.</div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
         </div>
-        <div class="flex items-start gap-3 p-3 bg-blue-50 rounded-lg">
-            <span class="material-symbols-outlined text-blue-500 text-sm mt-0.5">post_add</span>
-            <div><p class="text-xs font-bold text-blue-800">New Log Submitted</p><p class="text-[11px] text-blue-600 mt-0.5">Elena Rodriguez submitted her daily log.</p></div>
-        </div>
-        <div class="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-            <span class="material-symbols-outlined text-gray-500 text-sm mt-0.5">person_off</span>
-            <div><p class="text-xs font-bold text-gray-700">Student Inactive</p><p class="text-[11px] text-gray-500 mt-0.5">John Doe hasn't submitted a log in 2 days.</p></div>
-        </div>
-    </div>
-</div>
 
-<div class="bg-surface-container-lowest rounded-xl shadow-sm p-lg border border-gray-100">
-<div class="flex items-center gap-md mb-md">
-<div class="p-2 bg-primary-container/10 text-primary rounded-lg">
-<span class="material-symbols-outlined" data-icon="rate_review">rate_review</span>
-</div>
-<h3 class="font-h3 text-h3 text-on-surface">Quick Feedback</h3>
-</div>
-<form class="space-y-md">
-<div>
-<label class="block font-label-sm text-label-sm text-on-surface-variant mb-xs">Select Intern</label>
-<select class="w-full rounded-lg border-outline-variant focus:ring-primary focus:border-primary text-body-md">
-<option>Marcus Chen</option>
-<option>Elena Rodriguez</option>
-</select>
-</div>
-<div>
-<label class="block font-label-sm text-label-sm text-on-surface-variant mb-xs">Log Status</label>
-<div class="flex gap-2">
-<button class="flex-1 py-2 px-1 border border-outline-variant rounded-lg text-center hover:bg-surface-container-low transition-colors" type="button">
-<span class="material-symbols-outlined block text-on-surface-variant mb-1 text-sm" data-icon="warning">warning</span>
-<span class="text-[9px] font-bold text-gray-600 uppercase tracking-tight">Needs Improvement</span>
-</button>
-<button class="flex-1 py-2 px-1 border border-primary bg-primary/5 rounded-lg text-center" type="button">
-<span class="material-symbols-outlined block text-primary mb-1 text-sm" data-icon="check_circle">check_circle</span>
-<span class="text-[9px] font-bold text-primary uppercase tracking-tight">Reviewed</span>
-</button>
-<button class="flex-1 py-2 px-1 border border-outline-variant rounded-lg text-center hover:bg-surface-container-low transition-colors" type="button">
-<span class="material-symbols-outlined block text-on-surface-variant mb-1 text-sm" data-icon="star">star</span>
-<span class="text-[9px] font-bold text-gray-600 uppercase tracking-tight">Excellent Progress</span>
-</button>
-</div>
-</div>
-<div>
-<label class="block font-label-sm text-label-sm text-on-surface-variant mb-xs">Comments</label>
-<textarea class="w-full rounded-lg border-outline-variant focus:ring-primary focus:border-primary text-body-md p-md" placeholder="Share specific insights..." rows="3"></textarea>
-</div>
-<div class="flex items-center gap-2 mt-4 bg-green-50 p-3 rounded-lg border border-green-100">
-    <input type="checkbox" id="approve_weekly" class="w-4 h-4 text-green-600 rounded border-gray-300 focus:ring-green-500 cursor-pointer">
-    <label for="approve_weekly" class="text-xs font-bold text-green-800 cursor-pointer">Approve Weekly Progress</label>
-</div>
-<button class="w-full bg-primary-container text-white py-md mt-4 rounded-lg font-label-md text-label-md shadow-sm hover:brightness-110 transition-all" type="submit">Submit Evaluation</button>
-</form>
-</div>
-</div>
-</div>
-</div>
-</main>
+    <script>
+        function handleHodApproval(appId, newStatus) {
+            const actionWord = newStatus === 'HOD Approved' ? 'approve' : 'reject';
+            const confirmMsg = `Are you sure you want to ${actionWord} this candidate application?`;
+            if (!confirm(confirmMsg)) return;
 
+            const notes = prompt(`Add any optional comments for the ${actionWord} action:`) || "";
 
+            const formData = new FormData();
+            formData.append('application_id', appId);
+            formData.append('new_status', newStatus);
+            formData.append('notes', notes);
 
+            fetch('update_application_status.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(data.message);
+                    const row = document.getElementById(`hod-row-${appId}`);
+                    if (row) {
+                        row.remove();
+                    } else {
+                        location.reload();
+                    }
+                } else {
+                    alert("Error: " + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert("An error occurred during submission.");
+            });
+        }
 
-</body></html>
+        // Setup Chart.js trendsChart
+        document.addEventListener("DOMContentLoaded", function() {
+            const ctx = document.getElementById('trendsChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Pending Review', 'Approved', 'Needs Revision'],
+                    datasets: [{
+                        data: [
+                            <?php echo $pending_count; ?>, 
+                            <?php echo $log_counts[LOG_STATUS_APPROVED] ?? 0; ?>, 
+                            <?php echo $needs_update_count; ?>
+                        ],
+                        backgroundColor: ['#f59e0b', '#10b981', '#ef4444'],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                boxWidth: 12,
+                                font: { size: 11, weight: 'bold' }
+                            }
+                        }
+                    }
+                }
+            });
+        });
+    </script>
+<?php
+page_shell_end();
+?>

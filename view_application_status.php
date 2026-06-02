@@ -127,14 +127,16 @@ $profile = mysqli_fetch_assoc($profile_result);
       </div>
       
       <div class="flex items-center gap-6">
+            <!-- Profile Click Area -->
         <div class="relative">
-          <div id="profile-toggle" class="flex items-center gap-3 cursor-pointer group select-none p-1 rounded-lg hover:bg-gray-50 transition-colors">
-            <div class="text-right hidden md:block">
-              <p class="text-sm font-bold text-slate-800 group-hover:text-blue-600 transition-colors"><?php echo htmlspecialchars($profile['full_name']); ?></p>
-              <p class="text-xs text-gray-500">Student Account</p>
-            </div>
-            <img alt="User profile" class="w-10 h-10 rounded-full border border-gray-200 shadow-sm" src="https://ui-avatars.com/api/?name=<?php echo urlencode($profile['full_name']); ?>&background=0D8ABC&color=fff">
-          </div>
+          <button id="profile-toggle" class="flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-slate-50 transition-colors cursor-pointer text-left">
+            <img alt="User profile" class="w-9 h-9 rounded-full border border-gray-200 shadow-sm" src="https://ui-avatars.com/api/?name=<?php echo urlencode($profile['full_name']); ?>&background=0D8ABC&color=fff">
+            <span class="hidden text-left lg:block">
+              <span class="block text-sm font-bold text-slate-900"><?php echo htmlspecialchars($profile['full_name']); ?></span>
+              <span class="block text-xs text-slate-500">Student</span>
+            </span>
+            <span class="material-symbols-outlined text-slate-400">expand_more</span>
+          </button>
 
           <!-- Profile Dropdown Panel -->
           <div id="profile-dropdown" class="hidden absolute right-0 mt-3 w-80 bg-white rounded-xl shadow-xl border border-gray-100 z-50 overflow-hidden transform origin-top-right transition-all">
@@ -246,6 +248,13 @@ $profile = mysqli_fetch_assoc($profile_result);
                 if (!profileToggle.contains(e.target) && !profileDropdown.contains(e.target)) {
                     profileDropdown.classList.add('hidden');
                 }
+            });
+
+            // Close dropdown on link select
+            profileDropdown.querySelectorAll('a').forEach(link => {
+                link.addEventListener('click', () => {
+                    profileDropdown.classList.add('hidden');
+                });
             });
         }
     });

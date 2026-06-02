@@ -1,6 +1,7 @@
 <?php
 session_start();
 include "db.php";
+require_once __DIR__ . "/includes/crypto_helper.php";
 
 if(!isset($_SESSION['user_id'])){
     header("Location: login.php");
@@ -25,7 +26,7 @@ $gender = ($profile && isset($profile['gender'])) ? $profile['gender'] : '';
 $college_name = ($profile && isset($profile['college_name'])) ? $profile['college_name'] : '';
 $course = ($profile && isset($profile['course'])) ? $profile['course'] : '';
 $skills = ($profile && isset($profile['skills'])) ? $profile['skills'] : '';
-$aadhaar_number = ($profile && isset($profile['aadhaar_number'])) ? $profile['aadhaar_number'] : '';
+$aadhaar_number = ($profile && isset($profile['aadhaar_number'])) ? decrypt_aadhaar($profile['aadhaar_number']) : '';
 $pan_number = ($profile && isset($profile['pan_number'])) ? $profile['pan_number'] : '';
 $resume_file = ($profile && isset($profile['resume_file'])) ? $profile['resume_file'] : '';
 $aadhaar_file = ($profile && isset($profile['aadhaar_file'])) ? $profile['aadhaar_file'] : '';
@@ -138,6 +139,7 @@ if (empty($session_email) && $profile && isset($profile['email'])) {
 
             <!-- Form -->
             <form action="profile_submit.php" method="POST" enctype="multipart/form-data" class="px-8 py-8 space-y-10">
+                <?php echo csrf_token_field(); ?>
                 
                 <!-- 1. Personal Information -->
                 <section>

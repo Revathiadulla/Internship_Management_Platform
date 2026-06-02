@@ -41,10 +41,10 @@ if ($app_result) {
     while ($row = mysqli_fetch_assoc($app_result)) {
         $app_rows[] = $row;
         $st = $row['status'];
-        if ($st === 'Shortlisted' || $st === 'Approved' || $st === 'Accepted' || $st === 'Started' || $st === 'Internship Started' || $st === 'Active Intern') {
+        if ($st === 'Shortlisted' || $st === 'Approved' || $st === 'Accepted' || $st === 'Started' || $st === 'Internship Started' || $st === 'Active Intern' || $st === 'Selected') {
             $shortlist_count++;
         }
-        if (!$has_active && ($st === 'Started' || $st === 'Internship Started' || $st === 'Active Intern')) {
+        if (!$has_active && ($st === 'Started' || $st === 'Internship Started' || $st === 'Active Intern' || $st === 'Selected')) {
             $has_active = true;
             $active_intern = [
                 'app_id' => $row['app_id'],
@@ -55,7 +55,8 @@ if ($app_result) {
                 'status' => $row['status'],
                 'applied_date' => $row['applied_date'],
                 'test_score' => $row['test_score'],
-                'education_status' => $row['education_status']
+                'education_status' => $row['education_status'],
+                'preferred_duration' => $row['preferred_duration']
             ];
         }
     }
@@ -106,16 +107,52 @@ if ($has_active) {
     $active_intern['project_stack'] = $project_stack;
     $active_intern['company_name']  = "IMP Technologies";
 
+    $duration_str = strtolower($active_intern['preferred_duration'] ?? '');
+    $duration_months = 3;
+    $duration_days = 90;
+    $duration_modify = '+3 months';
+    if (strpos($duration_str, '1') !== false || strpos($duration_str, 'one') !== false) {
+        $duration_months = 1;
+        $duration_days = 30;
+        $duration_modify = '+1 month';
+    } elseif (strpos($duration_str, '2') !== false || strpos($duration_str, 'two') !== false) {
+        $duration_months = 2;
+        $duration_days = 60;
+        $duration_modify = '+2 months';
+    }
+    $active_intern['duration_months'] = $duration_months;
+    $active_intern['duration_days'] = $duration_days;
+    $active_intern['duration_modify'] = $duration_modify;
+
     $total_logs_res = mysqli_query($conn, "SELECT COUNT(*) as cnt FROM daily_logs WHERE user_id='$user_id'");
     $total_logs_row = mysqli_fetch_assoc($total_logs_res);
     $total_logs     = intval($total_logs_row['cnt'] ?? 0);
 
-    if ($total_logs >= 20)      $current_phase_num = 6;
-    elseif ($total_logs >= 15)  $current_phase_num = 5;
-    elseif ($total_logs >= 10)  $current_phase_num = 4;
-    elseif ($total_logs >= 6)   $current_phase_num = 3;
-    elseif ($total_logs >= 3)   $current_phase_num = 2;
-    else                        $current_phase_num = 1;
+    if ($duration_months === 1) {
+        // 1-Month duration: P1: 3 logs, P2: 3 logs, P3: 4 logs, P4: 4 logs, P5: 3 logs, P6: 3 logs (Total 20 logs)
+        if ($total_logs >= 17)      $current_phase_num = 6;
+        elseif ($total_logs >= 14)  $current_phase_num = 5;
+        elseif ($total_logs >= 10)  $current_phase_num = 4;
+        elseif ($total_logs >= 6)   $current_phase_num = 3;
+        elseif ($total_logs >= 3)   $current_phase_num = 2;
+        else                        $current_phase_num = 1;
+    } elseif ($duration_months === 2) {
+        // 2-Month duration: P1: 5 logs, P2: 5 logs, P3: 5 logs, P4: 10 logs, P5: 5 logs, P6: 10 logs (Total 40 logs)
+        if ($total_logs >= 30)      $current_phase_num = 6;
+        elseif ($total_logs >= 25)  $current_phase_num = 5;
+        elseif ($total_logs >= 15)  $current_phase_num = 4;
+        elseif ($total_logs >= 10)  $current_phase_num = 3;
+        elseif ($total_logs >= 5)   $current_phase_num = 2;
+        else                        $current_phase_num = 1;
+    } else {
+        // 3-Month duration (default): P1: 10 logs, P2: 10 logs, P3: 10 logs, P4: 15 logs, P5: 10 logs, P6: 15 logs (Total 70 logs)
+        if ($total_logs >= 55)      $current_phase_num = 6;
+        elseif ($total_logs >= 45)  $current_phase_num = 5;
+        elseif ($total_logs >= 30)  $current_phase_num = 4;
+        elseif ($total_logs >= 20)  $current_phase_num = 3;
+        elseif ($total_logs >= 10)  $current_phase_num = 2;
+        else                        $current_phase_num = 1;
+    }
 
     $phases = [
         1 => ['label' => 'P1 Learning Phase',           'short' => 'Learning',      'icon' => 'school'],
@@ -198,11 +235,13 @@ $all_notif_result = mysqli_query($conn, $all_notif_sql);
 if ($has_active) {
     $phases            = $active_intern['phases'];
     $current_phase_num = $active_intern['current_phase_num'];
-    $progress_pct      = min(100, round(($days_active / 90) * 100));
+    $dur_days          = $active_intern['duration_days'] ?? 90;
+    $dur_modify        = $active_intern['duration_modify'] ?? '+3 months';
+    $progress_pct      = min(100, round(($days_active / $dur_days) * 100));
     $end_date          = new DateTime($active_intern['applied_date']);
-    $end_date->modify('+3 months');
+    $end_date->modify($dur_modify);
     $days_left         = max(0, (new DateTime())->diff($end_date)->days);
-    $is_completed      = ($days_active >= 90 || strtolower($active_intern['status']) === 'completed');
+    $is_completed      = ($days_active >= $dur_days || strtolower($active_intern['status']) === 'completed');
 } else {
     $phases            = [];
     $current_phase_num = 0;
@@ -319,9 +358,7 @@ if ($has_active) {
     <button data-section="sec-notifications" class="nav-item w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all text-gray-600 hover:bg-gray-50 hover:text-blue-600">
       <span class="material-symbols-outlined text-[20px]">notifications</span>
       <span>Notifications</span>
-      <?php if ($unread_count > 0): ?>
-      <span class="ml-auto bg-red-100 text-red-600 text-[10px] font-bold px-1.5 py-0.5 rounded-full"><?php echo $unread_count; ?></span>
-      <?php endif; ?>
+      <span id="sidebar-badge" class="ml-auto bg-red-100 text-red-600 text-[10px] font-bold px-1.5 py-0.5 rounded-full <?php echo ($unread_count > 0) ? '' : 'hidden'; ?>"><?php echo $unread_count; ?></span>
     </button>
   </nav>
 
@@ -358,22 +395,21 @@ if ($has_active) {
       <!-- Notification bell -->
       <button data-section="sec-notifications" class="nav-item relative p-2 rounded-full text-gray-500 hover:bg-gray-100 transition-colors">
         <span class="material-symbols-outlined">notifications</span>
-        <?php if ($unread_count > 0): ?>
-        <span class="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
-        <?php endif; ?>
+        <span id="nav-dot" class="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white <?php echo ($unread_count > 0) ? '' : 'hidden'; ?>"></span>
       </button>
 
       <div class="h-7 w-px bg-gray-200"></div>
 
       <!-- Profile avatar + dropdown -->
       <div class="relative">
-        <button id="profile-toggle" class="flex items-center gap-3 p-1 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer">
-          <div class="text-right hidden md:block">
-            <p class="text-sm font-semibold text-slate-800 leading-tight"><?php echo htmlspecialchars($profile['full_name']); ?></p>
-            <p class="text-xs text-gray-400">Student Account</p>
-          </div>
+        <button id="profile-toggle" class="flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-slate-50 transition-colors cursor-pointer">
           <img src="https://ui-avatars.com/api/?name=<?php echo urlencode($profile['full_name']); ?>&background=0D8ABC&color=fff"
                alt="Avatar" class="w-9 h-9 rounded-full border border-gray-200 shadow-sm">
+          <span class="hidden text-left lg:block">
+            <span class="block text-sm font-bold text-slate-900"><?php echo htmlspecialchars($profile['full_name']); ?></span>
+            <span class="block text-xs text-slate-500">Student</span>
+          </span>
+          <span class="material-symbols-outlined text-slate-400">expand_more</span>
         </button>
 
         <!-- Dropdown -->
@@ -429,9 +465,11 @@ if ($has_active) {
       <?php
         $d_end = null; $d_left = 0; $d_pct = 0;
         if ($has_active) {
-          $d_end  = new DateTime($active_intern['applied_date']); $d_end->modify('+3 months');
+          $dur_days = $active_intern['duration_days'] ?? 90;
+          $dur_modify = $active_intern['duration_modify'] ?? '+3 months';
+          $d_end  = new DateTime($active_intern['applied_date']); $d_end->modify($dur_modify);
           $d_left = max(0,(new DateTime())->diff($d_end)->days);
-          $d_pct  = min(100,round(($days_active/90)*100));
+          $d_pct  = min(100,round(($days_active/$dur_days)*100));
         }
       ?>
       <?php if ($has_active): ?>
@@ -1619,6 +1657,7 @@ if ($has_active) {
   if (!toggle || !dropdown) return;
   toggle.addEventListener('click', e => { e.stopPropagation(); dropdown.classList.toggle('hidden'); });
   document.addEventListener('click', e => { if (!toggle.contains(e.target) && !dropdown.contains(e.target)) dropdown.classList.add('hidden'); });
+  dropdown.querySelectorAll('a').forEach(link => { link.addEventListener('click', () => dropdown.classList.add('hidden')); });
 })();
 
 // ── Daily log form validation ─────────────────────────────────────────────────
@@ -1945,6 +1984,163 @@ if ($has_active) {
 
   // ── Init ──────────────────────────────────────────────────────────────────
   updateStats();
+
+  // ── SSE Live Notifications Listener ───────────────────────────────────────
+  if (typeof EventSource !== "undefined") {
+    const source = new EventSource("sse_notifications.php");
+    source.onmessage = function(event) {
+      try {
+        const data = JSON.parse(event.data);
+        showLiveToast(data.title, data.message, data.type);
+        
+        // Update list if container exists
+        const list = document.getElementById("notif-list");
+        if (list) {
+          // Remove empty state
+          const emptyState = document.getElementById("notif-empty-state");
+          if (emptyState) emptyState.classList.add("hidden");
+          
+          const card = document.createElement("div");
+          card.id = `notif-card-${data.id}`;
+          card.dataset.id = data.id;
+          card.dataset.read = "0";
+          card.className = "notif-card group bg-white rounded-2xl border border-blue-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 overflow-hidden";
+          
+          let icon = "notifications";
+          let iconBg = "bg-blue-100";
+          let textClass = "text-blue-600";
+          let badgeClass = "bg-blue-100 text-blue-700";
+          let dotClass = "bg-blue-500";
+          let label = "Application";
+          
+          const type = (data.type || "").toLowerCase();
+          if (type === 'test' || type === 'assessment') {
+            icon = 'quiz'; iconBg = 'bg-orange-100'; textClass = 'text-orange-600'; badgeClass = 'bg-orange-100 text-orange-700'; dotClass = 'bg-orange-500'; label = 'Assessment';
+          } else if (type === 'warning' || type === 'reminder') {
+            icon = 'warning'; iconBg = 'bg-orange-100'; textClass = 'text-orange-600'; badgeClass = 'bg-orange-100 text-orange-700'; dotClass = 'bg-orange-500'; label = 'Reminder';
+          } else if (type === 'success' || type === 'approved' || type === 'selected') {
+            icon = 'check_circle'; iconBg = 'bg-emerald-100'; textClass = 'text-emerald-600'; badgeClass = 'bg-emerald-100 text-emerald-700'; dotClass = 'bg-emerald-500'; label = 'Approval';
+          } else if (type === 'feedback' || type === 'certificate') {
+            icon = 'reviews'; iconBg = 'bg-purple-100'; textClass = 'text-purple-600'; badgeClass = 'bg-purple-100 text-purple-700'; dotClass = 'bg-purple-500'; label = 'Feedback';
+          } else if (type === 'mentor') {
+            icon = 'person_pin'; iconBg = 'bg-blue-100'; textClass = 'text-blue-600'; badgeClass = 'bg-blue-100 text-blue-700'; dotClass = 'bg-blue-500'; label = 'Application';
+          } else if (type === 'error' || type === 'rejected') {
+            icon = 'cancel'; iconBg = 'bg-red-100'; textClass = 'text-red-600'; badgeClass = 'bg-red-100 text-red-700'; dotClass = 'bg-red-500'; label = 'Rejection';
+          } else if (type === 'verification') {
+            icon = 'verified_user'; iconBg = 'bg-yellow-100'; textClass = 'text-yellow-700'; badgeClass = 'bg-yellow-100 text-yellow-700'; dotClass = 'bg-yellow-500'; label = 'Verification';
+          }
+          
+          card.innerHTML = `
+            <div class="flex">
+              <div class="w-1 shrink-0 rounded-l-2xl ${dotClass}"></div>
+              <div class="flex-1 p-4 flex items-start gap-4">
+                <div class="w-11 h-11 rounded-xl ${iconBg} flex items-center justify-center shrink-0 mt-0.5">
+                  <span class="material-symbols-outlined text-[22px] ${textClass}">${icon}</span>
+                </div>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-start justify-between gap-2 mb-1.5">
+                    <div class="flex items-center gap-2 flex-wrap">
+                      <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold ${badgeClass}">${label}</span>
+                      <span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-600 text-white">New</span>
+                    </div>
+                    <div class="w-2.5 h-2.5 ${dotClass} rounded-full shrink-0 mt-1 animate-pulse"></div>
+                  </div>
+                  <p class="text-sm text-slate-700 font-semibold leading-snug">${data.message}</p>
+                  <div class="flex items-center justify-between mt-3 pt-2.5 border-t border-slate-100">
+                    <div class="flex items-center gap-1.5 text-xs text-slate-400">
+                      <span class="material-symbols-outlined text-[13px]">schedule</span>
+                      <span>Just now</span>
+                    </div>
+                    <div class="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                      <button onclick="notifMarkRead(${data.id}, this)" class="flex items-center gap-1 px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-200 rounded-lg text-[11px] font-semibold transition-colors">
+                        <span class="material-symbols-outlined text-[13px]">done</span> Mark read
+                      </button>
+                      <button onclick="notifDelete(${data.id}, this)" class="flex items-center gap-1 px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-500 border border-red-200 rounded-lg text-[11px] font-semibold transition-colors">
+                        <span class="material-symbols-outlined text-[13px]">close</span> Remove
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+          list.insertBefore(card, list.firstChild);
+        }
+        
+        // Re-calculate stats and update badges
+        updateStats();
+      } catch (e) {
+        console.error("Error handling SSE in dashboard:", e);
+      }
+    };
+  }
+
+  function showLiveToast(title, message, type) {
+    const toast = document.createElement("div");
+    toast.className = "fixed bottom-5 right-5 z-[999] max-w-sm w-full bg-white border border-slate-100 rounded-2xl shadow-[0_10px_30px_rgba(15,23,42,0.15)] p-4 flex gap-3 transform translate-y-10 opacity-0 transition-all duration-300 ease-out";
+    
+    let icon = "notifications";
+    let iconColor = "bg-blue-50 text-blue-600";
+    
+    if (type === "log_submission" || type === "log_resubmission") {
+        icon = "assignment_turned_in";
+        iconColor = "bg-purple-50 text-purple-600";
+    } else if (type === "intern_assignment") {
+        icon = "person_add";
+        iconColor = "bg-green-50 text-green-700";
+    } else if (type === "mentor") {
+        icon = "supervisor_account";
+        iconColor = "bg-indigo-50 text-indigo-600";
+    } else if (type === "Verification" || type === "verification") {
+        icon = "verified_user";
+        iconColor = "bg-green-50 text-green-600";
+    } else if (type === "Assessment" || type === "assessment") {
+        icon = "quiz";
+        iconColor = "bg-purple-50 text-purple-600";
+    } else if (type === "Selection" || type === "selection") {
+        icon = "stars";
+        iconColor = "bg-rose-50 text-rose-600";
+    } else if (type === "Reminder" || type === "reminder") {
+        icon = "event_note";
+        iconColor = "bg-amber-50 text-amber-600";
+    } else if (type === "alert" || type === "Warning") {
+        icon = "warning";
+        iconColor = "bg-red-50 text-red-600";
+    }
+    
+    toast.innerHTML = `
+        <div class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${iconColor}">
+            <span class="material-symbols-outlined text-[20px]">${icon}</span>
+        </div>
+        <div class="flex-1 min-w-0">
+            <p class="text-xs font-black text-slate-800">${title}</p>
+            <p class="text-xs text-slate-500 mt-1 font-semibold leading-relaxed">${message}</p>
+        </div>
+        <button class="text-slate-455 hover:text-slate-600 shrink-0 self-start transition-colors">
+            <span class="material-symbols-outlined text-sm font-bold">close</span>
+        </button>
+    `;
+    
+    toast.querySelector("button").addEventListener("click", () => {
+        toast.classList.remove("translate-y-0", "opacity-100");
+        toast.classList.add("translate-y-2", "opacity-0");
+        setTimeout(() => toast.remove(), 300);
+    });
+    
+    document.body.appendChild(toast);
+    toast.offsetHeight; // trigger reflow
+    
+    toast.classList.remove("translate-y-10", "opacity-0");
+    toast.classList.add("translate-y-0", "opacity-100");
+    
+    setTimeout(() => {
+        if (toast.parentNode) {
+            toast.classList.remove("translate-y-0", "opacity-100");
+            toast.classList.add("translate-y-2", "opacity-0");
+            setTimeout(() => toast.remove(), 300);
+        }
+    }, 6000);
+  }
 
 })();
 </script>

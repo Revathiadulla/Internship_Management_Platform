@@ -15,18 +15,18 @@ $profile_res = mysqli_query($conn, $profile_sql);
 $profile     = mysqli_fetch_assoc($profile_res);
 if (!$profile) { header("Location: student_profile_form.php"); exit(); }
 
-// Fetch active/started internship
+// Fetch completed internship
 $intern_sql = "SELECT a.id as app_id, a.applied_date, a.test_score, a.education_status,
                       COALESCE(i.title, a.internship_name) as title,
                       COALESCE(i.duration, '3 Months') as duration,
                       COALESCE(i.mode, 'Remote') as mode
                FROM internship_applications a
                LEFT JOIN internships i ON a.internship_id = i.id AND a.internship_id > 0
-               WHERE a.user_id = '$user_id' AND a.status = 'Started'
+               WHERE a.user_id = '$user_id' AND a.status = 'Completed'
                LIMIT 1";
 $intern_res  = mysqli_query($conn, $intern_sql);
 $intern      = mysqli_fetch_assoc($intern_res);
-$has_intern  = ($intern !== null);
+$has_completed = ($intern !== null);
 
 // Fetch total logs
 $logs_res  = mysqli_query($conn, "SELECT COUNT(*) as cnt, SUM(time_spent) as total_hours FROM daily_logs WHERE user_id='$user_id'");
@@ -35,9 +35,16 @@ $total_logs  = intval($logs_row['cnt'] ?? 0);
 $total_hours = round(floatval($logs_row['total_hours'] ?? 0), 1);
 
 // Compute dates
-$start_date = $has_intern ? new DateTime($intern['applied_date']) : new DateTime();
+$start_date = $has_completed ? new DateTime($intern['applied_date']) : new DateTime();
 $end_date   = clone $start_date;
-$end_date->modify('+3 months');
+$duration_str = strtolower($intern['duration'] ?? '3 Months');
+$dur_modify = '+3 months';
+if (strpos($duration_str, '1') !== false || strpos($duration_str, 'one') !== false) {
+    $dur_modify = '+1 month';
+} elseif (strpos($duration_str, '2') !== false || strpos($duration_str, 'two') !== false) {
+    $dur_modify = '+2 months';
+}
+$end_date->modify($dur_modify);
 $cert_id    = 'IMP-' . date('Y') . '-' . strtoupper(substr($profile['full_name'], 0, 2)) . '-' . str_pad($user_id, 5, '0', STR_PAD_LEFT);
 
 // Unread notifications
@@ -150,9 +157,10 @@ $unread_count = intval($unread_row['c'] ?? 0);
         </a>
         <div>
           <h1 class="text-base font-bold text-slate-800">Certificate of Completion</h1>
-          <p class="text-xs text-slate-500"><?php echo htmlspecialchars($profile['full_name']); ?> · <?php echo $has_intern ? htmlspecialchars($intern['title']) : 'Internship'; ?></p>
+          <p class="text-xs text-slate-500"><?php echo htmlspecialchars($profile['full_name']); ?> · <?php echo $has_completed ? htmlspecialchars($intern['title']) : 'Internship'; ?></p>
         </div>
       </div>
+      <?php if ($has_completed): ?>
       <div class="flex items-center gap-3">
         <button onclick="window.print()" class="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-lg shadow-sm transition-all">
           <span class="material-symbols-outlined text-[18px]">download</span> Download PDF
@@ -161,9 +169,46 @@ $unread_count = intval($unread_row['c'] ?? 0);
           <span class="material-symbols-outlined text-[18px]">share</span> Share
         </button>
       </div>
+      <?php endif; ?>
     </header>
 
     <main class="flex-1 p-8">
+      <?php if (!$has_completed): ?>
+        <div class="max-w-3xl mx-auto bg-white border border-slate-200 rounded-3xl p-8 text-center shadow-lg space-y-6 mt-8">
+            <div class="w-20 h-20 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center mx-auto shadow-inner animate-pulse">
+                <span class="material-symbols-outlined text-4xl">workspace_premium</span>
+            </div>
+            <h2 class="text-2xl font-black text-slate-800 tracking-tight">Certificate Locked</h2>
+            <p class="text-sm text-slate-500 max-w-lg mx-auto leading-relaxed">
+                Your official internship certificate is currently locked. You will be eligible to download and share your verified certificate once your internship application status has been transitioned to <strong class="text-slate-800 font-bold">Completed</strong> by program coordinators.
+            </p>
+            <div class="bg-slate-50 border border-slate-100 rounded-2xl p-6 text-left space-y-3 max-w-md mx-auto">
+                <h4 class="text-xs font-bold text-slate-500 uppercase tracking-widest">Requirements for Release</h4>
+                <ul class="space-y-2 text-xs text-slate-600">
+                    <li class="flex items-center gap-2">
+                        <span class="material-symbols-outlined text-emerald-600 text-base">check_circle</span>
+                        Submit all daily milestone logs
+                    </li>
+                    <li class="flex items-center gap-2">
+                        <span class="material-symbols-outlined text-emerald-600 text-base">check_circle</span>
+                        Obtain satisfactory mentor evaluations
+                    </li>
+                    <li class="flex items-center gap-2">
+                        <span class="material-symbols-outlined text-emerald-600 text-base">check_circle</span>
+                        Pass the coordinator final program audit
+                    </li>
+                </ul>
+            </div>
+            <div class="flex justify-center gap-4 pt-4">
+                <a href="student_dashboard.php" class="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all shadow-md">
+                    Return to Dashboard
+                </a>
+                <a href="student_daily_log.php" class="px-6 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all">
+                    Submit Daily Logs
+                </a>
+            </div>
+        </div>
+      <?php else: ?>
       <div class="max-w-6xl mx-auto flex flex-col lg:flex-row gap-8">
 
         <!-- Certificate Preview -->
@@ -370,6 +415,7 @@ $unread_count = intval($unread_row['c'] ?? 0);
 
         </div>
       </div>
+      <?php endif; ?>
     </main>
   </div>
 
@@ -391,7 +437,7 @@ $unread_count = intval($unread_row['c'] ?? 0);
 
     function shareLinkedIn() {
       const name  = '<?php echo addslashes($profile['full_name']); ?>';
-      const title = '<?php echo $has_intern ? addslashes($intern['title']) : 'Intern'; ?>';
+      const title = '<?php echo $has_completed ? addslashes($intern['title']) : 'Intern'; ?>';
       const text  = encodeURIComponent(`I have successfully completed my internship as ${title} at IMP (Internship Management Platform)! Certificate ID: <?php echo $cert_id; ?>`);
       window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(window.location.href)}&summary=${text}`, '_blank');
     }

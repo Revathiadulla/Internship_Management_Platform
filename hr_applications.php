@@ -1,180 +1,238 @@
 <?php
 session_start();
+include_once __DIR__ . '/includes/auth.php';
+require_module_access('applications');
 include "db.php";
 include "status_utils.php";
+include_once __DIR__ . '/includes/hr_module_helpers.php';
+ensure_module_schema($conn);
 
-// For demo purposes, set HR role (in production, check actual session)
-if (!isset($_SESSION['role'])) {
-    $_SESSION['role'] = 'HR';
-    $_SESSION['user_id'] = 999; // Demo HR user
+// Ensure verification_status and soft delete columns exist
+$col_check = mysqli_query($conn, "SHOW COLUMNS FROM internship_applications LIKE 'verification_status'");
+if ($col_check && mysqli_num_rows($col_check) == 0) {
+    mysqli_query($conn, "ALTER TABLE internship_applications ADD COLUMN verification_status VARCHAR(20) DEFAULT 'Pending'");
+}
+$delete_col_check = mysqli_query($conn, "SHOW COLUMNS FROM internship_applications LIKE 'is_deleted'");
+if ($delete_col_check && mysqli_num_rows($delete_col_check) == 0) {
+    mysqli_query($conn, "ALTER TABLE internship_applications ADD COLUMN is_deleted TINYINT(1) DEFAULT 0");
 }
 
-// Fetch all applications
+// Filter and search values
+$status_options       = ['Applied', 'Test Completed', 'Interview Scheduled', 'HR Round', 'HOD Approved', 'Selected', 'Offer Sent', 'Onboarding Completed', 'Rejected'];
+$verification_options = ['Pending', 'Verified', 'Rejected'];
+$status_filter       = isset($_GET['status'])              ? trim($_GET['status'])              : '';
+$verification_filter = isset($_GET['verification_status']) ? trim($_GET['verification_status']) : '';
+$title_filter        = isset($_GET['title'])               ? trim($_GET['title'])               : '';
+$job_posting_filter  = isset($_GET['job_posting_id'])      ? intval($_GET['job_posting_id'])    : 0;
+$search_query        = isset($_GET['search'])              ? trim($_GET['search'])              : '';
+
+// Pagination
+$per_page    = 10;
+$current_page = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
+$offset       = ($current_page - 1) * $per_page;
+
+// Build shared WHERE clause (used for both COUNT and data query)
+$where_clauses = ["a.is_deleted = 0"];
+if (in_array($status_filter, $status_options, true)) {
+    $where_clauses[] = "a.status = '" . mysqli_real_escape_string($conn, $status_filter) . "'";
+}
+if (in_array($verification_filter, $verification_options, true)) {
+    $where_clauses[] = "a.verification_status = '" . mysqli_real_escape_string($conn, $verification_filter) . "'";
+}
+if ($title_filter !== '') {
+    $title_escaped   = mysqli_real_escape_string($conn, $title_filter);
+    $where_clauses[] = "COALESCE(i.title, a.internship_name) LIKE '%$title_escaped%'";
+}
+if ($job_posting_filter > 0) {
+    $where_clauses[] = "a.job_posting_id = $job_posting_filter";
+}
+if ($search_query !== '') {
+    $search_escaped  = mysqli_real_escape_string($conn, $search_query);
+    $where_clauses[] = "(sp.full_name LIKE '%$search_escaped%' OR sp.email LIKE '%$search_escaped%')";
+}
+$where_sql = implode(' AND ', $where_clauses);
+
+// Total count for pagination (same filters, no LIMIT)
+$count_sql    = "SELECT COUNT(*) as total
+                 FROM internship_applications a
+                 LEFT JOIN internships i      ON a.internship_id = i.id AND a.internship_id > 0
+                 LEFT JOIN student_profiles sp ON a.user_id = sp.user_id
+                 WHERE $where_sql";
+$count_result = mysqli_query($conn, $count_sql);
+$total_rows   = (int) mysqli_fetch_assoc($count_result)['total'];
+$total_pages  = max(1, (int) ceil($total_rows / $per_page));
+
+// Clamp current page to valid range
+if ($current_page > $total_pages) $current_page = $total_pages;
+
+// Paginated data query
 $app_sql = "SELECT a.id as app_id, a.user_id, a.status, a.applied_date, a.education_status,
                    COALESCE(i.title, a.internship_name) as title,
                    COALESCE(i.duration, '') as duration,
                    COALESCE(i.mode, '') as mode,
-                   sp.full_name, sp.email, sp.college_name, sp.course
+                   a.verification_status,
+                   sp.full_name, sp.email, sp.college_name, sp.course,
+                   sp.resume_file
             FROM internship_applications a
-            LEFT JOIN internships i ON a.internship_id = i.id AND a.internship_id > 0
+            LEFT JOIN internships i       ON a.internship_id = i.id AND a.internship_id > 0
             LEFT JOIN student_profiles sp ON a.user_id = sp.user_id
-            ORDER BY a.applied_date DESC";
+            WHERE $where_sql
+            ORDER BY a.applied_date DESC
+            LIMIT $per_page OFFSET $offset";
 $app_result = mysqli_query($conn, $app_sql);
+
+// Build query string helper — preserves all active filters when changing page
+function paginate_url(int $page, array $filters): string {
+    $params = array_filter($filters, fn($v) => $v !== '');
+    $params['page'] = $page;
+    return 'hr_applications.php?' . http_build_query($params);
+}
+
+page_shell_start('applications', 'Applications', 'Review, update status, and manage all internship applications', '');
 ?>
-<!DOCTYPE html>
-<html class="light" lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta content="width=device-width, initial-scale=1.0" name="viewport">
-  <title>HR Applications Management - IMP</title>
-  
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL,GRAD,opsz@300,0,0,24" rel="stylesheet" />
-  
-  <style>
-    .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
-    body { font-family: 'Inter', sans-serif; }
-  </style>
-</head>
-<body class="bg-[#f8f9fa] text-[#191c1d] font-sans antialiased">
-  
-  <!-- SideNavBar -->
-  <aside class="fixed left-0 top-0 h-screen w-60 z-50 bg-gray-50 border-r border-gray-200 flex flex-col py-6 font-sans text-sm font-medium">
-    <div class="px-6 mb-8">
-      <a href="index.html" class="flex items-center gap-2 hover:opacity-95 transition-opacity">
-        <svg class="w-8 h-8 text-blue-600 shrink-0" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect width="32" height="32" rx="8" fill="currentColor"/>
-            <circle cx="16" cy="16" r="3" fill="white"/>
-            <line x1="16" y1="13" x2="16" y2="9" stroke="white" stroke-width="1.5"/>
-            <circle cx="16" cy="8" r="1.5" fill="white"/>
-            <line x1="18.5" y1="15.1" x2="22.5" y2="13.8" stroke="white" stroke-width="1.5"/>
-            <circle cx="23.5" cy="13.5" r="1.5" fill="white"/>
-            <line x1="17.8" y1="18.4" x2="20.0" y2="21.5" stroke="white" stroke-width="1.5"/>
-            <circle cx="20.7" cy="22.5" r="1.5" fill="white"/>
-            <line x1="14.2" y1="18.4" x2="12.0" y2="21.5" stroke="white" stroke-width="1.5"/>
-            <circle cx="11.3" cy="22.5" r="1.5" fill="white"/>
-            <line x1="13.5" y1="15.1" x2="9.5" y2="13.8" stroke="white" stroke-width="1.5"/>
-            <circle cx="8.5" cy="13.5" r="1.5" fill="white"/>
-        </svg>
-        <span class="text-xl font-bold text-blue-600 tracking-tight">IMP</span>
-      </a>
-      <p class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-2 ml-1">HR Portal</p>
-    </div>
-    
-    <nav class="flex-1 flex flex-col gap-1">
-      <a href="hr_dashboard.php" class="flex items-center gap-3 text-gray-600 px-4 py-3 hover:bg-gray-100 transition-all cursor-pointer">
-        <span class="material-symbols-outlined">dashboard</span>
-        <span>Dashboard</span>
-      </a>
-      <a href="hr_applications.php" class="flex items-center gap-3 bg-blue-50 text-blue-700 border-l-4 border-blue-600 px-4 py-3 cursor-pointer">
-        <span class="material-symbols-outlined">assignment</span>
-        <span>Applications</span>
-      </a>
-      <a href="#" class="flex items-center gap-3 text-gray-600 px-4 py-3 hover:bg-gray-100 transition-all cursor-pointer">
-        <span class="material-symbols-outlined">group</span>
-        <span>Candidates</span>
-      </a>
-      <a href="#" class="flex items-center gap-3 text-gray-600 px-4 py-3 hover:bg-gray-100 transition-all cursor-pointer">
-        <span class="material-symbols-outlined">analytics</span>
-        <span>Reports</span>
-      </a>
-    </nav>
-    
-    <div class="mt-auto border-t border-gray-200 pt-4 flex flex-col gap-1">
-      <a href="#" class="flex items-center gap-3 text-gray-600 px-4 py-3 hover:bg-gray-100 transition-all cursor-pointer">
-        <span class="material-symbols-outlined">help</span>
-        <span>Help Center</span>
-      </a>
-      <a href="index.html" class="flex items-center gap-3 text-gray-600 px-4 py-3 hover:bg-gray-100 transition-all cursor-pointer">
-        <span class="material-symbols-outlined">logout</span>
-        <span>Logout</span>
-      </a>
-    </div>
-  </aside>
 
-  <!-- Main Content -->
-  <main class="pl-60 flex flex-col min-h-screen">
-    
-    <!-- TopNavBar -->
-    <header class="w-full sticky top-0 z-40 bg-white border-b border-gray-200 shadow-sm flex items-center justify-between px-6 py-3">
-      <div class="flex items-center gap-8">
-        <a href="index.html" class="flex items-center gap-2 hover:opacity-95 transition-opacity">
-          <svg class="w-8 h-8 text-blue-600 shrink-0" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <rect width="32" height="32" rx="8" fill="currentColor"/>
-              <circle cx="16" cy="16" r="3" fill="white"/>
-              <line x1="16" y1="13" x2="16" y2="9" stroke="white" stroke-width="1.5"/>
-              <circle cx="16" cy="8" r="1.5" fill="white"/>
-              <line x1="18.5" y1="15.1" x2="22.5" y2="13.8" stroke="white" stroke-width="1.5"/>
-              <circle cx="23.5" cy="13.5" r="1.5" fill="white"/>
-              <line x1="17.8" y1="18.4" x2="20.0" y2="21.5" stroke="white" stroke-width="1.5"/>
-              <circle cx="20.7" cy="22.5" r="1.5" fill="white"/>
-              <line x1="14.2" y1="18.4" x2="12.0" y2="21.5" stroke="white" stroke-width="1.5"/>
-              <circle cx="11.3" cy="22.5" r="1.5" fill="white"/>
-              <line x1="13.5" y1="15.1" x2="9.5" y2="13.8" stroke="white" stroke-width="1.5"/>
-              <circle cx="8.5" cy="13.5" r="1.5" fill="white"/>
-          </svg>
-          <span class="text-xl font-bold text-blue-600 tracking-tight">IMP</span>
-        </a>
-        <div class="relative w-80">
-          <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-lg">search</span>
-          <input class="w-full bg-gray-50 border border-gray-200 rounded-lg pl-10 pr-4 py-2 focus:ring-2 focus:ring-blue-600 focus:border-transparent outline-none transition-all text-sm" placeholder="Search applications..." type="text">
-        </div>
-      </div>
-      <div class="flex items-center gap-4">
-        <button class="p-2 text-gray-500 hover:bg-gray-50 rounded-full transition-colors">
-          <span class="material-symbols-outlined">notifications</span>
-        </button>
-        <div class="h-8 w-[1px] bg-gray-200 mx-2"></div>
-        <div class="flex items-center gap-3">
-          <div class="text-right">
-            <p class="font-semibold text-gray-900 leading-none">Sarah Jenkins</p>
-            <p class="text-[10px] text-gray-500 mt-1 uppercase font-bold tracking-tight">HR Manager</p>
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+        <form method="get" class="grid gap-4 xl:grid-cols-4">
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Status</label>
+            <select name="status" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 bg-white">
+              <option value="">All Statuses</option>
+              <?php foreach ($status_options as $status_option): ?>
+                <option value="<?php echo htmlspecialchars($status_option); ?>" <?php echo $status_filter === $status_option ? 'selected' : ''; ?>><?php echo htmlspecialchars($status_option); ?></option>
+              <?php endforeach; ?>
+            </select>
           </div>
-          <img alt="User profile" class="w-10 h-10 rounded-full object-cover border-2 border-blue-100" src="https://ui-avatars.com/api/?name=Sarah+Jenkins&background=2563eb&color=fff">
-        </div>
-      </div>
-    </header>
-
-    <!-- Dashboard Body -->
-    <div class="p-8 space-y-6 max-w-[1600px] mx-auto w-full">
-      
-      <!-- Page Header -->
-      <div class="flex justify-between items-end">
-        <div>
-          <h2 class="text-3xl font-extrabold text-slate-900 tracking-tight">Applications Management</h2>
-          <p class="text-sm text-slate-500 mt-1">Review, update status, and manage all internship applications</p>
-        </div>
-        <div class="flex gap-2">
-          <button class="flex items-center gap-2 bg-slate-100 text-slate-700 px-4 py-2 rounded-lg font-medium text-sm hover:bg-slate-200 transition-all">
-            <span class="material-symbols-outlined text-[18px]">filter_list</span>
-            Filters
-          </button>
-          <button class="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg font-medium text-sm hover:bg-blue-700 transition-all shadow-sm">
-            <span class="material-symbols-outlined text-[18px]">download</span>
-            Export
-          </button>
-        </div>
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Verification</label>
+            <select name="verification_status" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 bg-white">
+              <option value="">All Verifications</option>
+              <?php foreach ($verification_options as $verification_option): ?>
+                <option value="<?php echo htmlspecialchars($verification_option); ?>" <?php echo $verification_filter === $verification_option ? 'selected' : ''; ?>><?php echo htmlspecialchars($verification_option); ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Internship title</label>
+            <input name="title" value="<?php echo htmlspecialchars($title_filter); ?>" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700" placeholder="Filter by title" />
+          </div>
+          <div class="flex items-end gap-2">
+            <input type="hidden" name="page" value="1">
+            <?php if ($search_query !== ''): ?>
+              <input type="hidden" name="search" value="<?php echo htmlspecialchars($search_query); ?>">
+            <?php endif; ?>
+            <button type="submit" class="w-full bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-700 transition">Apply</button>
+            <a href="hr_applications.php" class="w-full text-center border border-slate-200 rounded-lg px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 transition">Reset</a>
+          </div>
+        </form>
       </div>
 
       <!-- Applications Table -->
       <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+        <!-- Table header: record count — hidden when empty state is shown -->
+        <?php if ($total_rows > 0): ?>
+        <div class="px-6 py-3 border-b border-slate-100 flex items-center justify-between">
+          <p class="text-sm text-slate-500">
+            Showing
+            <span class="font-semibold text-slate-800"><?php echo $offset + 1; ?></span>
+            –
+            <span class="font-semibold text-slate-800"><?php echo min($offset + $per_page, $total_rows); ?></span>
+            of
+            <span class="font-semibold text-slate-800"><?php echo $total_rows; ?></span>
+            application<?php echo $total_rows !== 1 ? 's' : ''; ?>
+            <?php if ($status_filter || $verification_filter || $title_filter || $search_query): ?>
+              <span class="text-blue-600 font-medium">(filtered)</span>
+            <?php endif; ?>
+          </p>
+          <p class="text-xs text-slate-400">Page <?php echo $current_page; ?> of <?php echo $total_pages; ?></p>
+        </div>
+        <?php endif; ?>
+        <?php if ($total_rows === 0): ?>
+        <!-- ── Empty state ── -->
+        <?php
+          $has_filters = $status_filter || $verification_filter || $title_filter || $search_query;
+          // Build a human-readable summary of what was searched/filtered
+          $active_labels = [];
+          if ($search_query)        $active_labels[] = '"' . htmlspecialchars($search_query) . '"';
+          if ($status_filter)       $active_labels[] = 'status: ' . htmlspecialchars($status_filter);
+          if ($verification_filter) $active_labels[] = 'verification: ' . htmlspecialchars($verification_filter);
+          if ($title_filter)        $active_labels[] = 'title: "' . htmlspecialchars($title_filter) . '"';
+        ?>
+        <div class="flex flex-col items-center justify-center py-20 px-6 text-center">
+          <!-- Icon -->
+          <div class="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-5">
+            <span class="material-symbols-outlined text-[32px] text-slate-400">
+              <?php echo $has_filters ? 'filter_list_off' : 'inbox'; ?>
+            </span>
+          </div>
+          <!-- Heading -->
+          <h3 class="text-base font-bold text-slate-700 mb-1">
+            <?php echo $has_filters ? 'No applications found' : 'No applications yet'; ?>
+          </h3>
+          <!-- Subtitle -->
+          <p class="text-sm text-slate-400 max-w-sm">
+            <?php if ($has_filters): ?>
+              No results for <?php echo implode(', ', $active_labels); ?>.
+              Try adjusting your filters or search keywords.
+            <?php else: ?>
+              Applications will appear here once candidates start applying.
+            <?php endif; ?>
+          </p>
+          <!-- Reset button — only shown when filters are active -->
+          <?php if ($has_filters): ?>
+          <a href="hr_applications.php"
+             class="mt-6 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors shadow-sm">
+            <span class="material-symbols-outlined text-[16px]">restart_alt</span>
+            Reset filters
+          </a>
+          <?php endif; ?>
+        </div>
+
+        <?php else: ?>
+        <div class="px-6 py-4 border-b border-slate-100 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div class="flex items-center gap-3">
+            <label class="inline-flex items-center gap-2 text-sm text-slate-600">
+              <input id="bulk-select-all-top" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+              <span>Select all</span>
+            </label>
+            <span id="bulk-selected-count" class="text-sm text-slate-500 hidden"></span>
+          </div>
+          <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+            <select id="bulk-action-select" class="w-full sm:w-auto border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 bg-white">
+              <option value="">Bulk action</option>
+              <option value="verification_pending">Verification pending</option>
+              <option value="verify">Verified</option>
+              <option value="verification_rejected">Not verified</option>
+            </select>
+            <button id="bulk-action-apply" type="button" class="inline-flex items-center justify-center whitespace-nowrap rounded-lg border border-slate-200 bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed" disabled>Apply</button>
+          </div>
+        </div>
         <div class="overflow-x-auto">
           <table class="w-full text-left border-collapse">
             <thead>
               <tr class="bg-slate-50/75 border-b border-slate-100 text-slate-400 text-[11px] font-bold uppercase tracking-wider">
+                <th class="py-4 px-6">
+                  <label class="inline-flex items-center gap-2 text-slate-500">
+                    <input id="bulk-select-all" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                  </label>
+                </th>
                 <th class="py-4 px-6">Candidate</th>
                 <th class="py-4 px-6">Internship</th>
                 <th class="py-4 px-6">Applied Date</th>
                 <th class="py-4 px-6">Education</th>
-                <th class="py-4 px-6">Current Status</th>
-                <th class="py-4 px-6">Update Status</th>
+                <th class="py-4 px-6">Application Status</th>
+                <th class="py-4 px-6">Verification Status</th>
+                <th class="py-4 px-6">Update Verification Status</th>
                 <th class="py-4 px-6">Actions</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-100 text-sm text-slate-600">
               <?php while ($app = mysqli_fetch_assoc($app_result)): ?>
                 <tr class="hover:bg-slate-50/50 transition-colors">
+                  <td class="py-4 px-6">
+                    <label class="inline-flex items-center">
+                      <input type="checkbox" class="bulk-select-row h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" data-app-id="<?php echo $app['app_id']; ?>">
+                    </label>
+                  </td>
                   <td class="py-4 px-6">
                     <div class="flex items-center gap-3">
                       <img class="w-10 h-10 rounded-full border border-slate-200" src="https://ui-avatars.com/api/?name=<?php echo urlencode($app['full_name']); ?>&background=random" alt="<?php echo htmlspecialchars($app['full_name']); ?>">
@@ -202,26 +260,50 @@ $app_result = mysqli_query($conn, $app_sql);
                     </span>
                   </td>
                   <td class="py-4 px-6">
-                    <select class="status-update-select w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-blue-600 focus:border-transparent outline-none" data-app-id="<?php echo $app['app_id']; ?>" data-education="<?php echo htmlspecialchars($app['education_status']); ?>">
-                      <option value="">-- Update Status --</option>
-                      <option value="Applied">Applied</option>
-                      <option value="Test Completed">Test Completed</option>
-                      <option value="HR Round">HR Round</option>
-                      <?php if ($app['education_status'] === 'Pursuing'): ?>
-                      <option value="HOD Approved">HOD Approved</option>
-                      <?php endif; ?>
-                      <option value="Selected">Selected</option>
-                      <option value="Rejected">Rejected</option>
+                    <span class="inline-flex px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wide border uppercase <?php echo getVerificationBadgeClass($app['verification_status'] ?? 'Pending'); ?>">
+                      <?php echo htmlspecialchars($app['verification_status'] ?: 'Pending'); ?>
+                    </span>
+                  </td>
+
+                  <td class="py-4 px-6">
+                    <select class="verification-update-select w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-blue-600 focus:border-transparent outline-none" data-app-id="<?php echo $app['app_id']; ?>">
+                      <option value="">-- Verification Status --</option>
+                      <option value="Pending" <?php echo ($app['verification_status'] ?? 'Pending') === 'Pending' ? 'selected' : ''; ?>>Pending</option>
+                      <option value="Verified" <?php echo ($app['verification_status'] ?? 'Pending') === 'Verified' ? 'selected' : ''; ?>>Verified</option>
+                      <option value="Rejected" <?php echo ($app['verification_status'] ?? 'Pending') === 'Rejected' ? 'selected' : ''; ?>>Rejected</option>
                     </select>
                   </td>
                   <td class="py-4 px-6">
                     <div class="flex items-center gap-2">
-                      <a href="view_application_status.php?app_id=<?php echo $app['app_id']; ?>" class="p-2 text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors" title="View Timeline">
-                        <span class="material-symbols-outlined text-[18px]">timeline</span>
-                      </a>
-                      <button class="p-2 text-slate-600 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors" title="View Details">
+                      <a href="hr_applicant_detail.php?app_id=<?php echo $app['app_id']; ?>" class="p-2 text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors" title="View Applicant Details">
                         <span class="material-symbols-outlined text-[18px]">visibility</span>
-                      </button>
+                      </a>
+                      <?php
+                        $resume = !empty($app['resume_file']) ? trim($app['resume_file']) : '';
+                        $safe   = $resume !== '' ? urlencode(basename($resume)) : '';
+                        $ext_r  = $resume !== '' ? strtolower(pathinfo($resume, PATHINFO_EXTENSION)) : '';
+                        $allowed_r = ['pdf', 'doc', 'docx'];
+                        $has_resume = $safe !== '' && in_array($ext_r, $allowed_r, true);
+                      ?>
+                      <?php if ($has_resume): ?>
+                        <!-- View resume -->
+                        <a href="resume_serve.php?file=<?php echo $safe; ?>&mode=view"
+                           target="_blank"
+                           class="p-2 text-emerald-600 bg-emerald-50 rounded-lg hover:bg-emerald-100 transition-colors"
+                           title="View Resume (<?php echo htmlspecialchars(strtoupper($ext_r)); ?>)">
+                           <span class="material-symbols-outlined text-[18px]">description</span>
+                        </a>
+                        <!-- Download resume -->
+                        <a href="resume_serve.php?file=<?php echo $safe; ?>&mode=download"
+                           class="p-2 text-violet-600 bg-violet-50 rounded-lg hover:bg-violet-100 transition-colors"
+                           title="Download Resume">
+                           <span class="material-symbols-outlined text-[18px]">download</span>
+                        </a>
+                      <?php else: ?>
+                        <span class="px-2 py-1 text-[10px] font-semibold text-slate-400 bg-slate-100 rounded-lg" title="No resume uploaded">
+                          No Resume
+                        </span>
+                      <?php endif; ?>
                     </div>
                   </td>
                 </tr>
@@ -229,10 +311,88 @@ $app_result = mysqli_query($conn, $app_sql);
             </tbody>
           </table>
         </div>
-      </div>
+        <?php endif; /* end empty-state else */ ?>
 
-    </div>
-  </main>
+        <!-- Pagination bar — only shown when there are results -->
+        <?php if ($total_rows > 0): ?>
+        <?php
+          $filters = [
+              'status'              => $status_filter,
+              'verification_status' => $verification_filter,
+              'title'               => $title_filter,
+              'search'              => $search_query,
+          ];
+          $window     = 2;
+          $page_start = max(1, $current_page - $window);
+          $page_end   = min($total_pages, $current_page + $window);
+        ?>
+        <div class="px-6 py-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <!-- Left: summary -->
+          <p class="text-sm text-slate-500 order-2 sm:order-1">
+            <?php echo $total_rows; ?> result<?php echo $total_rows !== 1 ? 's' : ''; ?> &mdash;
+            page <?php echo $current_page; ?> of <?php echo $total_pages; ?>
+          </p>
+
+          <!-- Right: page buttons -->
+          <nav class="flex items-center gap-1 order-1 sm:order-2" aria-label="Pagination">
+
+            <!-- Previous -->
+            <?php if ($current_page > 1): ?>
+              <a href="<?php echo htmlspecialchars(paginate_url($current_page - 1, $filters)); ?>"
+                 class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-sm text-slate-600 hover:bg-slate-50 transition-colors">
+                <span class="material-symbols-outlined text-[16px]">chevron_left</span> Prev
+              </a>
+            <?php else: ?>
+              <span class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-100 bg-slate-50 text-sm text-slate-300 cursor-not-allowed">
+                <span class="material-symbols-outlined text-[16px]">chevron_left</span> Prev
+              </span>
+            <?php endif; ?>
+
+            <!-- First page + ellipsis -->
+            <?php if ($page_start > 1): ?>
+              <a href="<?php echo htmlspecialchars(paginate_url(1, $filters)); ?>"
+                 class="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-sm text-slate-600 hover:bg-slate-50 transition-colors">1</a>
+              <?php if ($page_start > 2): ?>
+                <span class="px-2 text-slate-400 text-sm">…</span>
+              <?php endif; ?>
+            <?php endif; ?>
+
+            <!-- Page window -->
+            <?php for ($p = $page_start; $p <= $page_end; $p++): ?>
+              <?php if ($p === $current_page): ?>
+                <span class="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm font-semibold shadow-sm"><?php echo $p; ?></span>
+              <?php else: ?>
+                <a href="<?php echo htmlspecialchars(paginate_url($p, $filters)); ?>"
+                   class="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-sm text-slate-600 hover:bg-slate-50 transition-colors"><?php echo $p; ?></a>
+              <?php endif; ?>
+            <?php endfor; ?>
+
+            <!-- Ellipsis + last page -->
+            <?php if ($page_end < $total_pages): ?>
+              <?php if ($page_end < $total_pages - 1): ?>
+                <span class="px-2 text-slate-400 text-sm">…</span>
+              <?php endif; ?>
+              <a href="<?php echo htmlspecialchars(paginate_url($total_pages, $filters)); ?>"
+                 class="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-sm text-slate-600 hover:bg-slate-50 transition-colors"><?php echo $total_pages; ?></a>
+            <?php endif; ?>
+
+            <!-- Next -->
+            <?php if ($current_page < $total_pages): ?>
+              <a href="<?php echo htmlspecialchars(paginate_url($current_page + 1, $filters)); ?>"
+                 class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-sm text-slate-600 hover:bg-slate-50 transition-colors">
+                Next <span class="material-symbols-outlined text-[16px]">chevron_right</span>
+              </a>
+            <?php else: ?>
+              <span class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-100 bg-slate-50 text-sm text-slate-300 cursor-not-allowed">
+                Next <span class="material-symbols-outlined text-[16px]">chevron_right</span>
+              </span>
+            <?php endif; ?>
+
+          </nav>
+        </div>
+        <?php endif; /* end pagination if $total_rows > 0 */ ?>
+
+      </div>
 
   <!-- Toast Notification -->
   <div id="toast" class="fixed top-6 right-6 z-50 bg-white rounded-xl shadow-xl px-5 py-4 border flex items-center gap-3 transform translate-x-[400px] transition-transform duration-500 ease-out hidden">
@@ -251,7 +411,6 @@ $app_result = mysqli_query($conn, $app_sql);
       select.addEventListener('change', async function() {
         const appId = this.dataset.appId;
         const newStatus = this.value;
-        const education = this.dataset.education;
         
         if (!newStatus) return;
         
@@ -287,6 +446,133 @@ $app_result = mysqli_query($conn, $app_sql);
         }
       });
     });
+
+    document.querySelectorAll('.verification-update-select').forEach(select => {
+      select.addEventListener('change', async function() {
+        const appId = this.dataset.appId;
+        const newVerification = this.value;
+        if (!newVerification) return;
+
+        if (!confirm(`Update verification status to "${newVerification}"?`)) {
+          this.value = '';
+          return;
+        }
+
+        try {
+          const formData = new FormData();
+          formData.append('application_id', appId);
+          formData.append('verification_status', newVerification);
+
+          const response = await fetch('update_verification_status.php', {
+            method: 'POST',
+            body: formData
+          });
+
+          const result = await response.json();
+          if (result.success) {
+            showToast('success', 'Success', result.message);
+            setTimeout(() => location.reload(), 1500);
+          } else {
+            showToast('error', 'Error', result.message);
+            this.value = '';
+          }
+        } catch (error) {
+          showToast('error', 'Error', 'Failed to update verification status');
+          this.value = '';
+        }
+      });
+    });
+
+    const bulkSelectAllTop = document.getElementById('bulk-select-all-top');
+    const bulkSelectAll = document.getElementById('bulk-select-all');
+    const bulkRows = Array.from(document.querySelectorAll('.bulk-select-row'));
+    const bulkActionSelect = document.getElementById('bulk-action-select');
+    const bulkApplyButton = document.getElementById('bulk-action-apply');
+    const bulkSelectedCount = document.getElementById('bulk-selected-count');
+
+    function updateBulkSelectionDisplay() {
+      const selectedRows = bulkRows.filter(row => row.checked);
+      const count = selectedRows.length;
+      const enabled = count > 0 && bulkActionSelect.value !== '';
+      bulkApplyButton.disabled = !enabled;
+      bulkSelectedCount.textContent = count > 0 ? `${count} selected` : '';
+      bulkSelectedCount.classList.toggle('hidden', count === 0);
+      const allChecked = selectedRows.length === bulkRows.length && bulkRows.length > 0;
+      if (bulkSelectAll) bulkSelectAll.checked = allChecked;
+      if (bulkSelectAllTop) bulkSelectAllTop.checked = allChecked;
+    }
+
+    function setBulkSelection(checked) {
+      bulkRows.forEach(row => row.checked = checked);
+      updateBulkSelectionDisplay();
+    }
+
+    if (bulkSelectAll) {
+      bulkSelectAll.addEventListener('change', function() {
+        setBulkSelection(this.checked);
+      });
+    }
+
+    if (bulkSelectAllTop) {
+      bulkSelectAllTop.addEventListener('change', function() {
+        setBulkSelection(this.checked);
+      });
+    }
+
+    bulkRows.forEach(row => {
+      row.addEventListener('change', updateBulkSelectionDisplay);
+    });
+
+    if (bulkActionSelect) {
+      bulkActionSelect.addEventListener('change', updateBulkSelectionDisplay);
+    }
+
+    if (bulkApplyButton) {
+      bulkApplyButton.addEventListener('click', async function() {
+        const selectedIds = bulkRows.filter(row => row.checked).map(row => row.dataset.appId).filter(Boolean);
+        const action = bulkActionSelect.value;
+        if (selectedIds.length === 0) {
+          showToast('error', 'No Selection', 'Select one or more applications before applying bulk action.');
+          return;
+        }
+        if (!action) {
+          showToast('error', 'Choose Action', 'Choose a bulk action to apply.');
+          return;
+        }
+
+        const actionLabelMap = {
+          verification_pending: 'Verification pending',
+          verify: 'Verified',
+          verification_rejected: 'Not verified'
+        };
+        const confirmText = `Are you sure you want to perform bulk action "${actionLabelMap[action] || action}" on ${selectedIds.length} application(s)?`;
+        if (!confirm(confirmText)) {
+          return;
+        }
+
+        try {
+          const formData = new FormData();
+          selectedIds.forEach(id => formData.append('application_ids[]', id));
+          formData.append('action', action);
+
+          const response = await fetch('bulk_update_applications.php', {
+            method: 'POST',
+            body: formData
+          });
+
+          const result = await response.json();
+          if (result.success) {
+            showToast('success', 'Bulk update complete', result.message || 'Applications updated successfully.');
+            setTimeout(() => location.reload(), 1300);
+          } else {
+            showToast('error', 'Bulk update failed', result.message || 'Unable to apply bulk action.');
+          }
+        } catch (error) {
+          showToast('error', 'Error', 'Bulk action request failed.');
+          console.error(error);
+        }
+      });
+    }
     
     function showToast(type, title, message) {
       const toast = document.getElementById('toast');
@@ -334,5 +620,4 @@ $app_result = mysqli_query($conn, $app_sql);
     }
   </script>
 
-</body>
-</html>
+<?php page_shell_end(); ?>

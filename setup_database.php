@@ -81,12 +81,13 @@ if (mysqli_num_rows($check_cols) == 0) {
 // 2. Check/Add smart-form columns in internship_applications
 $new_cols = [
     "education_status"    => "VARCHAR(20) DEFAULT NULL",
+    "verification_status" => "VARCHAR(20) DEFAULT 'Pending'",
     "department"          => "VARCHAR(100) DEFAULT NULL",
     "hod_name"            => "VARCHAR(100) DEFAULT NULL",
     "hod_email"           => "VARCHAR(100) DEFAULT NULL",
     "graduation_year"     => "VARCHAR(10) DEFAULT NULL",
     "prev_college_name"   => "VARCHAR(150) DEFAULT NULL",
-    "aadhaar_number"      => "VARCHAR(20) DEFAULT NULL",
+    "aadhaar_number"      => "VARCHAR(255) DEFAULT NULL",
     "resume_file"         => "VARCHAR(255) DEFAULT NULL",
     "preferred_domain"    => "VARCHAR(100) DEFAULT NULL",
     "project_interests"   => "TEXT DEFAULT NULL",
@@ -100,6 +101,9 @@ $new_cols = [
     "preferred_duration"  => "VARCHAR(100) DEFAULT NULL",
     "reason_for_applying" => "TEXT DEFAULT NULL",
     "relevant_skills"     => "TEXT DEFAULT NULL",
+    "is_deleted"          => "TINYINT(1) DEFAULT 0",
+    "deleted_at"          => "TIMESTAMP NULL DEFAULT NULL",
+    "deleted_by"          => "VARCHAR(100) DEFAULT NULL",
 ];
 foreach ($new_cols as $col => $definition) {
     $chk = mysqli_query($conn, "SHOW COLUMNS FROM internship_applications LIKE '$col'");
@@ -165,12 +169,21 @@ $daily_logs_table = "CREATE TABLE IF NOT EXISTS daily_logs (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
     internship_id INT NOT NULL,
+    application_id INT DEFAULT NULL,
     tasks_completed TEXT NOT NULL,
     time_spent DECIMAL(4,2) NOT NULL,
     focus_level VARCHAR(50) NOT NULL,
     issues_faced TEXT DEFAULT NULL,
     next_plan TEXT DEFAULT NULL,
     log_date DATE NOT NULL,
+    status VARCHAR(20) DEFAULT 'Submitted',
+    reviewed_by INT DEFAULT NULL,
+    reviewed_at TIMESTAMP NULL DEFAULT NULL,
+    attachment_path VARCHAR(255) DEFAULT NULL,
+    hr_review_status VARCHAR(50) DEFAULT 'Pending',
+    hr_remarks TEXT DEFAULT NULL,
+    hr_reviewed_by INT DEFAULT NULL,
+    hr_reviewed_at TIMESTAMP NULL DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )";
 executeSetupQuery($conn, $daily_logs_table, "Creating daily_logs table", $errors, $is_cli);
@@ -226,6 +239,100 @@ $password_resets_table = "CREATE TABLE IF NOT EXISTS password_resets (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )";
 executeSetupQuery($conn, $password_resets_table, "Creating password_resets table", $errors, $is_cli);
+
+// 11. Create company_profiles table
+$company_profiles_table = "CREATE TABLE IF NOT EXISTS company_profiles (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL UNIQUE,
+    company_name VARCHAR(150) NOT NULL,
+    industry_type VARCHAR(100) DEFAULT NULL,
+    website VARCHAR(150) DEFAULT NULL,
+    company_size VARCHAR(50) DEFAULT NULL,
+    plan_selected VARCHAR(50) DEFAULT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+)";
+executeSetupQuery($conn, $company_profiles_table, "Creating company_profiles table", $errors, $is_cli);
+
+// 12. Create company_shortlists table
+$company_shortlists_table = "CREATE TABLE IF NOT EXISTS company_shortlists (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    company_id INT NOT NULL,
+    candidate_id INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (company_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (candidate_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_company_candidate (company_id, candidate_id)
+)";
+executeSetupQuery($conn, $company_shortlists_table, "Creating company_shortlists table", $errors, $is_cli);
+
+// 13. Create company_contacts table
+$company_contacts_table = "CREATE TABLE IF NOT EXISTS company_contacts (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    company_id INT NOT NULL,
+    candidate_id INT NOT NULL,
+    message TEXT DEFAULT NULL,
+    contacted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (company_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (candidate_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_company_contact (company_id, candidate_id)
+)";
+executeSetupQuery($conn, $company_contacts_table, "Creating company_contacts table", $errors, $is_cli);
+
+// 14. Create hiring_requests table
+$hiring_requests_table = "CREATE TABLE IF NOT EXISTS hiring_requests (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    company_id INT NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    department VARCHAR(100) NOT NULL,
+    openings INT DEFAULT 1,
+    description TEXT DEFAULT NULL,
+    requirements TEXT DEFAULT NULL,
+    status VARCHAR(50) DEFAULT 'Pending',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (company_id) REFERENCES users(id) ON DELETE CASCADE
+)";
+executeSetupQuery($conn, $hiring_requests_table, "Creating hiring_requests table", $errors, $is_cli);
+
+// 15. Create activity_logs table
+$activity_logs_table = "CREATE TABLE IF NOT EXISTS activity_logs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT DEFAULT NULL,
+    user_name VARCHAR(100) NOT NULL,
+    user_role VARCHAR(50) NOT NULL,
+    action_type VARCHAR(100) NOT NULL,
+    details TEXT DEFAULT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+)";
+executeSetupQuery($conn, $activity_logs_table, "Creating activity_logs table", $errors, $is_cli);
+
+// 16. Create company_notifications table
+$company_notif_table = "CREATE TABLE IF NOT EXISTS company_notifications (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    company_id INT NOT NULL,
+    type VARCHAR(50) NOT NULL,
+    title VARCHAR(150) NOT NULL,
+    message TEXT NOT NULL,
+    is_read TINYINT(1) DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (company_id) REFERENCES users(id) ON DELETE CASCADE
+)";
+executeSetupQuery($conn, $company_notif_table, "Creating company_notifications table", $errors, $is_cli);
+
+// 17. Create company_views table to track candidate profile views
+$company_views_table = "CREATE TABLE IF NOT EXISTS company_views (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    company_id INT NOT NULL,
+    candidate_id INT NOT NULL,
+    viewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (company_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (candidate_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_company_candidate_view (company_id, candidate_id)
+)";
+executeSetupQuery($conn, $company_views_table, "Creating company_views table", $errors, $is_cli);
+
+
 
 
 $admin_email = 'imp.webprotal2026@gmail.com';

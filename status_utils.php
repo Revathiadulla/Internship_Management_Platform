@@ -1,15 +1,15 @@
 <?php
-// Status badge color mapping function
 function getStatusBadgeClass($status) {
+
     $status_lower = strtolower($status);
     
     // Green statuses (positive/completed)
-    if (in_array($status_lower, ['selected', 'hod approved'])) {
+    if (in_array($status_lower, ['selected', 'hod approved', 'offer sent', 'onboarding completed'])) {
         return 'bg-emerald-50 text-emerald-700 border-emerald-200';
     }
     
-    // Blue statuses (in progress)
-    if (in_array($status_lower, ['applied', 'test completed', 'hr round'])) {
+    // Blue/Cyan statuses (in progress)
+    if (in_array($status_lower, ['applied', 'test completed', 'interview scheduled', 'hr round'])) {
         return 'bg-blue-50 text-blue-700 border-blue-200';
     }
     
@@ -19,6 +19,18 @@ function getStatusBadgeClass($status) {
     }
     
     // Default gray
+    return 'bg-slate-50 text-slate-700 border-slate-200';
+}
+
+
+function getVerificationBadgeClass($verification_status) {
+    $status_lower = strtolower($verification_status);
+    if ($status_lower === 'verified') {
+        return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+    }
+    if ($status_lower === 'rejected') {
+        return 'bg-red-50 text-red-700 border-red-200';
+    }
     return 'bg-slate-50 text-slate-700 border-slate-200';
 }
 

@@ -1,3 +1,13 @@
+<?php
+session_start();
+if (!isset($_SESSION['user_id']) || !isset($_SESSION['role']) || strtolower($_SESSION['role']) !== 'coordinator') {
+    header("Location: login.php?error=" . urlencode("Unauthorized access. Coordinator role required."));
+    exit();
+}
+$name = $_SESSION['full_name'] ?? 'Coordinator';
+$email = $_SESSION['email'] ?? 'coordinator@example.com';
+$initial = strtoupper(substr($name, 0, 1)) ?: 'C';
+?>
 <!DOCTYPE html>
 
 <html class="light" lang="en">
@@ -176,7 +186,7 @@
                                 <span>Reports</span>
                         </a>
                         <a class="flex items-center gap-3 text-gray-600 px-4 py-3 hover:bg-gray-100 duration-200 ease-in-out"
-                                href="#">
+                                href="coordinator_teams.php">
                                 <span class="material-symbols-outlined">manage_accounts</span>
                                 <span>Team Management</span>
                         </a>
@@ -217,11 +227,25 @@
                                         class="p-2 hover:bg-gray-50 transition-colors cursor-pointer active:opacity-80 rounded-full">
                                         <span class="material-symbols-outlined text-gray-500">settings</span>
                                 </button>
-                                <div
-                                        class="w-8 h-8 rounded-full bg-gray-200 overflow-hidden ml-2 border border-outline-variant">
-                                        <img alt="User profile"
-                                                data-alt="A professional headshot of a corporate coordinator in a brightly lit, modern office environment. The individual is smiling confidently, wearing business-casual attire. The background is softly blurred, showing hints of a glass-walled conference room and contemporary office furniture, maintaining a high-key, professional light-mode aesthetic with clean white and soft gray tones."
-                                                src="https://lh3.googleusercontent.com/aida-public/AB6AXuArm-ek8_z6yNJrNGqrDL4ImXVmp5Dj2yo2qX-kO_uYcztlv3110NG1T8HwBiv1LAWTbijoGBuJcUDAdOg8rJ16xPPHfG3Z7I5xeb4NIYj7Mw0jLg3R0206NwSREEK4hddt-jU6NSFh_RlKwB1Ak3FGOVTK5eD7DKjYWgaXbejs2602llPcsUPlP0ZmN-A2L31M6eGRGeZF-eYsv4anZsVIg8uZE863u3rKer3UjXimU0cBqaFXbbYw0Kt6j7dkbPK1QY4NSw4xng" />
+                                <div class="relative">
+                                    <button id="profile-toggle" class="flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-slate-50 transition-colors cursor-pointer text-left">
+                                        <span class="grid h-9 w-9 place-items-center rounded-full bg-blue-600 text-sm font-bold text-white"><?php echo $initial; ?></span>
+                                        <span class="hidden text-left lg:block">
+                                            <span class="block text-sm font-bold text-slate-900"><?php echo htmlspecialchars($name); ?></span>
+                                            <span class="block text-xs text-slate-500">Coordinator</span>
+                                        </span>
+                                        <span class="material-symbols-outlined text-slate-400">expand_more</span>
+                                    </button>
+                                    
+                                    <!-- Dropdown -->
+                                    <div id="profile-dropdown" class="hidden absolute right-0 mt-2 min-w-[220px] bg-white rounded-xl shadow-xl border border-slate-200 py-2 z-50">
+                                        <div class="border-b border-slate-100 px-4 py-3 bg-slate-50/50">
+                                            <p class="text-sm font-bold text-slate-800"><?php echo htmlspecialchars($name); ?></p>
+                                            <p class="truncate text-xs text-slate-400 mt-0.5"><?php echo htmlspecialchars($email); ?></p>
+                                            <span class="inline-block px-2 py-0.5 bg-blue-100 text-blue-700 text-[9px] font-extrabold rounded uppercase mt-1.5 tracking-wider">Coordinator</span>
+                                        </div>
+                                        <a href="logout.php" class="block px-4 py-2.5 text-sm font-bold text-red-650 hover:bg-red-50 hover:text-red-700 transition">Logout</a>
+                                    </div>
                                 </div>
                         </div>
                 </header>
@@ -657,6 +681,15 @@
                         </div>
                 </div>
         </main>
+        <script>
+          const profileToggle = document.getElementById('profile-toggle');
+          const profileDropdown = document.getElementById('profile-dropdown');
+          if (profileToggle && profileDropdown) {
+            profileToggle.addEventListener('click', e => { e.stopPropagation(); profileDropdown.classList.toggle('hidden'); });
+            document.addEventListener('click', e => { if (!profileToggle.contains(e.target) && !profileDropdown.contains(e.target)) profileDropdown.classList.add('hidden'); });
+            profileDropdown.querySelectorAll('a').forEach(link => { link.addEventListener('click', () => profileDropdown.classList.add('hidden')); });
+          }
+        </script>
 </body>
 
 </html>

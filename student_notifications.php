@@ -137,9 +137,7 @@ $has_active = mysqli_num_rows($active_result) > 0;
       <a class="flex items-center gap-3 bg-blue-50 text-blue-700 rounded-lg px-4 py-3 font-medium transition-all shadow-sm" href="student_notifications.php">
         <span class="material-symbols-outlined">notifications</span>
         <span class="text-sm font-medium">Notifications</span>
-        <?php if ($unread_count > 0): ?>
-            <span id="sidebar-badge" class="ml-auto bg-red-100 text-red-600 py-0.5 px-2 rounded-full text-[10px] font-bold"><?php echo $unread_count; ?></span>
-        <?php endif; ?>
+        <span id="sidebar-badge" class="ml-auto bg-red-100 text-red-600 py-0.5 px-2 rounded-full text-[10px] font-bold <?php echo ($unread_count > 0) ? '' : 'hidden'; ?>"><?php echo $unread_count; ?></span>
       </a>
       <?php else: ?>
       <a class="flex items-center gap-3 text-gray-600 px-4 py-3 rounded-lg hover:bg-gray-50 hover:text-blue-600 transition-all" href="student_dashboard.php">
@@ -157,9 +155,7 @@ $has_active = mysqli_num_rows($active_result) > 0;
       <a class="flex items-center gap-3 bg-blue-50 text-blue-700 rounded-lg px-4 py-3 font-medium transition-all shadow-sm" href="student_notifications.php">
         <span class="material-symbols-outlined">notifications</span>
         <span class="text-sm font-medium">Notifications</span>
-        <?php if ($unread_count > 0): ?>
-            <span id="sidebar-badge" class="ml-auto bg-red-100 text-red-600 py-0.5 px-2 rounded-full text-[10px] font-bold"><?php echo $unread_count; ?></span>
-        <?php endif; ?>
+        <span id="sidebar-badge" class="ml-auto bg-red-100 text-red-600 py-0.5 px-2 rounded-full text-[10px] font-bold <?php echo ($unread_count > 0) ? '' : 'hidden'; ?>"><?php echo $unread_count; ?></span>
       </a>
       <?php endif; ?>
     </nav>
@@ -188,21 +184,20 @@ $has_active = mysqli_num_rows($active_result) > 0;
       <div class="flex items-center gap-6">
         <button class="p-2 text-gray-500 hover:bg-gray-50 transition-colors rounded-full relative">
           <span class="material-symbols-outlined">notifications</span>
-          <?php if ($unread_count > 0): ?>
-              <span id="nav-dot" class="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
-          <?php endif; ?>
+          <span id="nav-dot" class="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white <?php echo ($unread_count > 0) ? '' : 'hidden'; ?>"></span>
         </button>
         <div class="h-8 w-[1px] bg-gray-200"></div>
         
         <!-- Profile Click Area -->
         <div class="relative">
-          <div id="profile-toggle" class="flex items-center gap-3 cursor-pointer group select-none p-1 rounded-lg hover:bg-gray-50 transition-colors">
-            <div class="text-right hidden md:block">
-              <p class="text-sm font-bold text-slate-800 group-hover:text-blue-600 transition-colors"><?php echo htmlspecialchars($profile['full_name']); ?></p>
-              <p class="text-xs text-gray-500">Student Account</p>
-            </div>
-            <img alt="User profile" class="w-10 h-10 rounded-full border border-gray-200 shadow-sm" src="https://ui-avatars.com/api/?name=<?php echo urlencode($profile['full_name']); ?>&background=0D8ABC&color=fff">
-          </div>
+          <button id="profile-toggle" class="flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-slate-50 transition-colors cursor-pointer text-left">
+            <img alt="User profile" class="w-9 h-9 rounded-full border border-gray-200 shadow-sm" src="https://ui-avatars.com/api/?name=<?php echo urlencode($profile['full_name']); ?>&background=0D8ABC&color=fff">
+            <span class="hidden text-left lg:block">
+              <span class="block text-sm font-bold text-slate-900"><?php echo htmlspecialchars($profile['full_name']); ?></span>
+              <span class="block text-xs text-slate-500">Student</span>
+            </span>
+            <span class="material-symbols-outlined text-slate-400">expand_more</span>
+          </button>
 
           <!-- Profile Dropdown Panel -->
           <div id="profile-dropdown" class="hidden absolute right-0 mt-3 w-80 bg-white rounded-xl shadow-xl border border-gray-100 z-50 overflow-hidden transform origin-top-right transition-all">
@@ -385,16 +380,24 @@ $has_active = mysqli_num_rows($active_result) > 0;
         const profileToggle = document.getElementById('profile-toggle');
         const profileDropdown = document.getElementById('profile-dropdown');
 
-        profileToggle.addEventListener('click', (e) => {
-            e.stopPropagation();
-            profileDropdown.classList.toggle('hidden');
-        });
+        if (profileToggle && profileDropdown) {
+            profileToggle.addEventListener('click', (e) => {
+                e.stopPropagation();
+                profileDropdown.classList.toggle('hidden');
+            });
 
-        document.addEventListener('click', (e) => {
-            if (!profileToggle.contains(e.target) && !profileDropdown.contains(e.target)) {
-                profileDropdown.classList.add('hidden');
-            }
-        });
+            document.addEventListener('click', (e) => {
+                if (!profileToggle.contains(e.target) && !profileDropdown.contains(e.target)) {
+                    profileDropdown.classList.add('hidden');
+                }
+            });
+
+            profileDropdown.querySelectorAll('a').forEach(link => {
+                link.addEventListener('click', () => {
+                    profileDropdown.classList.add('hidden');
+                });
+            });
+        }
 
         // Filter Pills toggle logic
         const filterPills = document.querySelectorAll(".filter-pill");
@@ -531,5 +534,210 @@ $has_active = mysqli_num_rows($active_result) > 0;
     });
   </script>
 
+  <!-- Real-time SSE Toast & Badge Notifications Listener -->
+  <script>
+    (function() {
+        if (typeof EventSource === "undefined") return;
+        const source = new EventSource("sse_notifications.php");
+        
+        source.onmessage = function(event) {
+            try {
+                const data = JSON.parse(event.data);
+                showLiveToast(data.title, data.message, data.type);
+                
+                // Update badge counters
+                const sidebarBadges = document.querySelectorAll("#sidebar-badge");
+                const navDot = document.getElementById("nav-dot");
+                
+                sidebarBadges.forEach(sidebarBadge => {
+                    let currentCount = parseInt(sidebarBadge.textContent) || 0;
+                    currentCount++;
+                    sidebarBadge.textContent = currentCount;
+                    sidebarBadge.classList.remove("hidden");
+                });
+                
+                if (navDot) {
+                    navDot.classList.remove("hidden");
+                }
+
+                // Prepend to notifications-container if present on student_notifications.php
+                const container = document.getElementById("notifications-container");
+                if (container) {
+                    // Remove "No Notifications Yet" empty state if it's visible
+                    const emptyState = container.querySelector(".py-16");
+                    if (emptyState && emptyState.textContent.includes("No Notifications Yet")) {
+                        emptyState.remove();
+                    }
+                    
+                    // Create new card element
+                    const card = document.createElement("div");
+                    card.className = "notification-card bg-white rounded-2xl border border-blue-100 shadow-sm p-5 transition-all flex items-start gap-4";
+                    card.id = `notif-card-${data.id}`;
+                    card.setAttribute("data-id", data.id);
+                    card.setAttribute("data-type", (data.type || "").toLowerCase());
+                    card.setAttribute("data-read", "false");
+                    
+                    let icon = "notifications";
+                    let iconBg = "bg-blue-50 text-blue-600";
+                    const lowerType = (data.type || "").toLowerCase();
+                    if (lowerType === 'application') {
+                        icon = 'assignment';
+                        iconBg = 'bg-blue-50 text-blue-600';
+                    } else if (lowerType === 'assessment') {
+                        icon = 'quiz';
+                        iconBg = 'bg-purple-50 text-purple-600';
+                    } else if (lowerType === 'verification') {
+                        icon = 'verified_user';
+                        iconBg = 'bg-green-50 text-green-600';
+                    } else if (lowerType === 'hr') {
+                        icon = 'person';
+                        iconBg = 'bg-orange-50 text-orange-600';
+                    } else if (lowerType === 'hod') {
+                        icon = 'school';
+                        iconBg = 'bg-indigo-50 text-indigo-600';
+                    } else if (lowerType === 'selection') {
+                        icon = 'stars';
+                        iconBg = 'bg-rose-50 text-rose-600';
+                    } else if (lowerType === 'reminder') {
+                        icon = 'event_note';
+                        iconBg = 'bg-amber-50 text-amber-600';
+                    } else if (lowerType === 'alert') {
+                        icon = 'warning';
+                        iconBg = 'bg-red-50 text-red-600';
+                    } else if (lowerType === 'mentor') {
+                        icon = 'supervisor_account';
+                        iconBg = 'bg-indigo-50 text-indigo-600';
+                    }
+                    
+                    card.innerHTML = `
+                        <div class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${iconBg}">
+                            <span class="material-symbols-outlined text-[20px]">${icon}</span>
+                        </div>
+                        <div class="flex-grow min-w-0">
+                            <div class="flex items-start justify-between gap-2">
+                                <span class="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">${data.type || 'info'} Notification</span>
+                                <span class="new-dot w-2 h-2 bg-blue-600 rounded-full shrink-0 mt-1 shadow-sm"></span>
+                            </div>
+                            <p class="font-semibold text-slate-800 text-sm mt-1 leading-relaxed">${data.message}</p>
+                            <span class="text-[10px] text-slate-400 font-medium flex items-center gap-1 mt-3">
+                                <span class="material-symbols-outlined text-[12px]">schedule</span> 
+                                Just now
+                            </span>
+                        </div>
+                        <button class="btn-mark-single-read self-center text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50/50 hover:bg-blue-50 border border-blue-100 rounded-lg px-3 py-1.5 transition-colors shrink-0">
+                            Mark Read
+                        </button>
+                    `;
+                    
+                    // Attach read event listener to the new mark-read button
+                    const btn = card.querySelector(".btn-mark-single-read");
+                    if (btn) {
+                        btn.addEventListener("click", async () => {
+                            try {
+                                const response = await fetch(`mark_notification_read.php?id=${data.id}`);
+                                const respData = await response.json();
+                                if (respData.success) {
+                                    card.setAttribute("data-read", "true");
+                                    card.className = "notification-card bg-white rounded-2xl border border-slate-100 p-5 transition-all flex items-start gap-4";
+                                    const dot = card.querySelector(".new-dot");
+                                    if (dot) dot.remove();
+                                    btn.remove();
+                                    
+                                    // Update badge count locally using existing page function
+                                    if (typeof updateBadgeCounts === "function") {
+                                        updateBadgeCounts();
+                                    }
+                                } else {
+                                    alert("Error: " + respData.message);
+                                }
+                            } catch (err) {
+                                console.error("AJAX Error: ", err);
+                            }
+                        });
+                    }
+                    
+                    // Prepend card to list
+                    container.insertBefore(card, container.firstChild);
+                    
+                    // Update pill count label if present
+                    const pillCount = document.getElementById("unread-pill-count");
+                    if (pillCount) {
+                        let currentUnread = parseInt(pillCount.textContent) || 0;
+                        pillCount.textContent = `${currentUnread + 1} New`;
+                    }
+                }
+            } catch (e) {
+                console.error("Error parsing SSE data:", e);
+            }
+        };
+
+        function showLiveToast(title, message, type) {
+            const toast = document.createElement("div");
+            toast.className = "fixed bottom-5 right-5 z-[999] max-w-sm w-full bg-white border border-slate-100 rounded-2xl shadow-[0_10px_30px_rgba(15,23,42,0.15)] p-4 flex gap-3 transform translate-y-10 opacity-0 transition-all duration-300 ease-out";
+            
+            let icon = "notifications";
+            let iconColor = "bg-blue-50 text-blue-600";
+            
+            if (type === "log_submission" || type === "log_resubmission") {
+                icon = "assignment_turned_in";
+                iconColor = "bg-purple-50 text-purple-600";
+            } else if (type === "intern_assignment") {
+                icon = "person_add";
+                iconColor = "bg-green-50 text-green-700";
+            } else if (type === "mentor") {
+                icon = "supervisor_account";
+                iconColor = "bg-indigo-50 text-indigo-600";
+            } else if (type === "Verification" || type === "verification") {
+                icon = "verified_user";
+                iconColor = "bg-green-50 text-green-600";
+            } else if (type === "Assessment" || type === "assessment") {
+                icon = "quiz";
+                iconColor = "bg-purple-50 text-purple-600";
+            } else if (type === "Selection" || type === "selection") {
+                icon = "stars";
+                iconColor = "bg-rose-50 text-rose-600";
+            } else if (type === "Reminder" || type === "reminder") {
+                icon = "event_note";
+                iconColor = "bg-amber-50 text-amber-600";
+            } else if (type === "alert" || type === "Warning") {
+                icon = "warning";
+                iconColor = "bg-red-50 text-red-600";
+            }
+            
+            toast.innerHTML = `
+                <div class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${iconColor}">
+                    <span class="material-symbols-outlined text-[20px]">${icon}</span>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <p class="text-xs font-black text-slate-800">${title}</p>
+                    <p class="text-xs text-slate-500 mt-1 font-semibold leading-relaxed">${message}</p>
+                </div>
+                <button class="text-slate-455 hover:text-slate-600 shrink-0 self-start transition-colors">
+                    <span class="material-symbols-outlined text-sm font-bold">close</span>
+                </button>
+            `;
+            
+            toast.querySelector("button").addEventListener("click", () => {
+                toast.classList.remove("translate-y-0", "opacity-100");
+                toast.classList.add("translate-y-2", "opacity-0");
+                setTimeout(() => toast.remove(), 300);
+            });
+            
+            document.body.appendChild(toast);
+            toast.offsetHeight; // trigger reflow
+            
+            toast.classList.remove("translate-y-10", "opacity-0");
+            toast.classList.add("translate-y-0", "opacity-100");
+            
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.classList.remove("translate-y-0", "opacity-100");
+                    toast.classList.add("translate-y-2", "opacity-0");
+                    setTimeout(() => toast.remove(), 300);
+                }
+            }, 6000);
+        }
+    })();
+  </script>
 </body>
 </html>

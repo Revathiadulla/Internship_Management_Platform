@@ -1,8 +1,10 @@
 <?php
 session_start();
 include "db.php";
+include_once __DIR__ . "/includes/auth.php";
 include_once __DIR__ . "/includes/mail_helper.php";
 include "questions_pool.php";
+
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: login.html");
@@ -114,6 +116,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $old_status = mysqli_real_escape_string($conn, $app['status']);
         $notes = "Assessment test completed with score: $score/30";
         
+        // Log activity
+        log_activity($conn, 'Assessment Completed', "Student $student_name completed assessment for \"" . $app['title'] . "\" with score $score/30.");
+
         $history_sql = "INSERT INTO application_status_history 
                         (application_id, old_status, new_status, updated_by_role, updated_by_name, notes) 
                         VALUES ('$app_id', '$old_status', 'Test Completed', 'Student', '$student_name', '$notes')";

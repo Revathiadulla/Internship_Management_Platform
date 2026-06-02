@@ -1,6 +1,7 @@
 <?php
 session_start();
 include "db.php";
+require_once __DIR__ . "/includes/crypto_helper.php";
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
@@ -227,6 +228,7 @@ if (!$profile) {
 <!-- ── Main Form ── -->
 <main class="max-w-3xl mx-auto px-4 sm:px-6 py-8 pb-20">
 <form id="app-form" action="internship_application_submit.php" method="POST" enctype="multipart/form-data" novalidate>
+    <?php echo csrf_token_field(); ?>
 
     <input type="hidden" name="internship_id"    value="<?php echo (int)$internship['id']; ?>">
     <input type="hidden" name="internship_name"  value="<?php echo htmlspecialchars($internship_name); ?>">
@@ -504,8 +506,8 @@ if (!$profile) {
                         <div class="flex-1 min-w-0">
                             <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-0.5">Aadhaar</p>
                             <?php
-                            $aadhaar_val = $profile['aadhaar_number'] ?? '';
-                            $aadhaar_ok  = strlen(preg_replace('/\s+/', '', $aadhaar_val)) === 12;
+                            $aadhaar_val = decrypt_aadhaar($profile['aadhaar_number'] ?? '');
+                            $aadhaar_ok  = !empty($aadhaar_val) && strlen(preg_replace('/\s+/', '', $aadhaar_val)) === 12;
                             ?>
                             <?php if ($aadhaar_ok): ?>
                                 <p class="text-sm font-bold text-slate-700 font-mono tracking-widest">
@@ -562,7 +564,7 @@ if (!$profile) {
                 </div>
 
                 <!-- Pass Aadhaar & PAN as hidden fields for the submit handler -->
-                <input type="hidden" name="aadhaar_number" value="<?php echo htmlspecialchars(preg_replace('/\s+/', '', $profile['aadhaar_number'] ?? '')); ?>">
+                <input type="hidden" name="aadhaar_number" value="<?php echo htmlspecialchars(preg_replace('/\s+/', '', decrypt_aadhaar($profile['aadhaar_number'] ?? ''))); ?>">
                 <input type="hidden" name="pan_number"     value="<?php echo htmlspecialchars(strtoupper(trim($profile['pan_number'] ?? ''))); ?>">
                 <?php if (!empty($profile['pan_file'])): ?>
                 <input type="hidden" name="existing_pan"   value="<?php echo htmlspecialchars($profile['pan_file']); ?>">
@@ -605,9 +607,8 @@ if (!$profile) {
                     <label class="flex items-start gap-3 cursor-pointer">
                         <input type="checkbox" id="declaration" name="declaration"
                                class="mt-0.5 w-5 h-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 flex-shrink-0">
-                        <span class="text-sm text-slate-600 leading-relaxed">
-                            I declare that all information provided in this application is true and correct to the best of my knowledge.
-                            I understand that any false information may lead to rejection of my application or termination of internship.
+                        <span class="text-xs text-slate-650 leading-relaxed">
+                            I declare that all information provided in this application is true and correct. I agree to the platform's data usage policy and consent to identity verification processes. I understand that all personal information collected, including my Aadhaar number and other identification details, is strictly used for verification and internship management purposes only. The platform ensures that: data is securely stored and encrypted, information is not shared with unauthorized parties, data is not misused for commercial activities, and access is restricted to authorized personnel only.
                         </span>
                     </label>
                     <span id="decl-err" class="hidden text-red-500 text-xs mt-2 block">You must accept the declaration to submit.</span>

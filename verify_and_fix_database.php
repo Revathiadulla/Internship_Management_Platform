@@ -40,6 +40,7 @@ if (mysqli_num_rows($check) > 0) {
     $required_columns = [
         'status' => "VARCHAR(50) DEFAULT 'Applied'",
         'education_status' => "VARCHAR(20) DEFAULT 'Pursuing'",
+        'verification_status' => "VARCHAR(20) DEFAULT 'Pending'",
         'internship_name' => "VARCHAR(255) DEFAULT NULL",
         'preferred_duration' => "VARCHAR(100) DEFAULT NULL",
         'reason_for_applying' => "TEXT DEFAULT NULL",
@@ -106,6 +107,247 @@ if (mysqli_num_rows($check) > 0) {
 }
 echo "</div>";
 
+// Check 3.1: company_profiles table
+echo "<div class='mb-6'>";
+echo "<h2 class='text-lg font-bold text-slate-800 mb-3'>3.1 Checking company_profiles table</h2>";
+$check = mysqli_query($conn, "SHOW TABLES LIKE 'company_profiles'");
+if (mysqli_num_rows($check) > 0) {
+    echo "<p class='text-emerald-600 font-semibold'>✓ Table exists</p>";
+    $checks_passed++;
+} else {
+    echo "<p class='text-orange-600 font-semibold'>⚠ Creating company_profiles table...</p>";
+    $create_sql = "CREATE TABLE company_profiles (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL UNIQUE,
+        company_name VARCHAR(150) NOT NULL,
+        industry_type VARCHAR(100) DEFAULT NULL,
+        website VARCHAR(150) DEFAULT NULL,
+        company_size VARCHAR(50) DEFAULT NULL,
+        plan_selected VARCHAR(50) DEFAULT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )";
+    if (mysqli_query($conn, $create_sql)) {
+        echo "<p class='text-emerald-600 text-sm ml-4'>✓ Table created successfully</p>";
+        $fixes_applied++;
+        $checks_passed++;
+    } else {
+        echo "<p class='text-red-600 text-sm ml-4'>✗ Failed to create table: " . mysqli_error($conn) . "</p>";
+        $checks_failed++;
+    }
+}
+echo "</div>";
+
+// Check 3.2: company_shortlists table
+echo "<div class='mb-6'>";
+echo "<h2 class='text-lg font-bold text-slate-800 mb-3'>3.2 Checking company_shortlists table</h2>";
+$check = mysqli_query($conn, "SHOW TABLES LIKE 'company_shortlists'");
+if (mysqli_num_rows($check) > 0) {
+    echo "<p class='text-emerald-600 font-semibold'>✓ Table exists</p>";
+    $checks_passed++;
+} else {
+    echo "<p class='text-orange-600 font-semibold'>⚠ Creating company_shortlists table...</p>";
+    $create_sql = "CREATE TABLE company_shortlists (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        company_id INT NOT NULL,
+        candidate_id INT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (company_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (candidate_id) REFERENCES users(id) ON DELETE CASCADE,
+        UNIQUE KEY unique_company_candidate (company_id, candidate_id)
+    )";
+    if (mysqli_query($conn, $create_sql)) {
+        echo "<p class='text-emerald-600 text-sm ml-4'>✓ Table created successfully</p>";
+        $fixes_applied++;
+        $checks_passed++;
+    } else {
+        echo "<p class='text-red-600 text-sm ml-4'>✗ Failed to create table: " . mysqli_error($conn) . "</p>";
+        $checks_failed++;
+    }
+}
+echo "</div>";
+
+// Check 3.3: company_contacts table
+echo "<div class='mb-6'>";
+echo "<h2 class='text-lg font-bold text-slate-800 mb-3'>3.3 Checking company_contacts table</h2>";
+$check = mysqli_query($conn, "SHOW TABLES LIKE 'company_contacts'");
+if (mysqli_num_rows($check) > 0) {
+    echo "<p class='text-emerald-600 font-semibold'>✓ Table exists</p>";
+    $checks_passed++;
+} else {
+    echo "<p class='text-orange-600 font-semibold'>⚠ Creating company_contacts table...</p>";
+    $create_sql = "CREATE TABLE company_contacts (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        company_id INT NOT NULL,
+        candidate_id INT NOT NULL,
+        message TEXT DEFAULT NULL,
+        contacted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (company_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (candidate_id) REFERENCES users(id) ON DELETE CASCADE,
+        UNIQUE KEY unique_company_contact (company_id, candidate_id)
+    )";
+    if (mysqli_query($conn, $create_sql)) {
+        echo "<p class='text-emerald-600 text-sm ml-4'>✓ Table created successfully</p>";
+        $fixes_applied++;
+        $checks_passed++;
+    } else {
+        echo "<p class='text-red-600 text-sm ml-4'>✗ Failed to create table: " . mysqli_error($conn) . "</p>";
+        $checks_failed++;
+    }
+}
+echo "</div>";
+
+// Check 3.4: hiring_requests table
+echo "<div class='mb-6'>";
+echo "<h2 class='text-lg font-bold text-slate-800 mb-3'>3.4 Checking hiring_requests table</h2>";
+$check = mysqli_query($conn, "SHOW TABLES LIKE 'hiring_requests'");
+if (mysqli_num_rows($check) > 0) {
+    echo "<p class='text-emerald-600 font-semibold'>✓ Table exists</p>";
+    $checks_passed++;
+} else {
+    echo "<p class='text-orange-600 font-semibold'>⚠ Creating hiring_requests table...</p>";
+    $create_sql = "CREATE TABLE hiring_requests (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        company_id INT NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        department VARCHAR(100) NOT NULL,
+        openings INT DEFAULT 1,
+        description TEXT DEFAULT NULL,
+        requirements TEXT DEFAULT NULL,
+        status VARCHAR(50) DEFAULT 'Pending',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (company_id) REFERENCES users(id) ON DELETE CASCADE
+    )";
+    if (mysqli_query($conn, $create_sql)) {
+        echo "<p class='text-emerald-600 text-sm ml-4'>✓ Table created successfully</p>";
+        $fixes_applied++;
+        $checks_passed++;
+    } else {
+        echo "<p class='text-red-600 text-sm ml-4'>✗ Failed to create table: " . mysqli_error($conn) . "</p>";
+        $checks_failed++;
+    }
+}
+echo "</div>";
+
+// Check 3.4b: company_views table
+echo "<div class='mb-6'>";
+echo "<h2 class='text-lg font-bold text-slate-800 mb-3'>3.4b Checking company_views table</h2>";
+$check = mysqli_query($conn, "SHOW TABLES LIKE 'company_views'");
+if (mysqli_num_rows($check) > 0) {
+    echo "<p class='text-emerald-600 font-semibold'>✓ Table exists</p>";
+    $checks_passed++;
+} else {
+    echo "<p class='text-orange-600 font-semibold'>⚠ Creating company_views table...</p>";
+    $create_sql = "CREATE TABLE company_views (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        company_id INT NOT NULL,
+        candidate_id INT NOT NULL,
+        viewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (company_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (candidate_id) REFERENCES users(id) ON DELETE CASCADE,
+        UNIQUE KEY unique_company_candidate_view (company_id, candidate_id)
+    )";
+    if (mysqli_query($conn, $create_sql)) {
+        echo "<p class='text-emerald-600 text-sm ml-4'>✓ Table created successfully</p>";
+        $fixes_applied++;
+        $checks_passed++;
+    } else {
+        echo "<p class='text-red-600 text-sm ml-4'>✗ Failed to create table: " . mysqli_error($conn) . "</p>";
+        $checks_failed++;
+    }
+}
+echo "</div>";
+
+// Check 3.5: activity_logs table
+echo "<div class='mb-6'>";
+echo "<h2 class='text-lg font-bold text-slate-800 mb-3'>3.5 Checking activity_logs table</h2>";
+$check = mysqli_query($conn, "SHOW TABLES LIKE 'activity_logs'");
+if (mysqli_num_rows($check) > 0) {
+    echo "<p class='text-emerald-600 font-semibold'>✓ Table exists</p>";
+    $checks_passed++;
+} else {
+    echo "<p class='text-orange-600 font-semibold'>⚠ Creating activity_logs table...</p>";
+    $create_sql = "CREATE TABLE activity_logs (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT DEFAULT NULL,
+        user_name VARCHAR(100) NOT NULL,
+        user_role VARCHAR(50) NOT NULL,
+        action_type VARCHAR(100) NOT NULL,
+        details TEXT DEFAULT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+    )";
+    if (mysqli_query($conn, $create_sql)) {
+        echo "<p class='text-emerald-600 text-sm ml-4'>✓ Table created successfully</p>";
+        $fixes_applied++;
+        $checks_passed++;
+    } else {
+        echo "<p class='text-red-600 text-sm ml-4'>✗ Failed to create table: " . mysqli_error($conn) . "</p>";
+        $checks_failed++;
+    }
+}
+echo "</div>";
+
+// Check 3.6: company_notifications table
+echo "<div class='mb-6'>";
+echo "<h2 class='text-lg font-bold text-slate-800 mb-3'>3.6 Checking company_notifications table</h2>";
+$check = mysqli_query($conn, "SHOW TABLES LIKE 'company_notifications'");
+if (mysqli_num_rows($check) > 0) {
+    echo "<p class='text-emerald-600 font-semibold'>✓ Table exists</p>";
+    $checks_passed++;
+} else {
+    echo "<p class='text-orange-600 font-semibold'>⚠ Creating company_notifications table...</p>";
+    $create_sql = "CREATE TABLE company_notifications (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        company_id INT NOT NULL,
+        type VARCHAR(50) NOT NULL,
+        title VARCHAR(150) NOT NULL,
+        message TEXT NOT NULL,
+        is_read TINYINT(1) DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (company_id) REFERENCES users(id) ON DELETE CASCADE
+    )";
+    if (mysqli_query($conn, $create_sql)) {
+        echo "<p class='text-emerald-600 text-sm ml-4'>✓ Table created successfully</p>";
+        $fixes_applied++;
+        $checks_passed++;
+    } else {
+        echo "<p class='text-red-600 text-sm ml-4'>✗ Failed to create table: " . mysqli_error($conn) . "</p>";
+        $checks_failed++;
+    }
+}
+echo "</div>";
+
+
+// Check 3.7: daily_logs table columns check (HR features)
+echo "<div class='mb-6'>";
+echo "<h2 class='text-lg font-bold text-slate-800 mb-3'>3.7 Checking daily_logs table columns for HR reviews</h2>";
+$check_dl = mysqli_query($conn, "SHOW TABLES LIKE 'daily_logs'");
+if (mysqli_num_rows($check_dl) > 0) {
+    $checks_passed++;
+    $hr_columns = [
+        'hr_review_status' => "VARCHAR(50) DEFAULT 'Pending'",
+        'hr_remarks' => "TEXT DEFAULT NULL",
+        'hr_reviewed_by' => "INT DEFAULT NULL",
+        'hr_reviewed_at' => "TIMESTAMP NULL DEFAULT NULL"
+    ];
+    foreach ($hr_columns as $col => $def) {
+        $col_check = mysqli_query($conn, "SHOW COLUMNS FROM daily_logs LIKE '$col'");
+        if (mysqli_num_rows($col_check) == 0) {
+            echo "<p class='text-orange-600 text-sm ml-4'>⚠ Adding missing column: $col</p>";
+            mysqli_query($conn, "ALTER TABLE daily_logs ADD COLUMN $col $def");
+            $fixes_applied++;
+        } else {
+            echo "<p class='text-slate-600 text-sm ml-4'>✓ Column exists: $col</p>";
+        }
+    }
+} else {
+    echo "<p class='text-red-600 font-semibold'>✗ Table daily_logs does not exist - please run setup_database.php first</p>";
+    $checks_failed++;
+}
+echo "</div>";
+
+
 // Check 4: Update any old statuses to new format
 echo "<div class='mb-6'>";
 echo "<h2 class='text-lg font-bold text-slate-800 mb-3'>4. Migrating old statuses to new format</h2>";
@@ -117,7 +359,10 @@ $status_migrations = [
     'Waiting for HOD Approval' => 'HR Round',
     'Test Pending' => 'Applied',
     'Approved' => 'Selected',
-    'Accepted' => 'Selected'
+    'Accepted' => 'Selected',
+    'Assessment' => 'Test Completed',
+    'Interview' => 'HR Round',
+    'Internship Started' => 'Selected'
 ];
 
 $migrated = 0;
