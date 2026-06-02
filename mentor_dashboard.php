@@ -1,5 +1,6 @@
 <?php
 session_start();
+// Fixed column references for daily_logs (dl.user_id) per recent bug fix
 include_once __DIR__ . '/includes/auth.php'; // ensure logged in and role check
 require_module_access('mentor_dashboard');
 include "db.php";
