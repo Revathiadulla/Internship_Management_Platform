@@ -31,8 +31,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     }
     $internship_id = $row['internship_id'];
 
-    // Retrieve test questions
-    $qstmt = $conn->prepare('SELECT id, question_text FROM test_questions WHERE internship_id = ?');
+    // Retrieve test questions with all options
+    $qstmt = $conn->prepare('SELECT id, question_text, option_a, option_b, option_c, option_d FROM test_questions WHERE internship_id = ?');
     $qstmt->bind_param('i', $internship_id);
     $qstmt->execute();
     $qres = $qstmt->get_result();
@@ -43,6 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     $qstmt->close();
 
     if (empty($questions)) {
+        echo '<h2>Internship Test</h2>';
         echo '<p>No test questions available.</p>';
         exit;
     }
@@ -55,15 +56,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     foreach ($questions as $q) {
         $qid = $q['id'];
         $text = htmlspecialchars($q['question_text']);
-        echo "<div><p>{$text}</p>";
-        // Placeholder options (adjust as needed)
-        echo '<label><input type="radio" name="answers[' . $qid . ']" value="A" required> A</label>';
-        echo '<label><input type="radio" name="answers[' . $qid . ']" value="B"> B</label>';
-        echo '<label><input type="radio" name="answers[' . $qid . ']" value="C"> C</label>';
-        echo '<label><input type="radio" name="answers[' . $qid . ']" value="D"> D</label>';
+        echo "<div style='margin-bottom: 20px;'><p><strong>Question:</strong> {$text}</p>";
+        echo '<label style="display:block;"><input type="radio" name="answers[' . $qid . ']" value="A" required> ' . htmlspecialchars($q['option_a']) . '</label>';
+        echo '<label style="display:block;"><input type="radio" name="answers[' . $qid . ']" value="B"> ' . htmlspecialchars($q['option_b']) . '</label>';
+        echo '<label style="display:block;"><input type="radio" name="answers[' . $qid . ']" value="C"> ' . htmlspecialchars($q['option_c']) . '</label>';
+        echo '<label style="display:block;"><input type="radio" name="answers[' . $qid . ']" value="D"> ' . htmlspecialchars($q['option_d']) . '</label>';
         echo '</div>';
     }
-    echo '<button type="submit">Submit Test</button>';
+    echo '<button type="submit" style="padding: 10px 20px; cursor: pointer;">Submit Test</button>';
     echo '</form>';
     exit;
 }

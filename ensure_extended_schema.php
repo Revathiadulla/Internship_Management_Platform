@@ -119,3 +119,41 @@ $create_assignments = "CREATE TABLE IF NOT EXISTS mentor_assignments (
     UNIQUE KEY unique_assignment (mentor_id, student_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
 mysqli_query($conn, $create_assignments);
+
+// Create test_questions table if not exists
+$create_test_questions = "CREATE TABLE IF NOT EXISTS test_questions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    internship_id INT NOT NULL,
+    question_text TEXT NOT NULL,
+    option_a VARCHAR(255) NOT NULL,
+    option_b VARCHAR(255) NOT NULL,
+    option_c VARCHAR(255) NOT NULL,
+    option_d VARCHAR(255) NOT NULL,
+    correct_option VARCHAR(10) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
+mysqli_query($conn, $create_test_questions);
+
+// Seed sample questions if the table is empty
+$q_check = mysqli_query($conn, "SELECT COUNT(*) as count FROM test_questions");
+$q_row = mysqli_fetch_assoc($q_check);
+if ($q_row && intval($q_row['count']) === 0) {
+    // Insert a few default questions for standard internship IDs (or dynamically map them if needed)
+    $sample_questions = [
+        [1, "What does 'box-sizing: border-box' do in CSS?", "Includes padding/border in total dimensions", "Excludes padding from width", "Forces border grid", "Adds borders to margins", "A"],
+        [1, "What is the primary state hook in React?", "useEffect", "useContext", "useState", "useReducer", "C"],
+        [1, "Which JS array method returns a new array of elements passing a test?", "map()", "filter()", "forEach()", "reduce()", "B"],
+        [1, "Which HTML attribute makes an input field required before form submission?", "mandatory", "required", "validate", "must", "B"],
+        [1, "Which CSS unit is relative to the root element's font size?", "em", "rem", "px", "vh", "B"]
+    ];
+
+    $ins_stmt = $conn->prepare("INSERT INTO test_questions (internship_id, question_text, option_a, option_b, option_c, option_d, correct_option) VALUES (?, ?, ?, ?, ?, ?, ?)");
+    if ($ins_stmt) {
+        foreach ($sample_questions as $sq) {
+            $ins_stmt->bind_param("issssss", $sq[0], $sq[1], $sq[2], $sq[3], $sq[4], $sq[5], $sq[6]);
+            $ins_stmt->execute();
+        }
+        $ins_stmt->close();
+    }
+}
+
