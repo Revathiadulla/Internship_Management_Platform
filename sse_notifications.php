@@ -50,7 +50,7 @@ if (isset($conn) && $conn) {
 }
 
 // Loop and check for updates
-$interval = 3; // Check database every 3 seconds
+$interval = 30; // Check database every 30 seconds to reduce load
 
 while (true) {
     if (connection_aborted()) {

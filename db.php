@@ -21,6 +21,13 @@ if (isset($_SERVER['HTTP_HOST']) && ($_SERVER['HTTP_HOST'] == 'localhost' || str
 
 try {
     $conn = mysqli_connect($host, $user, $pass, $db, $port);
+// Register shutdown function to ensure the DB connection is closed at script termination
+register_shutdown_function(function() use (&$conn) {
+    if (isset($conn) && $conn) {
+        mysqli_close($conn);
+    }
+});
+log_debug('Database connection opened and shutdown handler registered.');
 } catch (\mysqli_sql_exception $e) {
     $is_local = (isset($_SERVER['HTTP_HOST']) && ($_SERVER['HTTP_HOST'] == 'localhost' || strpos($_SERVER['HTTP_HOST'], '127.0.0.1') !== false));
     if (!$is_local) {
