@@ -80,27 +80,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // Overview counts
 $overview = [];
 // Assigned interns count
-$res = mysqli_query($conn, "SELECT COUNT(*) as cnt FROM mentor_assignments WHERE mentor_id = $mentor_id");
+$res = mysqli_query($conn, "SELECT COUNT(*) as cnt FROM mentor_assignments ma WHERE ma.mentor_id = $mentor_id");
 $overview['assigned_interns'] = (int) mysqli_fetch_assoc($res)['cnt'];
 // Active projects (internships linked to assigned interns that are in Active Intern status)
 $res = mysqli_query($conn, "SELECT COUNT(DISTINCT i.id) as cnt FROM mentor_assignments ma JOIN internship_applications a ON ma.application_id = a.id JOIN internships i ON a.internship_id = i.id WHERE ma.mentor_id = $mentor_id AND a.status = 'Active Intern'");
 $overview['active_projects'] = (int) mysqli_fetch_assoc($res)['cnt'];
 // Pending daily logs (logs not reviewed)
-$res = mysqli_query($conn, "SELECT COUNT(*) as cnt FROM daily_logs dl JOIN mentor_assignments ma ON dl.user_id = ma.student_id WHERE ma.mentor_id = $mentor_id AND dl.is_reviewed = 0");
+$res = mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM daily_logs dl JOIN mentor_assignments ma ON ma.student_id = dl.user_id WHERE ma.mentor_id = $mentor_id AND ma.status = 'active' AND dl.is_reviewed = 0");
 $overview['pending_logs'] = (int) mysqli_fetch_assoc($res)['cnt'];
 // Completed reviews (feedback entries by this mentor)
 // Completed reviews (feedback entries by this mentor)
-$completed_sql = "SELECT COUNT(*) as cnt FROM mentor_feedback WHERE mentor_id = $mentor_id";
+$completed_sql = "SELECT COUNT(*) as cnt FROM mentor_feedback mf JOIN mentor_assignments ma ON mf.mentor_id = ma.mentor_id WHERE ma.mentor_id = $mentor_id";
 $res = mysqli_query($conn, $completed_sql);
 if ($res) {
     $overview['completed_reviews'] = (int) mysqli_fetch_assoc($res)['cnt'];
 } else {
-    // If the query fails (e.g., missing column/table), fallback to 0 and log error
     error_log('Mentor Dashboard query error (completed_reviews): ' . mysqli_error($conn));
     $overview['completed_reviews'] = 0;
 }
 // Dropout requests raised
-$res = mysqli_query($conn, "SELECT COUNT(*) as cnt FROM dropout_requests WHERE mentor_id = $mentor_id");
+$res = mysqli_query($conn, "SELECT COUNT(*) as cnt FROM dropout_requests dr JOIN mentor_assignments ma ON dr.mentor_id = ma.mentor_id WHERE ma.mentor_id = $mentor_id");
 $overview['dropout_requests'] = (int) mysqli_fetch_assoc($res)['cnt'];
 
 // Assigned interns list
