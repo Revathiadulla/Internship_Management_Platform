@@ -77,10 +77,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                     
                     // 2. Insert into mentor_feedback
-                    $fb_title = "Evaluation for Log (" . $log_date . ")";
-                    $mentor_name = $_SESSION['full_name'] ?? 'Mentor';
-                    $fb_stmt = $conn->prepare("INSERT INTO mentor_feedback (user_id, log_id, feedback_title, given_by, comments, rating, status) VALUES (?, ?, ?, ?, ?, ?, ?)");
-                    $fb_stmt->bind_param('iisssis', $student_id, $log_id, $fb_title, $mentor_name, $comments, $rating, $status);
+                    $phase = $_POST['phase'] ?? '';
+                    $fb_stmt = $conn->prepare("INSERT INTO mentor_feedback (mentor_id, student_id, internship_id, rating, comments, phase, status) VALUES (?, ?, ?, ?, ?, ?, ?)");
+                    $fb_stmt->bind_param('iiiisss', $mentor_id, $student_id, $log_row['application_id'], $rating, $comments, $phase, $status);
                     if (!$fb_stmt->execute()) {
                         throw new Exception("Failed to insert mentor feedback: " . $fb_stmt->error);
                     }
@@ -147,10 +146,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                     
                     // 2. Insert into mentor_feedback
-                    $fb_title = "Quick Approval (" . $log_date . ")";
-                    $mentor_name = $_SESSION['full_name'] ?? 'Mentor';
-                    $fb_stmt = $conn->prepare("INSERT INTO mentor_feedback (user_id, log_id, feedback_title, given_by, comments, rating, status) VALUES (?, ?, ?, ?, ?, ?, ?)");
-                    $fb_stmt->bind_param('iisssis', $student_id, $log_id, $fb_title, $mentor_name, $comments, $rating, $status);
+                    $phase = $_POST['phase'] ?? '';
+                    $fb_stmt = $conn->prepare("INSERT INTO mentor_feedback (mentor_id, student_id, internship_id, rating, comments, phase, status) VALUES (?, ?, ?, ?, ?, ?, ?)");
+                    $fb_stmt->bind_param('iiiisss', $mentor_id, $student_id, $log_row['application_id'], $rating, $comments, $phase, $status);
                     if (!$fb_stmt->execute()) {
                         throw new Exception("Failed to insert mentor feedback: " . $fb_stmt->error);
                     }
