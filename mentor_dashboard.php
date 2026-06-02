@@ -1,10 +1,10 @@
 <?php
+require_once __DIR__ . '/includes/hr_module_helpers.php';
 session_start();
-// Fixed column references for daily_logs (dl.user_id) per recent bug fix
+include "db.php"; // Ensure database connection before schema checks
+require_once __DIR__ . '/ensure_extended_schema.php';
 include_once __DIR__ . '/includes/auth.php'; // ensure logged in and role check
 require_module_access('mentor_dashboard');
-include "db.php";
-include_once __DIR__ . '/ensure_extended_schema.php';
 
 // Get mentor ID from session (assuming mentors are users with role 'mentor')
 $mentor_id = isset($_SESSION['user_id']) ? intval($_SESSION['user_id']) : 0;
@@ -89,8 +89,16 @@ $overview['active_projects'] = (int) mysqli_fetch_assoc($res)['cnt'];
 $res = mysqli_query($conn, "SELECT COUNT(*) as cnt FROM daily_logs dl JOIN mentor_assignments ma ON dl.user_id = ma.student_id WHERE ma.mentor_id = $mentor_id AND dl.is_reviewed = 0");
 $overview['pending_logs'] = (int) mysqli_fetch_assoc($res)['cnt'];
 // Completed reviews (feedback entries by this mentor)
-$res = mysqli_query($conn, "SELECT COUNT(*) as cnt FROM mentor_feedback WHERE mentor_id = $mentor_id");
-$overview['completed_reviews'] = (int) mysqli_fetch_assoc($res)['cnt'];
+// Completed reviews (feedback entries by this mentor)
+$completed_sql = "SELECT COUNT(*) as cnt FROM mentor_feedback WHERE mentor_id = $mentor_id";
+$res = mysqli_query($conn, $completed_sql);
+if ($res) {
+    $overview['completed_reviews'] = (int) mysqli_fetch_assoc($res)['cnt'];
+} else {
+    // If the query fails (e.g., missing column/table), fallback to 0 and log error
+    error_log('Mentor Dashboard query error (completed_reviews): ' . mysqli_error($conn));
+    $overview['completed_reviews'] = 0;
+}
 // Dropout requests raised
 $res = mysqli_query($conn, "SELECT COUNT(*) as cnt FROM dropout_requests WHERE mentor_id = $mentor_id");
 $overview['dropout_requests'] = (int) mysqli_fetch_assoc($res)['cnt'];
