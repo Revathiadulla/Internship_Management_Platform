@@ -1,10 +1,74 @@
 <?php
+// Enable error reporting for debugging
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
 // student_test.php
 // Handles test submission, calculates score, updates application, sends notifications.
 
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/ensure_extended_schema.php';
+require_once __DIR__ . '/includes/auth.php';
 
+// Handle GET request to display test
+if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+    if (!isset($_GET['app_id'])) {
+        die('Missing app_id parameter');
+    }
+    $app_id = intval($_GET['app_id']);
+
+    // Fetch internship_id for the application
+    $stmt = $conn->prepare('SELECT internship_id FROM internship_applications WHERE id = ?');
+    $stmt->bind_param('i', $app_id);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    $row = $res->fetch_assoc();
+    $stmt->close();
+
+    if (!$row) {
+        die('Application not found');
+    }
+    $internship_id = $row['internship_id'];
+
+    // Retrieve test questions
+    $qstmt = $conn->prepare('SELECT id, question_text FROM test_questions WHERE internship_id = ?');
+    $qstmt->bind_param('i', $internship_id);
+    $qstmt->execute();
+    $qres = $qstmt->get_result();
+    $questions = [];
+    while ($qrow = $qres->fetch_assoc()) {
+        $questions[] = $qrow;
+    }
+    $qstmt->close();
+
+    if (empty($questions)) {
+        echo '<p>No test questions available.</p>';
+        exit;
+    }
+
+    // Render simple test form
+    echo '<h2>Internship Test</h2>';
+    echo '<form method="POST" action="">';
+    echo '<input type="hidden" name="application_id" value="' . htmlspecialchars($app_id) . '"/>';
+
+    foreach ($questions as $q) {
+        $qid = $q['id'];
+        $text = htmlspecialchars($q['question_text']);
+        echo "<div><p>{$text}</p>";
+        // Placeholder options (adjust as needed)
+        echo '<label><input type="radio" name="answers[' . $qid . ']" value="A" required> A</label>';
+        echo '<label><input type="radio" name="answers[' . $qid . ']" value="B"> B</label>';
+        echo '<label><input type="radio" name="answers[' . $qid . ']" value="C"> C</label>';
+        echo '<label><input type="radio" name="answers[' . $qid . ']" value="D"> D</label>';
+        echo '</div>';
+    }
+    echo '<button type="submit">Submit Test</button>';
+    echo '</form>';
+    exit;
+}
+
+// Handle POST request (existing logic)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Expected POST fields: application_id, answers (array of answer IDs), optional other data
     $app_id = intval($_POST['application_id'] ?? 0);
