@@ -18,8 +18,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'approve_log') {
         $log_id = intval($_POST['log_id'] ?? 0);
         if ($log_id > 0) {
-            $stmt = $conn->prepare("UPDATE daily_logs SET is_reviewed = 1, review_status = 'approved', reviewed_at = NOW() WHERE id = ? AND mentor_id = ?");
-            $stmt->bind_param('ii', $log_id, $mentor_id);
+            $stmt = $conn->prepare("UPDATE daily_logs SET is_reviewed = 1, review_status = 'approved', reviewed_at = NOW() WHERE id = ?");
+            $stmt->bind_param('i', $log_id);
             $stmt->execute();
             $stmt->close();
             // notify admin
@@ -29,8 +29,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $log_id = intval($_POST['log_id'] ?? 0);
         $remarks = trim($_POST['remarks'] ?? '');
         if ($log_id > 0) {
-            $stmt = $conn->prepare("UPDATE daily_logs SET is_reviewed = 0, review_status = 'changes_requested', reviewer_remarks = ?, reviewed_at = NOW() WHERE id = ? AND mentor_id = ?");
-            $stmt->bind_param('sii', $remarks, $log_id, $mentor_id);
+            $stmt = $conn->prepare("UPDATE daily_logs SET is_reviewed = 0, review_status = 'changes_requested', reviewer_remarks = ?, reviewed_at = NOW() WHERE id = ?");
+            $stmt->bind_param('si', $remarks, $log_id);
             $stmt->execute();
             $stmt->close();
             sendEmailNotification('admin', 'Daily Log Change Requested', "Mentor requested changes for log ID $log_id. Remarks: $remarks", ['mentor_id' => $mentor_id]);
