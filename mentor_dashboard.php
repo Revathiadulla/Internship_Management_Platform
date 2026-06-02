@@ -90,7 +90,7 @@ $res = mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM daily_logs dl JOIN mento
 $overview['pending_logs'] = (int) mysqli_fetch_assoc($res)['cnt'];
 // Completed reviews (feedback entries by this mentor)
 // Completed reviews (feedback entries by this mentor)
-$completed_sql = "SELECT COUNT(*) as cnt FROM mentor_feedback mf JOIN mentor_assignments ma ON mf.mentor_id = ma.mentor_id WHERE ma.mentor_id = $mentor_id";
+$completed_sql = "SELECT COUNT(*) as cnt FROM mentor_feedback mf JOIN mentor_assignments ma ON mf.student_id = ma.student_id WHERE ma.mentor_id = $mentor_id AND ma.status = 'active'";
 $res = mysqli_query($conn, $completed_sql);
 if ($res) {
     $overview['completed_reviews'] = (int) mysqli_fetch_assoc($res)['cnt'];
