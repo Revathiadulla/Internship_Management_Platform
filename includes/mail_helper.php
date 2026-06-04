@@ -516,22 +516,56 @@ if (!function_exists('sendEmailNotification')) {
         $sent = sendEmail($email, $fullName, $subject, $htmlBody, $smtp_logs);
         $final_status = $sent ? 'Sent' : 'Failed';
         $engine_info = "Sent via PHPMailer SMTP (smtp.gmail.com:587)";
-        
-        $clean_err = '';
+               $clean_err = '';
         if (!$sent) {
-            if (stripos($smtp_logs, 'authenticate') !== false || stripos($smtp_logs, 'authentication') !== false || stripos($smtp_logs, 'Username and Password not accepted') !== false) {
-                $clean_err = 'Email failed: SMTP Authentication failed';
-            } elseif (stripos($smtp_logs, 'connect') !== false || stripos($smtp_logs, 'connection') !== false) {
-                $clean_err = 'Email failed: SMTP Connection failed';
-            } elseif (stripos($smtp_logs, 'recipient') !== false || stripos($smtp_logs, 'address') !== false) {
-                $clean_err = 'Email failed: Invalid recipient email';
-            } else {
+            $errorInfo = '';
+            // Expose actual PHPMailer error (inside parenthesized suffix of SMTP logs)
+            if (preg_match('/Error: .*? \((.*?)\)/i', $smtp_logs, $matches)) {
+                $errorInfo = trim($matches[1]);
+            }
+            if (empty($errorInfo)) {
+                // Fallback exception search
                 if (preg_match('/Exception: (.*?)(?:\(|Debug|$)/i', $smtp_logs, $matches)) {
-                    $clean_err = 'Email failed: ' . trim($matches[1]);
-                } else {
-                    $clean_err = 'Email failed: ' . str_replace(["\n", "\r"], ' ', substr(strip_tags($smtp_logs), 0, 100));
+                    $errorInfo = trim($matches[1]);
                 }
             }
+            if (empty($errorInfo)) {
+                $errorInfo = str_replace(["\n", "\r"], ' ', substr(strip_tags($smtp_logs), 0, 100));
+            }
+            if (empty($errorInfo)) {
+                $errorInfo = 'Unknown error occurred';
+            }
+
+            // Expose exact reasons: SMTP Authentication failed, Invalid credentials, Connection timeout, Invalid sender address, Recipient rejected
+            if (stripos($smtp_logs, 'Username and Password not accepted') !== false || 
+                stripos($smtp_logs, 'Password not accepted') !== false || 
+                stripos($smtp_logs, 'Invalid credentials') !== false) {
+                $clean_err = 'Email failed: Invalid credentials';
+            } elseif (stripos($smtp_logs, 'authenticate') !== false || 
+                      stripos($smtp_logs, 'authentication') !== false) {
+                $clean_err = 'Email failed: SMTP Authentication failed';
+            } elseif (stripos($smtp_logs, 'timeout') !== false || 
+                      stripos($smtp_logs, 'timed out') !== false || 
+                      stripos($smtp_logs, 'Connection timed out') !== false) {
+                $clean_err = 'Email failed: Connection timeout';
+            } elseif (stripos($smtp_logs, 'connect') !== false || 
+                      stripos($smtp_logs, 'connection') !== false || 
+                      stripos($smtp_logs, 'Could not connect') !== false) {
+                $clean_err = 'Email failed: SMTP Connection failed';
+            } elseif (stripos($smtp_logs, 'sender address') !== false || 
+                      $errorInfo === 'Invalid address' ||
+                      stripos($smtp_logs, 'sender rejected') !== false || 
+                      stripos($smtp_logs, 'From address') !== false) {
+                $clean_err = 'Email failed: Invalid sender address';
+            } elseif (stripos($smtp_logs, 'recipient rejected') !== false || 
+                      stripos($smtp_logs, 'Recipient address rejected') !== false || 
+                      stripos($smtp_logs, 'Invalid recipient') !== false ||
+                      stripos($smtp_logs, 'Address rejected') !== false) {
+                $clean_err = 'Email failed: Recipient rejected';
+            } else {
+                $clean_err = 'Email failed: ' . $errorInfo;
+            }
+            $errorOutput = $clean_err;
         }
 
         // 3. Log to Database

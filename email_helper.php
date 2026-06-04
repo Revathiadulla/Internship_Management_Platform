@@ -220,7 +220,7 @@ function sendEmail($to, $subjectOrName, $messageOrSubject = null, $message = nul
         }
         return true;
     } catch (Exception $e) {
-        $errorMessage = 'Failed to send email to ' . $toEmail . '. Error: ' . $e->getMessage() . ' (' . $mail->ErrorInfo . ')';
+        $errorMessage = 'Failed to send email to ' . $toEmail . ' via ' . ($smtpConfig['host'] ?? 'unknown host') . '. Error: ' . $e->getMessage() . ' (' . $mail->ErrorInfo . ')';
         if ($debugOutput !== '') {
             $errorMessage .= ' Debug: ' . $debugOutput;
         }
