@@ -652,19 +652,86 @@ if (!function_exists('createNotification')) {
     /**
      * Create a dashboard notification record for the given user/role.
      */
-    function createNotification($userId, $role, $title, $message, $notification_type = 'info') {
+    function createNotification($userId, $role, $title, $message, $notification_type = 'info', $type = 'general') {
         global $conn;
         $userId = intval($userId);
         $role = strtolower(trim((string) $role));
-        $notifType = mysqli_real_escape_string($conn, trim($notification_type ?: 'info'));
-        $titleEsc = mysqli_real_escape_string($conn, trim((string) $title));
-        $messageEsc = mysqli_real_escape_string($conn, trim((string) $message));
-        $roleEsc = mysqli_real_escape_string($conn, $role);
+        $notifType = trim($notification_type ?: 'info');
+        $titleStr = trim((string) $title);
+        $messageStr = trim((string) $message);
+        
+        // Ensure type always has a default value
+        $type = !empty($type) ? trim((string)$type) : 'general';
 
         // Only insert into the unified notifications table.
         $tableCheck = mysqli_query($conn, "SHOW TABLES LIKE 'notifications'");
         if ($tableCheck && mysqli_num_rows($tableCheck) > 0) {
-            mysqli_query($conn, "INSERT INTO notifications (user_id, role, title, message, notification_type, is_read, created_at) VALUES ($userId, '$roleEsc', '$titleEsc', '$messageEsc', '$notifType', 0, NOW())");
+            // Get existing columns to avoid query failures on different database environments
+            $columnsRes = mysqli_query($conn, "SHOW COLUMNS FROM notifications");
+            $existingCols = [];
+            if ($columnsRes) {
+                while ($colRow = mysqli_fetch_assoc($columnsRes)) {
+                    $existingCols[strtolower($colRow['Field'])] = true;
+                }
+            }
+
+            $insertData = [];
+
+            if (isset($existingCols['user_id'])) {
+                $insertData['user_id'] = [intval($userId), 'i'];
+            }
+
+            if (isset($existingCols['user_role'])) {
+                $insertData['user_role'] = [$role, 's'];
+            } elseif (isset($existingCols['role'])) {
+                $insertData['role'] = [$role, 's'];
+            }
+
+            if (isset($existingCols['type'])) {
+                $insertData['type'] = [$type, 's'];
+            }
+
+            if (isset($existingCols['title'])) {
+                $insertData['title'] = [$titleStr, 's'];
+            }
+
+            if (isset($existingCols['message'])) {
+                $insertData['message'] = [$messageStr, 's'];
+            }
+
+            if (isset($existingCols['category'])) {
+                $insertData['category'] = [$notifType, 's'];
+            } elseif (isset($existingCols['notification_type'])) {
+                $insertData['notification_type'] = [$notifType, 's'];
+            }
+
+            if (isset($existingCols['is_read'])) {
+                $insertData['is_read'] = [0, 'i'];
+            }
+
+            if (isset($existingCols['created_at'])) {
+                $insertData['created_at'] = [date('Y-m-d H:i:s'), 's'];
+            }
+
+            if (!empty($insertData)) {
+                $fields = array_keys($insertData);
+                $placeholders = array_fill(0, count($fields), '?');
+                
+                $sql = "INSERT INTO notifications (" . implode(', ', $fields) . ") VALUES (" . implode(', ', $placeholders) . ")";
+                $stmt = $conn->prepare($sql);
+                if ($stmt) {
+                    $types = '';
+                    $bindParams = [];
+                    foreach ($insertData as $col => $info) {
+                        $types .= $info[1];
+                        $bindParams[] = &$insertData[$col][0];
+                    }
+                    array_unshift($bindParams, $types);
+                    call_user_func_array([$stmt, 'bind_param'], $bindParams);
+                    $stmt->execute();
+                    $stmt->close();
+                }
+            }
         }
 
         return true;
@@ -684,7 +751,8 @@ if (!function_exists('notifyUser')) {
             }
         }
 
-        createNotification($userId, $role, $title, $message, $notification_type);
+        $type = isset($metadata['type']) ? $metadata['type'] : 'general';
+        createNotification($userId, $role, $title, $message, $notification_type, $type);
         if (!empty($email) && filter_var($email, FILTER_VALIDATE_EMAIL)) {
             if (empty($metadata['recipient_name']) && is_numeric($userId)) {
                 $nameQuery = mysqli_query($conn, "SELECT full_name FROM users WHERE id = " . intval($userId) . " LIMIT 1");
@@ -729,7 +797,7 @@ if (!function_exists('sendManualMessage')) {
         $emailError = null;
 
         if ($sendNotification) {
-            createNotification($recipientId, $recipientRole, $subject, $message, 'info');
+            createNotification($recipientId, $recipientRole, $subject, $message, 'info', 'message');
         }
 
         if ($sendEmail) {
