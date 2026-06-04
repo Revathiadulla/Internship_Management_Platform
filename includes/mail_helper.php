@@ -229,8 +229,9 @@ if (!function_exists('sendEmailNotification')) {
      * @param array  $metadata    Key-value pairs to display in the email body summary card
      * @return bool True if logged and sent, false otherwise
      */
-    function sendEmailNotification($recipient, $subject, $messageText, $metadata = []) {
+    function sendEmailNotification($recipient, $subject, $messageText, $metadata = [], &$errorOutput = null) {
         global $conn;
+        $errorOutput = '';
 
         $user_id = null;
         $email = '';
@@ -306,6 +307,7 @@ if (!function_exists('sendEmailNotification')) {
         }
 
         if (empty($email)) {
+            $errorOutput = 'Email failed: Invalid recipient email';
             return false;
         }
 
@@ -510,11 +512,27 @@ if (!function_exists('sendEmailNotification')) {
     </div>
 </body>
 </html>';
-
-        $sent = sendEmail($email, $fullName, $subject, $htmlBody);
+        $smtp_logs = '';
+        $sent = sendEmail($email, $fullName, $subject, $htmlBody, $smtp_logs);
         $final_status = $sent ? 'Sent' : 'Failed';
         $engine_info = "Sent via PHPMailer SMTP (smtp.gmail.com:587)";
-        $smtp_logs = $sent ? "PHPMailer sent successfully." : "PHPMailer sending failed. Check email_notifications.log.";
+        
+        $clean_err = '';
+        if (!$sent) {
+            if (stripos($smtp_logs, 'authenticate') !== false || stripos($smtp_logs, 'authentication') !== false || stripos($smtp_logs, 'Username and Password not accepted') !== false) {
+                $clean_err = 'Email failed: SMTP Authentication failed';
+            } elseif (stripos($smtp_logs, 'connect') !== false || stripos($smtp_logs, 'connection') !== false) {
+                $clean_err = 'Email failed: SMTP Connection failed';
+            } elseif (stripos($smtp_logs, 'recipient') !== false || stripos($smtp_logs, 'address') !== false) {
+                $clean_err = 'Email failed: Invalid recipient email';
+            } else {
+                if (preg_match('/Exception: (.*?)(?:\(|Debug|$)/i', $smtp_logs, $matches)) {
+                    $clean_err = 'Email failed: ' . trim($matches[1]);
+                } else {
+                    $clean_err = 'Email failed: ' . str_replace(["\n", "\r"], ' ', substr(strip_tags($smtp_logs), 0, 100));
+                }
+            }
+        }
 
         // 3. Log to Database
         $esc_user_id = $user_id !== null ? $user_id : 'NULL';
@@ -566,7 +584,7 @@ if (!function_exists('sendEmailNotification')) {
             }
         }
         $recipient_role_sql = $recipient_role ? "'" . mysqli_real_escape_string($conn, $recipient_role) . "'" : 'NULL';
-        $err_msg_safe = $sent ? 'NULL' : "'" . mysqli_real_escape_string($conn, $smtp_logs) . "'";
+        $err_msg_safe = $sent ? 'NULL' : "'" . mysqli_real_escape_string($conn, ($clean_err ? $clean_err . " | " : "") . $smtp_logs) . "'";
         // Capture sender details when available in session
         $sender_id_sql = 'NULL';
         $sender_role_sql = 'NULL';
@@ -837,10 +855,11 @@ if (!function_exists('sendManualMessage')) {
                     'from_name' => $fromName,
                 ];
 
-                $sent = sendEmailNotification($recipientEmail, $subject, $message, $metadata);
+                $emailError = '';
+                $sent = sendEmailNotification($recipientEmail, $subject, $message, $metadata, $emailError);
                 $emailStatus = $sent ? 'sent' : 'failed';
-                if (!$sent) {
-                    $emailError = 'Email delivery failed. Review SMTP logs.';
+                if (!$sent && empty($emailError)) {
+                    $emailError = 'Email failed: Unknown error occurred';
                 }
             } else {
                 $emailStatus = 'failed';

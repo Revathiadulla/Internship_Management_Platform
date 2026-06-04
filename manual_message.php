@@ -283,11 +283,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (empty($errors)) {
         $sentCount = 0;
         $failedCount = 0;
+        $failedMsgs = [];
         foreach ($targets as $target) {
             $recipientRole = strtolower(trim($target['role'] ?? 'student'));
             $result = sendManualMessage($senderId, $senderRole, intval($target['id']), $recipientRole, $subject, $messageBody, $sendNotification, $sendEmail);
             if ($sendEmail && $result['email_status'] === 'failed') {
                 $failedCount++;
+                $failedMsgs[] = htmlspecialchars($target['full_name'] ?? 'User') . ' (' . ($result['email_error'] ?: 'Unknown error') . ')';
             } else {
                 $sentCount++;
             }
@@ -295,7 +297,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $successMessage = "Message delivered to {$sentCount} recipient" . ($sentCount === 1 ? '' : 's') . ".";
         if ($failedCount > 0) {
-            $successMessage .= " {$failedCount} delivery attempt" . ($failedCount === 1 ? '' : 's') . " failed.";
+            $successMessage .= " Failed to send email to: " . implode(', ', $failedMsgs) . ".";
         }
     }
 }
