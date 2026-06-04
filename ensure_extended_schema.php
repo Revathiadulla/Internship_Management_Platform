@@ -235,6 +235,24 @@ $create_manual_messages = "CREATE TABLE IF NOT EXISTS manual_messages (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
 mysqli_query($conn, $create_manual_messages);
 
+// FIX: Ensure manual_messages.id is AUTO_INCREMENT PRIMARY KEY
+$_manual_msg_id_check = mysqli_query($conn, "SHOW COLUMNS FROM manual_messages LIKE 'id'");
+if ($_manual_msg_id_check && $_manual_msg_id_row = mysqli_fetch_assoc($_manual_msg_id_check)) {
+    $hasAutoIncrement = (stripos($_manual_msg_id_row['Extra'] ?? '', 'auto_increment') !== false);
+    if (!$hasAutoIncrement) {
+        $hasPK = false;
+        $_pk_check = mysqli_query($conn, "SHOW KEYS FROM manual_messages WHERE Key_name = 'PRIMARY' AND Column_name = 'id'");
+        if ($_pk_check && mysqli_num_rows($_pk_check) > 0) {
+            $hasPK = true;
+        }
+        if (!$hasPK) {
+            @mysqli_query($conn, "ALTER TABLE manual_messages DROP PRIMARY KEY");
+            @mysqli_query($conn, "ALTER TABLE manual_messages ADD PRIMARY KEY (id)");
+        }
+        @mysqli_query($conn, "ALTER TABLE manual_messages MODIFY id INT NOT NULL AUTO_INCREMENT");
+    }
+}
+
 // Create dropout_requests table to track mentor-initiated dropouts
 $create_dropout = "CREATE TABLE IF NOT EXISTS dropout_requests (
     id INT AUTO_INCREMENT PRIMARY KEY,
