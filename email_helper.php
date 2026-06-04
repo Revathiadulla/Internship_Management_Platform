@@ -2,10 +2,18 @@
 /**
  * email_helper.php
  * Centralized Gmail SMTP helper for Internship Management Platform.
- * Uses environment variables when available, otherwise falls back to config/email_config.php.
+ * Strategy:
+ *   - Local (XAMPP): loads config/email_config.php which defines SMTP_* constants.
+ *   - Live (Render): config file does NOT exist; SMTP settings are read from environment variables.
+ * No fatal error is thrown when config/email_config.php is missing.
  */
 
-require_once __DIR__ . '/config/email_config.php';
+// Safely load local config only when it exists (local dev environment)
+$_emailConfigPath = __DIR__ . '/config/email_config.php';
+if (file_exists($_emailConfigPath)) {
+    require_once $_emailConfigPath;
+}
+unset($_emailConfigPath);
 require_once __DIR__ . '/includes/PHPMailer/Exception.php';
 require_once __DIR__ . '/includes/PHPMailer/PHPMailer.php';
 require_once __DIR__ . '/includes/PHPMailer/SMTP.php';
@@ -15,6 +23,11 @@ use PHPMailer\PHPMailer\Exception;
 
 function getEnvVar(array $keys, string $default = ''): string {
     foreach ($keys as $key) {
+        // Check $_ENV first (set by Render and most hosting platforms)
+        if (isset($_ENV[$key]) && trim($_ENV[$key]) !== '') {
+            return trim($_ENV[$key]);
+        }
+        // Fall back to getenv() (works with Apache SetEnv and CLI)
         $value = getenv($key);
         if ($value !== false && trim($value) !== '') {
             return trim($value);
