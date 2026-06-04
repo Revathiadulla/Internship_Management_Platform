@@ -113,6 +113,27 @@ if ($check_notification_type && mysqli_num_rows($check_notification_type) === 0)
     mysqli_query($conn, "ALTER TABLE notifications ADD COLUMN notification_type VARCHAR(50) DEFAULT 'info'");
 }
 
+// FIX: Ensure notifications.id is AUTO_INCREMENT PRIMARY KEY (live DB may lack this)
+$_notif_id_check = mysqli_query($conn, "SHOW COLUMNS FROM notifications LIKE 'id'");
+if ($_notif_id_check && $_notif_id_row = mysqli_fetch_assoc($_notif_id_check)) {
+    $hasAutoIncrement = (stripos($_notif_id_row['Extra'] ?? '', 'auto_increment') !== false);
+    if (!$hasAutoIncrement) {
+        // Ensure id is the primary key first
+        $hasPK = false;
+        $_pk_check = mysqli_query($conn, "SHOW KEYS FROM notifications WHERE Key_name = 'PRIMARY' AND Column_name = 'id'");
+        if ($_pk_check && mysqli_num_rows($_pk_check) > 0) {
+            $hasPK = true;
+        }
+        if (!$hasPK) {
+            // Drop any existing PK first (may fail silently if none exists), then add
+            @mysqli_query($conn, "ALTER TABLE notifications DROP PRIMARY KEY");
+            @mysqli_query($conn, "ALTER TABLE notifications ADD PRIMARY KEY (id)");
+        }
+        // Now set AUTO_INCREMENT
+        @mysqli_query($conn, "ALTER TABLE notifications MODIFY id INT NOT NULL AUTO_INCREMENT");
+    }
+}
+
 // Add email_logs table for tracking outbound emails
 $create_email_logs = "CREATE TABLE IF NOT EXISTS email_logs (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -428,6 +449,19 @@ try {
     $check_notification_type = mysqli_query($conn, "SHOW COLUMNS FROM notifications LIKE 'notification_type'");
     if ($check_notification_type && mysqli_num_rows($check_notification_type) === 0) {
         mysqli_query($conn, "ALTER TABLE notifications ADD COLUMN notification_type VARCHAR(50) DEFAULT 'info'");
+    }
+
+    // FIX: Ensure notifications.id is AUTO_INCREMENT PRIMARY KEY (live DB may lack this)
+    $_notif_id_check2 = mysqli_query($conn, "SHOW COLUMNS FROM notifications LIKE 'id'");
+    if ($_notif_id_check2 && $_notif_id_row2 = mysqli_fetch_assoc($_notif_id_check2)) {
+        if (stripos($_notif_id_row2['Extra'] ?? '', 'auto_increment') === false) {
+            $_pk_check2 = mysqli_query($conn, "SHOW KEYS FROM notifications WHERE Key_name = 'PRIMARY' AND Column_name = 'id'");
+            if (!$_pk_check2 || mysqli_num_rows($_pk_check2) === 0) {
+                @mysqli_query($conn, "ALTER TABLE notifications DROP PRIMARY KEY");
+                @mysqli_query($conn, "ALTER TABLE notifications ADD PRIMARY KEY (id)");
+            }
+            @mysqli_query($conn, "ALTER TABLE notifications MODIFY id INT NOT NULL AUTO_INCREMENT");
+        }
     }
 
     // Ensure notification metadata columns exist for coordinator send/receive flow and universal linking
