@@ -169,6 +169,24 @@ foreach ($email_log_columns as $col => $definition) {
     }
 }
 
+// FIX: Ensure email_logs.id is AUTO_INCREMENT PRIMARY KEY
+$_email_logs_id_check = mysqli_query($conn, "SHOW COLUMNS FROM email_logs LIKE 'id'");
+if ($_email_logs_id_check && $_email_logs_id_row = mysqli_fetch_assoc($_email_logs_id_check)) {
+    $hasAutoIncrement = (stripos($_email_logs_id_row['Extra'] ?? '', 'auto_increment') !== false);
+    if (!$hasAutoIncrement) {
+        $hasPK = false;
+        $_pk_check = mysqli_query($conn, "SHOW KEYS FROM email_logs WHERE Key_name = 'PRIMARY' AND Column_name = 'id'");
+        if ($_pk_check && mysqli_num_rows($_pk_check) > 0) {
+            $hasPK = true;
+        }
+        if (!$hasPK) {
+            @mysqli_query($conn, "ALTER TABLE email_logs DROP PRIMARY KEY");
+            @mysqli_query($conn, "ALTER TABLE email_logs ADD PRIMARY KEY (id)");
+        }
+        @mysqli_query($conn, "ALTER TABLE email_logs MODIFY id INT NOT NULL AUTO_INCREMENT");
+    }
+}
+
 // Ensure email_notifications_log sender columns exist when the table is present
 $has_email_notifications_log = mysqli_query($conn, "SHOW TABLES LIKE 'email_notifications_log'");
 if ($has_email_notifications_log && mysqli_num_rows($has_email_notifications_log) > 0) {
@@ -179,6 +197,24 @@ if ($has_email_notifications_log && mysqli_num_rows($has_email_notifications_log
     $res4 = mysqli_query($conn, "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'email_notifications_log' AND COLUMN_NAME = 'sender_role'");
     if (!$res4 || mysqli_num_rows($res4) === 0) {
         @mysqli_query($conn, "ALTER TABLE email_notifications_log ADD COLUMN sender_role VARCHAR(50) NULL");
+    }
+
+    // FIX: Ensure email_notifications_log.id is AUTO_INCREMENT PRIMARY KEY
+    $_email_notif_log_id_check = mysqli_query($conn, "SHOW COLUMNS FROM email_notifications_log LIKE 'id'");
+    if ($_email_notif_log_id_check && $_email_notif_log_id_row = mysqli_fetch_assoc($_email_notif_log_id_check)) {
+        $hasAutoIncrement = (stripos($_email_notif_log_id_row['Extra'] ?? '', 'auto_increment') !== false);
+        if (!$hasAutoIncrement) {
+            $hasPK = false;
+            $_pk_check = mysqli_query($conn, "SHOW KEYS FROM email_notifications_log WHERE Key_name = 'PRIMARY' AND Column_name = 'id'");
+            if ($_pk_check && mysqli_num_rows($_pk_check) > 0) {
+                $hasPK = true;
+            }
+            if (!$hasPK) {
+                @mysqli_query($conn, "ALTER TABLE email_notifications_log DROP PRIMARY KEY");
+                @mysqli_query($conn, "ALTER TABLE email_notifications_log ADD PRIMARY KEY (id)");
+            }
+            @mysqli_query($conn, "ALTER TABLE email_notifications_log MODIFY id INT NOT NULL AUTO_INCREMENT");
+        }
     }
 }
 
