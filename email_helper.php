@@ -37,7 +37,8 @@ function getEnvVar(array $keys, string $default = ''): string {
 }
 
 function getSmtpConfig(): array {
-    return [
+    // Retrieve configuration values from environment or defined constants
+    $config = [
         'host' => trim((string)getEnvVar(['SMTP_HOST', 'MAIL_HOST'], defined('SMTP_HOST') ? SMTP_HOST : '')),
         'port' => trim((string)getEnvVar(['SMTP_PORT', 'MAIL_PORT'], defined('SMTP_PORT') ? SMTP_PORT : '')),
         'username' => trim((string)getEnvVar(['SMTP_USERNAME', 'MAIL_USERNAME'], defined('SMTP_USERNAME') ? SMTP_USERNAME : '')),
@@ -45,6 +46,38 @@ function getSmtpConfig(): array {
         'from_email' => trim((string)getEnvVar(['SMTP_FROM_EMAIL', 'MAIL_FROM_EMAIL'], defined('SMTP_FROM_EMAIL') ? SMTP_FROM_EMAIL : '')),
         'from_name' => trim((string)getEnvVar(['SMTP_FROM_NAME', 'MAIL_FROM_NAME'], defined('SMTP_FROM_NAME') ? SMTP_FROM_NAME : 'Internship Management Platform')),
     ];
+
+    // Determine missing required variables for diagnostics
+    $missing = [];
+    if (empty($config['host'])) $missing[] = 'SMTP_HOST';
+    if (empty($config['port'])) $missing[] = 'SMTP_PORT';
+    if (empty($config['username'])) $missing[] = 'SMTP_USERNAME';
+    if (empty($config['password'])) $missing[] = 'SMTP_PASSWORD';
+    if (empty($config['from_email'])) $missing[] = 'SMTP_FROM_EMAIL';
+
+    // Log configuration and any missing variables to a debug log file
+    logSmtpConfig($config, $missing);
+
+    return $config;
+}
+
+/**
+ * Logs SMTP configuration values and missing variables for debugging.
+ * The log is written to /logs/smtp_config_debug.log relative to project root.
+ */
+function logSmtpConfig(array $config, array $missing): void {
+    $logDir = __DIR__ . '/../logs';
+    if (!is_dir($logDir)) {
+        @mkdir($logDir, 0755, true);
+    }
+    $logFile = $logDir . '/smtp_config_debug.log';
+    $timestamp = date('[Y-m-d H:i:s]');
+    $entry = $timestamp . ' SMTP Config: ' . json_encode($config);
+    if (!empty($missing)) {
+        $entry .= ' MISSING: ' . implode(', ', $missing);
+    }
+    $entry .= PHP_EOL;
+    @file_put_contents($logFile, $entry, FILE_APPEND);
 }
 
 function getSmtpDiagnostics(): array {
