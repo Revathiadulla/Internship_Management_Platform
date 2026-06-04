@@ -36,15 +36,22 @@ function getEnvVar(array $keys, string $default = ''): string {
     return $default;
 }
 
+
+
+/**
+ * Retrieve configuration values from environment or defined constants.
+ * The log is written to /logs/smtp_config_debug.log relative to project root.
+ */
 function getSmtpConfig(): array {
     // Retrieve configuration values from environment or defined constants
     $config = [
-        'host' => trim((string)getEnvVar(['SMTP_HOST', 'MAIL_HOST'], defined('SMTP_HOST') ? SMTP_HOST : '')),
-        'port' => trim((string)getEnvVar(['SMTP_PORT', 'MAIL_PORT'], defined('SMTP_PORT') ? SMTP_PORT : '')),
-        'username' => trim((string)getEnvVar(['SMTP_USERNAME', 'MAIL_USERNAME'], defined('SMTP_USERNAME') ? SMTP_USERNAME : '')),
-        'password' => trim((string)getEnvVar(['SMTP_PASSWORD', 'MAIL_PASSWORD'], defined('SMTP_PASSWORD') ? SMTP_PASSWORD : '')),
-        'from_email' => trim((string)getEnvVar(['SMTP_FROM_EMAIL', 'MAIL_FROM_EMAIL'], defined('SMTP_FROM_EMAIL') ? SMTP_FROM_EMAIL : '')),
-        'from_name' => trim((string)getEnvVar(['SMTP_FROM_NAME', 'MAIL_FROM_NAME'], defined('SMTP_FROM_NAME') ? SMTP_FROM_NAME : 'Internship Management Platform')),
+        'host' => getEnvVar(['SMTP_HOST'], defined('SMTP_HOST') ? SMTP_HOST : ''),
+        'port' => getEnvVar(['SMTP_PORT'], defined('SMTP_PORT') ? (string)SMTP_PORT : ''),
+        'username' => getEnvVar(['SMTP_USERNAME'], defined('SMTP_USERNAME') ? SMTP_USERNAME : ''),
+        'password' => getEnvVar(['SMTP_PASSWORD'], defined('SMTP_PASSWORD') ? SMTP_PASSWORD : ''),
+        // Support both SMTP_FROM and legacy SMTP_FROM_EMAIL
+        'from_email' => getEnvVar(['SMTP_FROM', 'SMTP_FROM_EMAIL'], defined('SMTP_FROM') ? SMTP_FROM : (defined('SMTP_FROM_EMAIL') ? SMTP_FROM_EMAIL : '')),
+        'from_name' => getEnvVar(['SMTP_FROM_NAME'], defined('SMTP_FROM_NAME') ? SMTP_FROM_NAME : 'Internship Management Platform'),
     ];
 
     // Determine missing required variables for diagnostics
@@ -53,10 +60,14 @@ function getSmtpConfig(): array {
     if (empty($config['port'])) $missing[] = 'SMTP_PORT';
     if (empty($config['username'])) $missing[] = 'SMTP_USERNAME';
     if (empty($config['password'])) $missing[] = 'SMTP_PASSWORD';
-    if (empty($config['from_email'])) $missing[] = 'SMTP_FROM_EMAIL';
+    if (empty($config['from_email'])) $missing[] = 'SMTP_FROM';
 
-    // Log configuration and any missing variables to a debug log file
-    logSmtpConfig($config, $missing);
+    // Mask password before logging to avoid exposing it
+    $logConfig = $config;
+    if (!empty($logConfig['password'])) {
+        $logConfig['password'] = '********';
+    }
+    logSmtpConfig($logConfig, $missing);
 
     return $config;
 }
@@ -172,8 +183,8 @@ function sendEmail($to, $subjectOrName, $messageOrSubject = null, $message = nul
 
     $smtpConfig = getSmtpConfig();
     if (empty($smtpConfig['host']) || empty($smtpConfig['port']) || empty($smtpConfig['username']) || empty($smtpConfig['password']) || empty($smtpConfig['from_email'])) {
-        $debugInfo = 'Missing SMTP configuration. Please set SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, SMTP_FROM_EMAIL.';
-        writeEmailLog('Missing SMTP configuration. Please set SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, SMTP_FROM_EMAIL.');
+$debugInfo = 'Missing SMTP configuration. Please set SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, SMTP_FROM.';
+        writeEmailLog('Missing SMTP configuration. Please set SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, SMTP_FROM.');
         return false;
     }
 
