@@ -96,7 +96,7 @@ mysqli_query($conn, "INSERT INTO student_notifications (user_id, title, type, me
 $subj = ($decision === 'approve')
     ? "IMP – HOD Approved Your Internship Application: $internship_title"
     : "IMP – HOD Rejected Your Internship Application: $internship_title";
-sendEmailNotification($student_user_id, $subj, $notif_msg, [
+sendStudentNotification($student_user_id, $student_name, $subj, $notif_msg, [
     'event'        => 'HOD Decision',
     'internship'   => $internship_title,
     'hod_decision' => ucfirst($decision) . 'd',

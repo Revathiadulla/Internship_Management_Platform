@@ -32,9 +32,19 @@ if (!$internship) {
         'mode'     => isset($_GET['mode'])     ? trim(strip_tags($_GET['mode']))     : 'Remote',
         'skills'   => isset($_GET['skills'])   ? trim(strip_tags($_GET['skills']))   : '',
         'domain'   => isset($_GET['domain'])   ? trim(strip_tags($_GET['domain']))   : '',
+        'project_type' => isset($_GET['project_type']) ? trim(strip_tags($_GET['project_type'])) : '',
+        'project_subtype' => isset($_GET['project_subtype']) ? trim(strip_tags($_GET['project_subtype'])) : '',
     ];
 }
 $internship_name = $internship['title'];
+
+$display_title = (!empty($internship['project_type']) && !empty($internship['project_subtype'])) 
+    ? ucfirst($internship['project_type']) . ' - ' . ucfirst($internship['project_subtype']) 
+    : (!empty($internship['project_subtype']) 
+        ? ucfirst($internship['project_subtype']) 
+        : (!empty($internship['project_type']) 
+            ? ucfirst($internship['project_type']) 
+            : $internship_name));
 
 // Fetch student profile
 $sql = "SELECT * FROM student_profiles WHERE user_id = '$user_id' LIMIT 1";
@@ -95,7 +105,7 @@ if (!empty($profile['year_of_study'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Apply – <?php echo htmlspecialchars($internship_name); ?> | IMP</title>
+    <title>Apply – <?php echo htmlspecialchars($display_title); ?> | IMP</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL,GRAD,opsz@400,0,0,24" rel="stylesheet"/>
@@ -141,7 +151,7 @@ if (!empty($profile['year_of_study'])) {
                 <span class="material-symbols-outlined text-white text-2xl">work</span>
             </div>
             <div class="flex-1 min-w-0">
-                <h1 class="text-xl sm:text-2xl font-black leading-tight mb-3"><?php echo htmlspecialchars($internship_name); ?></h1>
+                <h1 class="text-xl sm:text-2xl font-black leading-tight mb-3"><?php echo htmlspecialchars($display_title); ?></h1>
                 <div class="flex flex-wrap gap-2">
                     <?php if (!empty($internship['duration'])): ?>
                     <span class="info-pill bg-white/10 border-white/20 text-white">

@@ -6,6 +6,11 @@ if (!isset($_SESSION['user_id']) || !isset($_SESSION['role']) || strtolower($_SE
 }
 include "db.php";
 
+// Fetch admin notifications unread count for badge
+$admin_unread_res = mysqli_query($conn, "SELECT COUNT(*) as count FROM notifications WHERE user_id = " . intval($_SESSION['user_id']) . " AND role = 'admin' AND is_read = 0");
+$admin_unread_row = mysqli_fetch_assoc($admin_unread_res);
+$admin_unread_count = $admin_unread_row['count'] ?? 0;
+
 $success_msg = "";
 $error_msg = "";
 
@@ -385,6 +390,14 @@ $header_photo = $header_user['profile_photo'] ?? '';
         <span class="font-semibold text-slate-700">System Online</span>
       </div>
       
+      <!-- Notifications Bell -->
+      <a href="admin_received_notifications.php" class="p-2 text-gray-500 hover:bg-gray-50 transition-colors rounded-full relative flex items-center justify-center">
+        <span class="material-symbols-outlined">notifications</span>
+        <?php if ($admin_unread_count > 0): ?>
+          <span class="absolute top-1 right-1 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center text-[9px] font-bold"><?php echo $admin_unread_count; ?></span>
+        <?php endif; ?>
+      </a>
+
       <!-- Profile Button -->
       <div class="relative">
         <button onclick="document.getElementById('profile-dropdown').classList.toggle('hidden')" class="flex items-center gap-2 focus:outline-none cursor-pointer group">
@@ -415,59 +428,7 @@ $header_photo = $header_user['profile_photo'] ?? '';
 
   <div class="flex flex-1 overflow-hidden">
     <!-- Sidebar -->
-    <aside class="w-64 bg-white border-r border-gray-200 p-6 flex flex-col justify-between overflow-y-auto shrink-0">
-      <div class="space-y-6">
-        <div>
-          <h2 class="text-[10px] font-bold text-gray-400 tracking-widest mb-4 uppercase">Main Menu</h2>
-          <nav class="flex flex-col gap-1">
-            <a href="admin_dashboard.php" class="flex items-center gap-3 text-gray-700 px-4 py-2.5 rounded-lg hover:bg-gray-50 text-sm font-medium transition-colors">
-              <span class="material-symbols-outlined text-xl">dashboard</span>
-              Dashboard
-            </a>
-            <a href="admin_users.php" class="flex items-center gap-3 bg-blue-50 text-blue-700 border-l-4 border-blue-600 px-4 py-2.5 rounded-r-lg text-sm font-bold">
-              <span class="material-symbols-outlined text-xl">group</span>
-              Users
-            </a>
-            <a href="admin_internships.php" class="flex items-center gap-3 text-gray-700 px-4 py-2.5 rounded-lg hover:bg-gray-50 text-sm font-medium transition-colors">
-              <span class="material-symbols-outlined text-xl">work</span>
-              Internships
-            </a>
-            <a href="admin_applications.php" class="flex items-center gap-3 text-gray-700 px-4 py-2.5 rounded-lg hover:bg-gray-50 text-sm font-medium transition-colors">
-              <span class="material-symbols-outlined text-xl">assignment</span>
-              Applications
-            </a>
-            <a href="admin_projects.php" class="flex items-center gap-3 text-gray-700 px-4 py-2.5 rounded-lg hover:bg-gray-50 text-sm font-medium transition-colors">
-              <span class="material-symbols-outlined text-xl">account_tree</span>
-              Projects
-            </a>
-            <a href="admin_daily_logs.php" class="flex items-center gap-3 text-gray-700 px-4 py-2.5 rounded-lg hover:bg-gray-50 text-sm font-medium transition-colors">
-              <span class="material-symbols-outlined text-xl">monitoring</span>
-              Daily Logs
-            </a>
-            <a href="admin_reports.php" class="flex items-center gap-3 text-gray-700 px-4 py-2.5 rounded-lg hover:bg-gray-50 text-sm font-medium transition-colors">
-              <span class="material-symbols-outlined text-xl">analytics</span>
-              Reports
-            </a>
-            <a href="admin_notifications.php" class="flex items-center gap-3 text-gray-700 px-4 py-2.5 rounded-lg hover:bg-gray-50 text-sm font-medium transition-colors">
-              <span class="material-symbols-outlined text-xl">campaign</span>
-              Notifications
-            </a>
-            <a href="admin_talent_pool.php" class="flex items-center gap-3 text-gray-700 px-4 py-2.5 rounded-lg hover:bg-gray-50 text-sm font-medium transition-colors">
-              <span class="material-symbols-outlined text-xl">stars</span>
-              Talent Pool
-            </a>
-          </nav>
-        </div>
-      </div>
-      <div>
-        <nav class="flex flex-col gap-1 border-t border-gray-150 pt-4">
-          <a href="logout.php" class="flex items-center gap-3 text-red-600 px-4 py-2.5 rounded-lg hover:bg-red-50 text-sm font-medium transition-colors">
-            <span class="material-symbols-outlined text-xl">logout</span>
-            Logout
-          </a>
-        </nav>
-      </div>
-    </aside>
+    <?php include 'includes/admin_sidebar.php'; ?>
 
     <!-- Main Content -->
     <main class="flex-1 p-8 overflow-y-auto bg-gray-50">

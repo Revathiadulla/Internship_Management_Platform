@@ -1,13 +1,19 @@
 <?php
-session_start();
-include "db.php";
-include_once __DIR__ . "/includes/mail_helper.php";
+error_reporting(E_ALL);
+ini_set('display_errors', '0');
 
-// Check if user is logged in
-if (!isset($_SESSION['user_id']) || !isset($_SESSION['role'])) {
-    echo json_encode(['success' => false, 'message' => 'Unauthorized access']);
-    exit();
-}
+header('Content-Type: application/json');
+
+try {
+    session_start();
+    include "db.php";
+    include_once __DIR__ . "/includes/mail_helper.php";
+
+    // Check if user is logged in
+    if (!isset($_SESSION['user_id']) || !isset($_SESSION['role'])) {
+        echo json_encode(['success' => false, 'message' => 'Unauthorized access']);
+        exit();
+    }
 
 $user_id = $_SESSION['user_id'];
 $user_role = $_SESSION['role'];
@@ -102,9 +108,15 @@ if ($new_status === 'HOD Approval Pending') {
     }
 
     // Build stateless approve/reject URLs
-    $base_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . '://' . $_SERVER['HTTP_HOST'];
-    $approve_url = $base_url . '/IMP/hod_approval.php?token=' . urlencode($hod_token) . '&decision=approve';
-    $reject_url  = $base_url . '/IMP/hod_approval.php?token=' . urlencode($hod_token) . '&decision=reject';
+    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+    $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+    $base_dir = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '')), '/');
+    if ($base_dir === '') {
+        $base_dir = '/';
+    }
+    $base_url = $scheme . '://' . $host . $base_dir;
+    $approve_url = rtrim($base_url, '/') . '/hod_approval_action.php?application_id=' . urlencode($app_id) . '&action=approve&token=' . urlencode($hod_token);
+    $reject_url  = rtrim($base_url, '/') . '/hod_approval_action.php?application_id=' . urlencode($app_id) . '&action=reject&token=' . urlencode($hod_token);
 
     // Send HOD approval email
     $hod_subject = "Action Required: Internship Approval for $student_name – IMP";
@@ -176,6 +188,17 @@ if ($new_status === 'HOD Approval Pending') {
         VALUES ($app_id, '$old_status', 'HOD Approval Pending', '$user_role', '$updated_by_name', '$notes_escaped')");
 
     // Notify the student
+    $student_subject = "Your application is pending HOD approval";
+    $student_message = "Dear $student_name,\n\nYour application for \"$internship_title\" is awaiting HOD approval. Your HOD has been emailed at $hod_email, and you will be notified once they respond.\n\nBest regards,\nIMP Team";
+    sendStudentNotification($student_user_id, $student_name, $student_subject, $student_message, [
+        'event' => 'HOD Approval Request',
+        'internship' => $internship_title,
+        'status' => 'Awaiting HOD approval',
+        'hod_name' => $hod_name,
+        'action_url' => 'http://localhost/IMP/student_applications.php',
+        'action_label' => 'View Application Status'
+    ]);
+
     $notif_msg = mysqli_real_escape_string($conn, "Your HOD ($hod_name) has been sent an approval request for your internship application.");
     mysqli_query($conn, "INSERT INTO student_notifications (user_id, title, type, message)
         VALUES ($student_user_id, 'HOD Approval Requested', 'info', '$notif_msg')");
@@ -185,21 +208,39 @@ if ($new_status === 'HOD Approval Pending') {
 }
 
 // ── Block direct selection of Pursuing students without HOD approval ────────
-if ($new_status === 'Selected' && $education_status === 'Currently Pursuing') {
+if ($new_status === 'Selected' && ($education_status === 'Currently Pursuing' || $education_status === 'Pursuing')) {
     $current_hod_status = $app['hod_approval_status'] ?? 'Pending';
     if ($current_hod_status !== 'Approved' && $app['status'] !== 'HOD Approved') {
-        echo json_encode(['success' => false, 'message' => 'Cannot select this student. HOD approval is required for Currently Pursuing students. Please send HOD approval email first.']);
+        echo json_encode(['success' => false, 'message' => 'Cannot select this student. HOD approval is required for Pursuing students. Please send HOD approval email first.']);
         exit();
     }
 }
 
 // ── Standard status update ────────────────────────────────────────────────
+$new_status_escaped = mysqli_real_escape_string($conn, $new_status);
 $selected_at_sql = ($new_status === 'Selected') ? ", selected_by = $user_id, selected_at = NOW()" : '';
-$final_status_sql = ($new_status === 'Selected' || $new_status === 'Rejected') ? ", final_selection_status = '$new_status'" : '';
-$update_sql = "UPDATE internship_applications SET status = '$new_status' $selected_at_sql $final_status_sql WHERE id = $app_id";
+$final_status_sql = ($new_status === 'Selected' || $new_status === 'Rejected') ? ", final_selection_status = '$new_status_escaped'" : '';
+$update_sql = "UPDATE internship_applications SET status = '$new_status_escaped' $selected_at_sql $final_status_sql WHERE id = $app_id";
 
 if (mysqli_query($conn, $update_sql)) {
-    checkAndAddToTalentPool($conn, $app_id);
+    // Check and add to talent pool if eligible (e.g., for 'Selected' status)
+    // Talent pool logic: add students with 'Selected' status
+    if ($new_status === 'Selected') {
+        $tp_check_sql = "SELECT id, user_id FROM internship_applications WHERE id = $app_id LIMIT 1";
+        $tp_check = mysqli_query($conn, $tp_check_sql);
+        if ($tp_check && $tp_check_row = mysqli_fetch_assoc($tp_check)) {
+            $student_user_id_check = intval($tp_check_row['user_id']);
+            // Check if this student already has a talent pool entry
+            $dup_check = mysqli_query($conn, "SELECT id FROM internship_applications WHERE user_id = $student_user_id_check AND in_talent_pool = 1 AND id != $app_id LIMIT 1");
+            if ($dup_check && mysqli_num_rows($dup_check) > 0) {
+                // Prevent duplicate talent pool entries
+                mysqli_query($conn, "UPDATE internship_applications SET talent_pool_status = 'Yes', in_talent_pool = 0 WHERE id = $app_id");
+            } else {
+                // Add to talent pool
+                mysqli_query($conn, "UPDATE internship_applications SET in_talent_pool = 1, talent_pool_status = 'Yes' WHERE id = $app_id");
+            }
+        }
+    }
 
     // Get updater's name
     $name_sql = "SELECT full_name FROM student_profiles WHERE user_id = $user_id LIMIT 1";
@@ -215,24 +256,133 @@ if (mysqli_query($conn, $update_sql)) {
     mysqli_query($conn, $history_sql);
 
     // Post-update actions
-    if ($new_status === 'Selected') {
-        // Send selection email to student
-        $subject = "Congratulations! You have been selected for the internship";
-        $message = "Dear $student_name,\n\nWe are pleased to inform you that you have been selected for the internship: $internship_title.\n\nPlease await further instructions from HR.\n\nBest regards,\nIMP Team";
-        if (function_exists('sendEmail')) {
-            sendEmail($student_email, $student_name, $subject, nl2br($message));
-        }
-        // Notification
-        $notif_msg = mysqli_real_escape_string($conn, "Congratulations! You have been selected for the internship.");
-        mysqli_query($conn, "INSERT INTO student_notifications (user_id, title, type, message) VALUES ($student_user_id, 'Internship Selected', 'success', '$notif_msg')");
-    } elseif ($new_status === 'Rejected') {
-        // Notification for rejection
-        $notif_msg = mysqli_real_escape_string($conn, "Your internship application was not selected.");
-        mysqli_query($conn, "INSERT INTO student_notifications (user_id, title, type, message) VALUES ($student_user_id, 'Application Rejected', 'info', '$notif_msg')");
+    $student_subject = "Application Update: $new_status";
+    $student_message = "Dear $student_name,\n\nYour internship application for \"$internship_title\" has been updated to \"$new_status\".\n\nPlease log in to the platform for the latest details and next steps.\n\nBest regards,\nIMP Team";
+    $notif_title = 'Application Status Updated';
+    $notif_type = 'info';
+    $notif_msg = "Your application status has changed to \"$new_status\".";
+
+    switch ($new_status) {
+        case 'HR Review':
+            $student_subject = "Your application is under HR review";
+            $student_message = "Dear $student_name,\n\nYour application for \"$internship_title\" is now under HR review. We will notify you once there is an update.\n\nBest regards,\nIMP Team";
+            $notif_title = 'HR Review';
+            break;
+        case 'HR Round':
+            $student_subject = "Your application has moved to the HR Round";
+            $student_message = "Dear $student_name,\n\nGood news! Your application for \"$internship_title\" has progressed to the HR Round. Please stay prepared for next steps.\n\nBest regards,\nIMP Team";
+            $notif_title = 'HR Round';
+            break;
+        case 'Test Completed':
+            $student_subject = "Your application status is now Test Completed";
+            $student_message = "Dear $student_name,\n\nYour application for \"$internship_title\" is now marked as Test Completed. We will review the results and update you shortly.\n\nBest regards,\nIMP Team";
+            $notif_title = 'Test Completed';
+            $notif_type = 'success';
+            break;
+        case 'Selected':
+            $student_subject = "Congratulations! You have been selected for the internship";
+            $student_message = "Dear $student_name,\n\nWe are pleased to inform you that you have been selected for the internship: \"$internship_title\". Please find your Confirmation Letter attached.\n\nNote: Project allocation, team formation, and mentor assignment will be communicated separately by the Coordinator.\n\nBest regards,\nIMP Team";
+            $notif_title = 'Internship Selected';
+            $notif_type = 'success';
+
+            // Generate PDF
+            require_once __DIR__ . '/includes/fpdf.php';
+            $pdf = new FPDF();
+            $pdf->AddPage();
+            
+            // Header
+            $pdf->SetFont('Arial', 'B', 24);
+            $pdf->SetTextColor(0, 74, 198); // Blue
+            $pdf->Cell(0, 15, 'IMP', 0, 1, 'C');
+            $pdf->SetFont('Arial', 'B', 14);
+            $pdf->SetTextColor(50, 50, 50);
+            $pdf->Cell(0, 10, 'Internship Management Platform', 0, 1, 'C');
+            $pdf->Ln(10);
+            
+            // Title
+            $pdf->SetFont('Arial', 'B', 16);
+            $pdf->SetTextColor(0, 0, 0);
+            $pdf->Cell(0, 10, 'INTERNSHIP SELECTION CONFIRMATION LETTER', 0, 1, 'C');
+            $pdf->Ln(10);
+            
+            // Details
+            $pdf->SetFont('Arial', '', 12);
+            $ref_no = 'IMP/' . date('Y') . '/' . str_pad($app_id, 4, '0', STR_PAD_LEFT);
+            $pdf->Cell(0, 8, 'Reference No: ' . $ref_no, 0, 1);
+            $pdf->Cell(0, 8, 'Date: ' . date('F j, Y'), 0, 1);
+            $pdf->Ln(5);
+            
+            $pdf->Cell(0, 8, 'Student Name: ' . $student_name, 0, 1);
+            $pdf->Cell(0, 8, 'Student Email: ' . ($app['student_email'] ?? ''), 0, 1);
+            $pdf->Cell(0, 8, 'Application ID: ' . $app_id, 0, 1);
+            $pdf->Cell(0, 8, 'Status: SELECTED', 0, 1);
+            $pdf->Ln(10);
+            
+            // Body
+            $pdf->SetFont('Arial', '', 12);
+            $msg = "Dear $student_name,\n\nWe are pleased to inform you that your application for the internship position \"$internship_title\" has been successful. You have been officially selected for this role.\n\nPlease note: Project allocation, team formation, and mentor assignment will be communicated separately by the Coordinator. You do not need to take any action regarding these assignments until further notice.\n\nCongratulations on your selection!";
+            $pdf->MultiCell(0, 8, $msg);
+            $pdf->Ln(20);
+            
+            // Signature
+            $pdf->SetFont('Arial', 'B', 12);
+            $pdf->Cell(0, 8, 'Best Regards,', 0, 1);
+            $pdf->Cell(0, 8, 'HR Team, IMP', 0, 1);
+            $pdf->Ln(10);
+            
+            $pdf->SetFont('Arial', 'I', 10);
+            $pdf->SetTextColor(100, 100, 100);
+            $pdf->Cell(0, 10, 'This is a system-generated confirmation letter. No signature is required.', 0, 1, 'C');
+            
+            // Save PDF
+            $pdf_filename = 'Confirmation_Letter_' . $app_id . '.pdf';
+            $pdf_path = 'uploads/offer_letters/' . $pdf_filename;
+            $full_pdf_path = __DIR__ . '/' . $pdf_path;
+            
+            $pdf->Output('F', $full_pdf_path);
+            
+            // Update DB
+            $esc_pdf_path = mysqli_real_escape_string($conn, $pdf_path);
+            mysqli_query($conn, "UPDATE internship_applications SET confirmation_letter_path = '$esc_pdf_path', confirmation_letter_sent_at = NOW() WHERE id = $app_id");
+            
+            // Attach to email
+            $GLOBALS['mail_options_attachments'] = [
+                ['path' => $full_pdf_path, 'name' => $pdf_filename]
+            ];
+            break;
+        case 'Rejected':
+            $student_subject = "Update: Internship application not selected";
+            $student_message = "Dear $student_name,\n\nWe are sorry to inform you that your application for \"$internship_title\" was not selected at this time.\n\nThank you for applying and keep an eye out for future opportunities.\n\nBest regards,\nIMP Team";
+            $notif_title = 'Application Rejected';
+            break;
+        case 'Active Intern':
+            $student_subject = "Your internship status has been updated to Active Intern";
+            $student_message = "Dear $student_name,\n\nYour internship application for \"$internship_title\" is now active. Please continue with your assigned tasks and log your progress regularly.\n\nBest regards,\nIMP Team";
+            $notif_title = 'Active Internship';
+            $notif_type = 'success';
+            break;
     }
+
+    sendStudentNotification($student_user_id, $student_name, $student_subject, $student_message, [
+        'event' => 'Application Status Update',
+        'internship' => $internship_title,
+        'status' => $new_status,
+        'action_url' => 'http://localhost/IMP/student_applications.php',
+        'action_label' => 'View Application'
+    ]);
+
+    $notif_msg = mysqli_real_escape_string($conn, $notif_msg);
+    mysqli_query($conn, "INSERT INTO student_notifications (user_id, title, type, message) VALUES ($student_user_id, '$notif_title', '$notif_type', '$notif_msg')");
     echo json_encode(['success' => true, 'message' => "Application status updated to $new_status."]); 
     exit();
 } else {
     echo json_encode(['success' => false, 'message' => 'Failed to update status: ' . mysqli_error($conn)]);
+    exit();
+}} catch (Throwable $e) {
+    echo json_encode([
+        'success' => false,
+        'message' => 'Server error: ' . $e->getMessage(),
+        'error_details' => get_class($e) . ' at ' . $e->getFile() . ':' . $e->getLine()
+    ]);
     exit();
 }

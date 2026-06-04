@@ -20,7 +20,9 @@ if ($app_id <= 0) {
 $app_sql = "SELECT a.*, 
                    COALESCE(i.title, a.internship_name) as title,
                    COALESCE(i.duration, '') as duration,
-                   COALESCE(i.mode, '') as mode
+                   COALESCE(i.mode, '') as mode,
+                   i.project_type,
+                   i.project_subtype
             FROM internship_applications a
             LEFT JOIN internships i ON a.internship_id = i.id AND a.internship_id > 0
             WHERE a.id = $app_id AND a.user_id = $user_id
@@ -34,6 +36,17 @@ if (mysqli_num_rows($app_result) == 0) {
 
 $app = mysqli_fetch_assoc($app_result);
 
+$is_selected_or_approved = in_array($app['status'], ['Selected', 'Started', 'Internship Started', 'Active Intern']);
+$display_title = $is_selected_or_approved 
+    ? $app['title'] 
+    : (!empty($app['project_type']) && !empty($app['project_subtype']) 
+        ? $app['project_type'] . ' - ' . $app['project_subtype'] 
+        : (!empty($app['project_subtype']) 
+            ? $app['project_subtype'] 
+            : (!empty($app['project_type']) 
+                ? $app['project_type'] 
+                : $app['title'])));
+
 // Fetch student profile
 $profile_sql = "SELECT * FROM student_profiles WHERE user_id = '$user_id' LIMIT 1";
 $profile_result = mysqli_query($conn, $profile_sql);
@@ -44,7 +57,7 @@ $profile = mysqli_fetch_assoc($profile_result);
 <head>
   <meta charset="utf-8">
   <meta content="width=device-width, initial-scale=1.0" name="viewport">
-  <title>Application Status - <?php echo htmlspecialchars($app['title']); ?></title>
+  <title>Application Status - <?php echo htmlspecialchars($display_title); ?></title>
   
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -122,7 +135,7 @@ $profile = mysqli_fetch_assoc($profile_result);
         </a>
         <div>
           <h1 class="text-lg font-bold text-slate-800">Application Status</h1>
-          <p class="text-xs text-slate-500"><?php echo htmlspecialchars($app['title']); ?></p>
+          <p class="text-xs text-slate-500"><?php echo htmlspecialchars($display_title); ?></p>
         </div>
       </div>
       
@@ -194,7 +207,7 @@ $profile = mysqli_fetch_assoc($profile_result);
         <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
           <div class="flex items-start justify-between mb-4">
             <div class="flex-1">
-              <h2 class="text-2xl font-extrabold text-slate-900 tracking-tight"><?php echo htmlspecialchars($app['title']); ?></h2>
+              <h2 class="text-2xl font-extrabold text-slate-900 tracking-tight"><?php echo htmlspecialchars($display_title); ?></h2>
               <div class="flex flex-wrap gap-2 mt-3">
                 <?php if (!empty($app['duration'])): ?>
                 <span class="px-3 py-1 bg-blue-50 text-blue-700 text-xs font-semibold rounded-lg border border-blue-100">

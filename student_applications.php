@@ -26,9 +26,13 @@ $app_sql = "SELECT a.id as app_id,
                    COALESCE(i.mode, '') as mode,
                    a.status, a.applied_date,
                    a.relevant_skills, a.preferred_duration,
-                   a.test_status, a.test_score, a.test_answers, a.education_status, a.test_submitted_date
+                   a.test_status, a.test_score, a.test_answers, a.education_status, a.test_submitted_date,
+                   i.project_type, i.project_subtype,
+                   ss.score as ss_score,
+                   ss.total_questions as ss_total_questions
             FROM internship_applications a
             LEFT JOIN internships i ON a.internship_id = i.id AND a.internship_id > 0
+            LEFT JOIN student_scores ss ON a.id = ss.application_id
             WHERE a.user_id = '$user_id'
             ORDER BY a.applied_date DESC";
 $app_result = mysqli_query($conn, $app_sql);
@@ -239,6 +243,11 @@ $has_active = mysqli_num_rows($active_result) > 0;
     <main class="flex-1 p-8">
       
       <div class="max-w-5xl mx-auto">
+        <?php if (isset($_GET['msg'])): ?>
+          <div class="mb-6 p-4 text-sm font-bold text-green-800 rounded-lg bg-green-50 border border-green-300 shadow-sm">
+            <?php echo htmlspecialchars($_GET['msg']); ?>
+          </div>
+        <?php endif; ?>
         <div class="flex items-center justify-between mb-8">
           <div>
             <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">My Applications</h1>
@@ -283,6 +292,20 @@ $has_active = mysqli_num_rows($active_result) > 0;
                     $test_score = $app['test_score'] ?? 0;
                     $test_submitted_date = $app['test_submitted_date'] ?? null;
                     
+                    $raw_score = 0;
+                    $total_qs = 30;
+                    if ($app['ss_score'] !== null) {
+                        $raw_score = intval($app['ss_score']);
+                        $total_qs = intval($app['ss_total_questions'] ?: 30);
+                    } else if (isset($app['test_score'])) {
+                        $p = intval($app['test_score']);
+                        if ($p > 30) {
+                            $raw_score = intval(round(($p / 100) * 30));
+                        } else {
+                            $raw_score = $p;
+                        }
+                    }
+                    
                     $show_start_test = ($current_status === 'Applied' && $test_status !== 'Completed' && !$is_deadline_expired);
                     $show_test_expired = ($current_status === 'Applied' && $test_status !== 'Completed' && $is_deadline_expired);
                     $show_view_result = ($test_status === 'Completed');
@@ -293,11 +316,23 @@ $has_active = mysqli_num_rows($active_result) > 0;
                       <!-- Left: Internship Info -->
                       <div class="flex-1 min-w-0">
                         <div class="flex items-start gap-4">
+                          <?php
+                            $is_selected_or_approved = in_array($app['status'], ['Selected', 'Started', 'Internship Started', 'Active Intern']);
+                            $display_title = $is_selected_or_approved 
+                                ? $app['title'] 
+                                : (!empty($app['project_type']) && !empty($app['project_subtype']) 
+                                    ? $app['project_type'] . ' - ' . $app['project_subtype'] 
+                                    : (!empty($app['project_subtype']) 
+                                        ? $app['project_subtype'] 
+                                        : (!empty($app['project_type']) 
+                                            ? $app['project_type'] 
+                                            : $app['title'])));
+                          ?>
                           <div class="w-14 h-14 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-xl shrink-0 shadow-md group-hover:shadow-lg transition-shadow">
-                            <?php echo strtoupper(substr($app['title'], 0, 1)); ?>
+                            <?php echo strtoupper(substr($display_title, 0, 1)); ?>
                           </div>
                           <div class="flex-1 min-w-0">
-                            <h3 class="font-bold text-slate-900 text-lg mb-2 group-hover:text-blue-600 transition-colors"><?php echo htmlspecialchars($app['title']); ?></h3>
+                            <h3 class="font-bold text-slate-900 text-lg mb-2 group-hover:text-blue-600 transition-colors"><?php echo htmlspecialchars($display_title); ?></h3>
                             <div class="flex flex-wrap items-center gap-3 text-sm text-slate-500">
                               <?php if (!empty($app['duration'])): ?>
                               <span class="flex items-center gap-1.5">
@@ -393,7 +428,7 @@ $has_active = mysqli_num_rows($active_result) > 0;
                         </a>
                         
                         <?php if ($show_start_test): ?>
-                          <a href="student_test.php?app_id=<?php echo $app['app_id']; ?>" 
+                          <a href="student_test.php?application_id=<?php echo $app['app_id']; ?>" 
                              class="px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 shadow-sm hover:shadow-md">
                             <span class="material-symbols-outlined text-[18px]">quiz</span> 
                             Start Test
@@ -405,7 +440,7 @@ $has_active = mysqli_num_rows($active_result) > 0;
                             Test Expired
                           </button>
                         <?php elseif ($show_view_result): ?>
-                          <button onclick="openResultModal('<?php echo htmlspecialchars($app['title']); ?>', <?php echo intval($test_score); ?>, '<?php echo htmlspecialchars($app['test_answers'] ?? '', ENT_QUOTES, 'UTF-8'); ?>')" 
+                          <button onclick="openResultModal('<?php echo htmlspecialchars($display_title); ?>', <?php echo intval($raw_score); ?>, <?php echo intval($total_qs); ?>, '<?php echo htmlspecialchars($app['test_answers'] ?? '', ENT_QUOTES, 'UTF-8'); ?>')" 
                                   class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 shadow-sm hover:shadow-md">
                             <span class="material-symbols-outlined text-[18px]">leaderboard</span> 
                             View Result
@@ -501,7 +536,7 @@ $has_active = mysqli_num_rows($active_result) > 0;
         return 'General Aptitude';
     }
 
-    function openResultModal(title, score, answersJsonStr) {
+    function openResultModal(title, score, totalQuestions, answersJsonStr) {
         const modal = document.getElementById("result-modal");
         const modalContent = document.getElementById("result-modal-content");
         const modalTitle = document.getElementById("result-modal-title");
@@ -510,13 +545,13 @@ $has_active = mysqli_num_rows($active_result) > 0;
         const questionsContainer = document.getElementById("result-modal-questions");
 
         modalTitle.textContent = title;
-        scoreCircle.textContent = score + "/30";
+        scoreCircle.textContent = score + "/" + totalQuestions;
         
-        const percentage = Math.round((score / 30) * 100);
-        let comment = `You scored ${score}/30 (${percentage}%). `;
-        if (score === 30) comment += "Perfect score! Outstanding grasp of the subject matter. Hiring managers have been notified of your exceptional performance.";
-        else if (score >= 25) comment += "Excellent job! You demonstrated strong foundational knowledge in this domain. Your response has been saved.";
-        else if (score >= 18) comment += "Good attempt. You have solid basics but there is room for improvement. The review committee will review your profile shortly.";
+        const percentage = Math.round((score / totalQuestions) * 100);
+        let comment = `You scored ${score}/${totalQuestions} (${percentage}%). `;
+        if (score === totalQuestions) comment += "Perfect score! Outstanding grasp of the subject matter. Hiring managers have been notified of your exceptional performance.";
+        else if (percentage >= 80) comment += "Excellent job! You demonstrated strong foundational knowledge in this domain. Your response has been saved.";
+        else if (percentage >= 60) comment += "Good attempt. You have solid basics but there is room for improvement. The review committee will review your profile shortly.";
         else comment += "Test completed. Your scores have been submitted. Focus on key core concepts to build your confidence.";
 
         scoreComment.textContent = comment;

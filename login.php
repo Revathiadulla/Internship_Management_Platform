@@ -2,23 +2,34 @@
 ob_start();
 session_start();
 include 'db.php';
+include_once __DIR__ . '/includes/auth.php';
 
 // ── POST: process login ──
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email    = trim($_POST['email'] ?? '');
     $password = $_POST['password'];
 
-    $email_safe = mysqli_real_escape_string($conn, $email);
-    $sql    = "SELECT * FROM users WHERE email='$email_safe'";
-    $result = mysqli_query($conn, $sql);
+    $stmt = $conn->prepare("SELECT * FROM users WHERE email = ?");
+    $stmt->bind_param("s", $email);
+    $stmt->execute();
+    $result = $stmt->get_result();
 
     if (mysqli_num_rows($result) > 0) {
         $user = mysqli_fetch_assoc($result);
 
         if (password_verify($password, $user['password'])) {
-            if (isset($user['status']) && strtolower($user['status']) === 'inactive') {
-                header("Location: login.php?error=" . urlencode("Your account has been deactivated. Please contact support."));
-                exit();
+            if (isset($user['status'])) {
+                $status = strtolower($user['status']);
+                if ($status === 'inactive') {
+                    header("Location: login.php?error=" . urlencode("Your account has been deactivated. Please contact support."));
+                    exit();
+                } elseif ($status === 'pending_approval') {
+                    header("Location: login.php?error=" . urlencode("Your account is pending admin approval. You will receive an email once approved."));
+                    exit();
+                } elseif ($status === 'rejected') {
+                    header("Location: login.php?error=" . urlencode("Your account registration has been rejected by Admin."));
+                    exit();
+                }
             }
             $_SESSION['user_id']   = $user['id'];
             $_SESSION['full_name'] = $user['full_name'];
@@ -44,6 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } elseif ($role == "coordinator") {
                 header("Location: coordinator_dashboard.php");
             } elseif ($role == "company") {
+                ensure_company_profile($conn, $user['id'], $user['full_name']);
                 header("Location: company_dashboard.php");
             } elseif ($role == "admin") {
                 header("Location: admin_dashboard.php");
@@ -271,7 +283,7 @@ if (isset($_GET['success'])) $success_msg = htmlspecialchars(urldecode($_GET['su
 <p class="font-body-md text-body-md text-on-surface-variant mt-2">Access your internship dashboard</p>
 </div>
 <?php if ($success_msg): ?>
-<div id="login-success-container" class="animate-fade-in mb-4">
+<div id="login-success-container" class="animate-fade-in mb-4 alert-success">
     <div id="login-success-banner" class="flex items-center gap-3 p-3.5 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700 font-medium">
         <span class="material-symbols-outlined text-green-500 text-[20px] flex-shrink-0">check_circle</span>
         <span><?php echo $success_msg; ?></span>
@@ -304,7 +316,7 @@ if (isset($_GET['success'])) $success_msg = htmlspecialchars(urldecode($_GET['su
 <label class="ml-2 font-body-md text-body-md text-on-surface-variant" for="remember">Keep me logged in for 30 days</label>
 </div>
 <?php if ($error_msg): ?>
-<div id="login-error-container" class="animate-fade-in">
+<div id="login-error-container" class="animate-fade-in alert-danger">
     <div id="login-error-banner" class="flex items-center gap-3 p-3.5 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 font-medium animate-shake">
         <span class="material-symbols-outlined text-red-500 text-[20px] flex-shrink-0">error</span>
         <span><?php echo $error_msg; ?></span>
@@ -504,4 +516,5 @@ function sanitizeEncodingIssues() {
 }
 document.addEventListener('DOMContentLoaded', sanitizeEncodingIssues);
 </script>
+<script src="js/alerts.js"></script>
 </body></html>

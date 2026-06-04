@@ -22,6 +22,15 @@ $pan_number = mysqli_real_escape_string($conn, $_POST['pan_number']);
 $hod_name = isset($_POST['hod_name']) ? mysqli_real_escape_string($conn, trim($_POST['hod_name'])) : '';
 $hod_phone = isset($_POST['hod_phone']) ? mysqli_real_escape_string($conn, trim($_POST['hod_phone'])) : '';
 $hod_email = isset($_POST['hod_email']) ? mysqli_real_escape_string($conn, trim($_POST['hod_email'])) : '';
+$education_status = isset($_POST['education_status']) ? mysqli_real_escape_string($conn, trim($_POST['education_status'])) : null;
+$department = isset($_POST['department']) ? mysqli_real_escape_string($conn, trim($_POST['department'])) : null;
+$graduation_year = isset($_POST['graduation_year']) ? mysqli_real_escape_string($conn, trim($_POST['graduation_year'])) : null;
+$previous_college = isset($_POST['previous_college']) ? mysqli_real_escape_string($conn, trim($_POST['previous_college'])) : null;
+// Convert empty strings to NULL for optional fields
+$education_status = $education_status === '' ? null : $education_status;
+$department = $department === '' ? null : $department;
+$graduation_year = $graduation_year === '' ? null : $graduation_year;
+$previous_college = $previous_college === '' ? null : $previous_college;
 
 $folder = sys_get_temp_dir() . "/imp_uploads/";
 if (!is_dir($folder)) {
@@ -78,6 +87,7 @@ if (isset($_FILES['resume']) && $_FILES['resume']['error'] === UPLOAD_ERR_OK) {
 }
 
 // 2. Aadhaar File Upload Validation & Processing
+// 2. Aadhaar File Upload Validation & Processing
 if (isset($_FILES['aadhaar_file']) && $_FILES['aadhaar_file']['error'] === UPLOAD_ERR_OK) {
     $aadhaar_name = $_FILES['aadhaar_file']['name'];
     $aadhaar_tmp = $_FILES['aadhaar_file']['tmp_name'];
@@ -95,10 +105,21 @@ if (isset($_FILES['aadhaar_file']) && $_FILES['aadhaar_file']['error'] === UPLOA
     $clean_aadhaar_name = preg_replace("/[^a-zA-Z0-9\._-]/", "", $aadhaar_name);
     $unique_aadhaar = time() . "_aadhaar_" . $clean_aadhaar_name;
     
-    if (move_uploaded_file($aadhaar_tmp, $folder . $unique_aadhaar)) {
-        $new_aadhaar = $unique_aadhaar;
-        if ($existing_profile && !empty($existing_profile['aadhaar_file']) && file_exists($folder . $existing_profile['aadhaar_file'])) {
-            @unlink($folder . $existing_profile['aadhaar_file']);
+    $aadhaar_dir = __DIR__ . '/uploads/aadhaar/';
+    if (!is_dir($aadhaar_dir)) {
+        mkdir($aadhaar_dir, 0777, true);
+    }
+    
+    if (move_uploaded_file($aadhaar_tmp, $aadhaar_dir . $unique_aadhaar)) {
+        $new_aadhaar = 'uploads/aadhaar/' . $unique_aadhaar;
+        if ($existing_profile && !empty($existing_profile['aadhaar_file'])) {
+            $old_path = $existing_profile['aadhaar_file'];
+            if (strpos($old_path, 'uploads/') !== 0) {
+                @unlink(__DIR__ . '/uploads/secure/' . $old_path);
+                @unlink($folder . $old_path);
+            } else {
+                @unlink(__DIR__ . '/' . $old_path);
+            }
         }
     } else {
         header("Location: student_profile_form.php?error=" . urlencode("Failed to move uploaded Aadhaar file."));
@@ -127,10 +148,21 @@ if (isset($_FILES['pan_file']) && $_FILES['pan_file']['error'] === UPLOAD_ERR_OK
     $clean_pan_name = preg_replace("/[^a-zA-Z0-9\._-]/", "", $pan_name);
     $unique_pan = time() . "_pan_" . $clean_pan_name;
     
-    if (move_uploaded_file($pan_tmp, $folder . $unique_pan)) {
-        $new_pan = $unique_pan;
-        if ($existing_profile && !empty($existing_profile['pan_file']) && file_exists($folder . $existing_profile['pan_file'])) {
-            @unlink($folder . $existing_profile['pan_file']);
+    $pan_dir = __DIR__ . '/uploads/pan/';
+    if (!is_dir($pan_dir)) {
+        mkdir($pan_dir, 0777, true);
+    }
+    
+    if (move_uploaded_file($pan_tmp, $pan_dir . $unique_pan)) {
+        $new_pan = 'uploads/pan/' . $unique_pan;
+        if ($existing_profile && !empty($existing_profile['pan_file'])) {
+            $old_path = $existing_profile['pan_file'];
+            if (strpos($old_path, 'uploads/') !== 0) {
+                @unlink(__DIR__ . '/uploads/secure/' . $old_path);
+                @unlink($folder . $old_path);
+            } else {
+                @unlink(__DIR__ . '/' . $old_path);
+            }
         }
     } else {
         header("Location: student_profile_form.php?error=" . urlencode("Failed to move uploaded PAN file."));
@@ -141,28 +173,68 @@ if (isset($_FILES['pan_file']) && $_FILES['pan_file']['error'] === UPLOAD_ERR_OK
     exit();
 }
 
-// Save or Update Profile in Database
+        // Auto-migrate student_profiles table to ensure required columns exist
+        $required_cols = [
+            'education_status' => "VARCHAR(50) NULL",
+            'department' => "VARCHAR(100) NULL",
+            'hod_name' => "VARCHAR(100) NULL",
+            'hod_phone' => "VARCHAR(20) NULL",
+            'hod_email' => "VARCHAR(100) NULL",
+            'graduation_year' => "VARCHAR(10) NULL",
+            'previous_college' => "VARCHAR(255) NULL"
+        ];
+        foreach ($required_cols as $col => $def) {
+            $col_check = mysqli_query($conn, "SHOW COLUMNS FROM student_profiles LIKE '$col'");
+            if ($col_check && mysqli_num_rows($col_check) === 0) {
+                $alter_sql = "ALTER TABLE student_profiles ADD COLUMN $col $def";
+                if (!mysqli_query($conn, $alter_sql)) {
+                    require_once __DIR__ . '/utils/log_helper.php';
+                    log_error("Failed to add column $col: " . mysqli_error($conn));
+                    header('Location: student_profile_form.php?error=' . urlencode('Database schema update failed. Please try again later.'));
+                    exit();
+                }
+            }
+        }
+
+        // Save or Update Profile in Database
 if ($existing_profile) {
-    // Update
-    $sql = "UPDATE student_profiles SET 
-            full_name='$full_name', email='$email', phone='$phone', dob='$dob', gender='$gender',
-            college_name='$college_name', course='$course', year_of_study='$year_of_study', skills='$skills',
-            resume_file='$new_resume', resume_url='$resume_url', aadhaar_number='$aadhaar_number', pan_number='$pan_number',
-            aadhaar_file='$new_aadhaar', pan_file='$new_pan',
-            hod_name='$hod_name', hod_phone='$hod_phone', hod_email='$hod_email'
-            WHERE user_id='$user_id'";
+    // Update using prepared statement
+    // DEBUG: placeholder_count=23, bind_type_count=23, bind_variable_count=23
+    $stmt = $conn->prepare("UPDATE student_profiles SET full_name=?, email=?, phone=?, dob=?, gender=?, college_name=?, course=?, year_of_study=?, skills=?, resume_file=?, resume_url=?, aadhaar_number=?, pan_number=?, aadhaar_file=?, pan_file=?, hod_name=?, hod_phone=?, hod_email=?, education_status=?, department=?, graduation_year=?, previous_college=? WHERE user_id=?");
+    $stmt->bind_param(
+        "ssssssssssssssssssssssi",
+        $full_name, $email, $phone, $dob, $gender, $college_name, $course, $year_of_study, $skills, $new_resume, $resume_url, $aadhaar_number, $pan_number, $new_aadhaar, $new_pan, $hod_name, $hod_phone, $hod_email, $education_status, $department, $graduation_year, $previous_college, $user_id
+    );
+    if ($stmt->execute()) {
+        header("Location: student_dashboard.php?msg=profile_updated");
+        exit();
+    } else {
+        require_once __DIR__ . '/utils/log_helper.php';
+        log_error('Profile update failed: ' . $stmt->error);
+        header('Location: student_profile_form.php?error=' . urlencode('Failed to update profile. Please try again later.'));
+        exit();
+    }
 } else {
-    // Insert
-    $sql = "INSERT INTO student_profiles 
-            (user_id, full_name, email, phone, dob, gender, college_name, course, year_of_study, skills, resume_file, resume_url, aadhaar_number, pan_number, aadhaar_file, pan_file, hod_name, hod_phone, hod_email) 
-            VALUES 
-            ('$user_id', '$full_name', '$email', '$phone', '$dob', '$gender', '$college_name', '$course', '$year_of_study', '$skills', '$new_resume', '$resume_url', '$aadhaar_number', '$pan_number', '$new_aadhaar', '$new_pan', '$hod_name', '$hod_phone', '$hod_email')";
+    // Insert new profile using prepared statement
+    // DEBUG: placeholder_count=23, bind_type_count=23, bind_variable_count=23
+    $stmt = $conn->prepare("INSERT INTO student_profiles (user_id, full_name, email, phone, dob, gender, college_name, course, year_of_study, skills, resume_file, resume_url, aadhaar_number, pan_number, aadhaar_file, pan_file, hod_name, hod_phone, hod_email, education_status, department, graduation_year, previous_college) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+                        $stmt->bind_param(
+                            "issssssssssssssssssssss",
+                            $user_id, $full_name, $email, $phone, $dob, $gender,
+                            $college_name, $course, $year_of_study, $skills,
+                            $new_resume, $resume_url, $aadhaar_number, $pan_number,
+                            $new_aadhaar, $new_pan, $hod_name, $hod_phone, $hod_email,
+                            $education_status, $department, $graduation_year, $previous_college
+                        );
+    if ($stmt->execute()) {
+        header("Location: student_dashboard.php?msg=profile_updated");
+        exit();
+    } else {
+        require_once __DIR__ . '/utils/log_helper.php';
+        log_error('Profile insert failed: ' . $stmt->error);
+        header('Location: student_profile_form.php?error=' . urlencode('Failed to save profile. Please try again later.'));
+        exit();
+    }
 }
 
-if (mysqli_query($conn, $sql)) {
-    header("Location: student_dashboard.php?msg=profile_updated");
-    exit();
-} else {
-    header("Location: student_profile_form.php?error=" . urlencode("Database Error: " . mysqli_error($conn)));
-    exit();
-}
+

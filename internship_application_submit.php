@@ -92,13 +92,18 @@ if (isset($_FILES['pan_file']) && $_FILES['pan_file']['error'] === UPLOAD_ERR_OK
         die("PAN file too large. Maximum size is 2MB.");
     }
     $safe_name  = 'pan_' . $user_id . '_' . time() . '.' . $ext;
-    $upload_dir = __DIR__ . '/uploads/';
-    if (!is_dir($upload_dir)) mkdir($upload_dir, 0755, true);
-    if (move_uploaded_file($_FILES['pan_file']['tmp_name'], $upload_dir . $safe_name)) {
-        $pan_filename = $safe_name;
+    $pan_dir = __DIR__ . '/uploads/pan/';
+    if (!is_dir($pan_dir)) mkdir($pan_dir, 0777, true);
+    if (move_uploaded_file($_FILES['pan_file']['tmp_name'], $pan_dir . $safe_name)) {
+        $pan_filename = 'uploads/pan/' . $safe_name;
     }
 } elseif (!empty($_POST['existing_pan'])) {
-    $pan_filename = mysqli_real_escape_string($conn, basename($_POST['existing_pan']));
+    $existing_val = trim($_POST['existing_pan']);
+    if (preg_match('/^uploads\/pan\/[a-zA-Z0-9\._-]+$/', $existing_val)) {
+        $pan_filename = mysqli_real_escape_string($conn, $existing_val);
+    } else {
+        $pan_filename = mysqli_real_escape_string($conn, basename($existing_val));
+    }
 }
 
 // ── Update student profile ──
@@ -138,15 +143,56 @@ $insert_sql = "INSERT INTO internship_applications (
 if (mysqli_query($conn, $insert_sql)) {
 
     // ── Notify student ──
-    $notif_msg = mysqli_real_escape_string($conn,
-        "Your application for '$internship_name' has been submitted. Status: $app_status.");
-    mysqli_query($conn, "INSERT INTO student_notifications (user_id, type, message)
-                         VALUES ('$user_id', 'application', '$notif_msg')");
+    $notif_title = 'Application Submitted';
+    $notif_msg = "Your application for '$internship_name' has been submitted. Status: $app_status.";
+    notifyUser($user_id, 'student', $email, $notif_title, $notif_msg, [
+        'event' => 'Application Submitted',
+        'internship_title' => $internship_name,
+        'current_status' => $app_status,
+        'action_url' => 'http://localhost/IMP/student_applications.php',
+        'action_label' => 'View Application Status'
+    ], 'application');
+
+    // ── Notify coordinators ──
+    $coord_res = mysqli_query($conn, "SELECT id, email, full_name FROM users WHERE LOWER(role) = 'coordinator'");
+    if ($coord_res) {
+        $c_title = 'New Student Application';
+        $c_msg = "New application received from $full_name for '$internship_name'.";
+        while ($c_row = mysqli_fetch_assoc($coord_res)) {
+            $coord_id = intval($c_row['id']);
+            $coord_email = trim($c_row['email']);
+            notifyUser($coord_id, 'coordinator', $coord_email, $c_title, $c_msg, [
+                'event' => 'New Internship Application',
+                'student_name' => $full_name,
+                'internship_title' => $internship_name,
+                'action_url' => 'http://localhost/IMP/coordinator_applications.php',
+                'action_label' => 'Review Application'
+            ], 'new_application');
+        }
+    }
+
+    // ── Notify admins of a new application as well
+    $admin_res = mysqli_query($conn, "SELECT id, email FROM users WHERE LOWER(role) = 'admin'");
+    if ($admin_res) {
+        $admin_title = 'New Internship Application Submitted';
+        $admin_msg = "A new application from $full_name has been submitted for '$internship_name'.";
+        while ($admin_row = mysqli_fetch_assoc($admin_res)) {
+            $admin_id = intval($admin_row['id']);
+            $admin_email = trim($admin_row['email']);
+            notifyUser($admin_id, 'admin', $admin_email, $admin_title, $admin_msg, [
+                'event' => 'New Application Received',
+                'student_name' => $full_name,
+                'internship_title' => $internship_name,
+                'action_url' => 'http://localhost/IMP/admin_applications.php',
+                'action_label' => 'View Applications'
+            ], 'new_application');
+        }
+    }
 
     // Send email notification for internship application
     $app_subject = "IMP Application Submitted: $internship_name";
     $app_message = "Dear " . $_POST['full_name'] . ",\n\nYour application for the \"$internship_name\" internship has been successfully submitted to the platform.\n\nYour current application status is: **$app_status**.\n\nPlease remember that you are required to complete your skills assessment test (if applicable) within 48 hours of application submission.\n\nThank you for choosing IMP!";
-    sendEmailNotification($user_id, $app_subject, $app_message, [
+    sendStudentNotification($user_id, $_POST['full_name'] ?? '', $app_subject, $app_message, [
         'event' => 'Internship Application',
         'internship_position' => $internship_name,
         'education_status' => $education_status,
@@ -157,7 +203,7 @@ if (mysqli_query($conn, $insert_sql)) {
 
     // Send exam invitation email only if a test is required
     if ($test_status !== 'N/A') {
-        $exam_link = "https://internship-management-platform-1.onrender.com/student_test.php?app_id=" . mysqli_insert_id($conn);
+        $exam_link = "https://internship-management-platform-1.onrender.com/student_test.php?application_id=" . mysqli_insert_id($conn);
         $exam_subject = "Exam Invitation for $internship_name";
         $exam_message = "Dear $full_name,\n\nYou are invited to take the skills assessment test for the '$internship_name' internship. Please complete the exam using the following link (valid for 48 hours): $exam_link\n\nBest regards,\nInternship Management Platform Team";
         sendEmailNotification($user_id, $exam_subject, $exam_message, [

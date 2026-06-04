@@ -22,10 +22,10 @@ if ($q_prof && $row = mysqli_fetch_assoc($q_prof)) {
     $plan_selected = $row['plan_selected'];
 }
 
-// Redirect if no plan selected
 if (empty($plan_selected)) {
-    header("Location: company_subscription.php");
-    exit();
+    $profile = ensure_company_profile($conn, $company_id, $_SESSION['full_name'] ?? 'Nexus Tech');
+    $plan_selected = $profile['plan_selected'];
+    $company_title = $profile['company_name'];
 }
 
 // Fetch unread notifications count

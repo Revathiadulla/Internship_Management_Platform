@@ -1,0 +1,220 @@
+<?php
+/**
+ * email_helper.php
+ * Centralized Gmail SMTP helper for Internship Management Platform.
+ * Uses environment variables when available, otherwise falls back to config/email_config.php.
+ */
+
+require_once __DIR__ . '/config/email_config.php';
+require_once __DIR__ . '/includes/PHPMailer/Exception.php';
+require_once __DIR__ . '/includes/PHPMailer/PHPMailer.php';
+require_once __DIR__ . '/includes/PHPMailer/SMTP.php';
+
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception;
+
+function getEnvVar(array $keys, string $default = ''): string {
+    foreach ($keys as $key) {
+        $value = getenv($key);
+        if ($value !== false && trim($value) !== '') {
+            return trim($value);
+        }
+    }
+    return $default;
+}
+
+function getSmtpConfig(): array {
+    return [
+        'host' => trim((string)getEnvVar(['SMTP_HOST', 'MAIL_HOST'], defined('SMTP_HOST') ? SMTP_HOST : '')),
+        'port' => trim((string)getEnvVar(['SMTP_PORT', 'MAIL_PORT'], defined('SMTP_PORT') ? SMTP_PORT : '')),
+        'username' => trim((string)getEnvVar(['SMTP_USERNAME', 'MAIL_USERNAME'], defined('SMTP_USERNAME') ? SMTP_USERNAME : '')),
+        'password' => trim((string)getEnvVar(['SMTP_PASSWORD', 'MAIL_PASSWORD'], defined('SMTP_PASSWORD') ? SMTP_PASSWORD : '')),
+        'from_email' => trim((string)getEnvVar(['SMTP_FROM_EMAIL', 'MAIL_FROM_EMAIL'], defined('SMTP_FROM_EMAIL') ? SMTP_FROM_EMAIL : '')),
+        'from_name' => trim((string)getEnvVar(['SMTP_FROM_NAME', 'MAIL_FROM_NAME'], defined('SMTP_FROM_NAME') ? SMTP_FROM_NAME : 'Internship Management Platform')),
+    ];
+}
+
+function getSmtpDiagnostics(): array {
+    $smtpConfig = getSmtpConfig();
+    return [
+        'host' => $smtpConfig['host'],
+        'port' => $smtpConfig['port'],
+        'username' => $smtpConfig['username'],
+        'from_email' => $smtpConfig['from_email'],
+        'from_name' => $smtpConfig['from_name'],
+        'password_present' => !empty($smtpConfig['password']),
+        'is_valid_from_email' => filter_var($smtpConfig['from_email'], FILTER_VALIDATE_EMAIL) !== false,
+        'has_required_config' => !empty($smtpConfig['host']) && !empty($smtpConfig['port']) && !empty($smtpConfig['username']) && !empty($smtpConfig['password']) && !empty($smtpConfig['from_email']),
+        'connection_status' => 'Not tested',
+        'connection_debug' => '',
+        'error' => '',
+    ];
+}
+
+function testSmtpConnection(string &$debugOutput = null): bool {
+    $smtpConfig = getSmtpConfig();
+    $debugOutput = '';
+
+    if (empty($smtpConfig['host']) || empty($smtpConfig['port'])) {
+        $debugOutput = 'SMTP host or port is missing.';
+        return false;
+    }
+
+    try {
+        $mail = new PHPMailer(true);
+        $mail->SMTPDebug = 2;
+        $mail->Debugoutput = function($str, $level) use (&$debugOutput) {
+            $debugOutput .= '[' . $level . '] ' . trim($str) . "\n";
+        };
+
+        $mail->isSMTP();
+        $mail->Host = $smtpConfig['host'];
+        $mail->SMTPAuth = true;
+        $mail->Username = $smtpConfig['username'];
+        $mail->Password = $smtpConfig['password'];
+        $mail->Port = (int)$smtpConfig['port'];
+        $mail->CharSet = 'UTF-8';
+        $mail->Timeout = 10;
+        $mail->SMTPKeepAlive = false;
+        $mail->SMTPOptions = [
+            'ssl' => [
+                'verify_peer' => false,
+                'verify_peer_name' => false,
+                'allow_self_signed' => true,
+            ],
+        ];
+
+        if ($mail->Port === 465) {
+            $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
+        } else {
+            $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+        }
+
+        $mail->smtpConnect();
+        $mail->smtpClose();
+
+        return true;
+    } catch (Exception $e) {
+        $debugOutput .= 'Exception: ' . $e->getMessage();
+        return false;
+    }
+}
+
+function writeEmailLog(string $message): void {
+    $logPath = __DIR__ . '/email_notifications.log';
+    @file_put_contents($logPath, '[' . date('Y-m-d H:i:s') . '] ' . $message . "\n", FILE_APPEND);
+}
+
+function sendEmail($to, $subjectOrName, $messageOrSubject = null, $message = null, &$debugInfo = null): bool {
+    if ($message === null) {
+        $toEmail = trim((string)$to);
+        $toName = '';
+        $subject = trim((string)$subjectOrName);
+        $body = trim((string)$messageOrSubject);
+    } else {
+        $toEmail = trim((string)$to);
+        $toName = trim((string)$subjectOrName);
+        $subject = trim((string)$messageOrSubject);
+        $body = trim((string)$message);
+    }
+
+    if (empty($toEmail) || !filter_var($toEmail, FILTER_VALIDATE_EMAIL)) {
+        $debugInfo = 'Invalid recipient email provided.';
+        writeEmailLog("Invalid recipient email provided: $toEmail");
+        return false;
+    }
+
+    $smtpConfig = getSmtpConfig();
+    if (empty($smtpConfig['host']) || empty($smtpConfig['port']) || empty($smtpConfig['username']) || empty($smtpConfig['password']) || empty($smtpConfig['from_email'])) {
+        $debugInfo = 'Missing SMTP configuration. Please set SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, SMTP_FROM_EMAIL.';
+        writeEmailLog('Missing SMTP configuration. Please set SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, SMTP_FROM_EMAIL.');
+        return false;
+    }
+
+    try {
+        $debugOutput = '';
+        $mail = new PHPMailer(true);
+        $mail->SMTPDebug = 2;
+        $mail->Debugoutput = function($str, $level) use (&$debugOutput) {
+            $debugOutput .= '[' . $level . '] ' . trim($str) . "\n";
+        };
+
+        $mail->isSMTP();
+        $mail->Host = $smtpConfig['host'];
+        $mail->SMTPAuth = true;
+        $mail->Username = $smtpConfig['username'];
+        $mail->Password = $smtpConfig['password'];
+        $mail->Port = (int)$smtpConfig['port'];
+        $mail->CharSet = 'UTF-8';
+        // Allow caller to override From name and provide Reply-To via global mail options
+        $fromName = $smtpConfig['from_name'];
+        if (!empty($GLOBALS['mail_options']) && is_array($GLOBALS['mail_options'])) {
+            $opts = $GLOBALS['mail_options'];
+            if (!empty($opts['from_name'])) {
+                $fromName = $opts['from_name'];
+            }
+        }
+
+        $mail->setFrom($smtpConfig['from_email'], $fromName);
+        // Add Reply-To if provided
+        if (!empty($GLOBALS['mail_options']) && is_array($GLOBALS['mail_options'])) {
+            $opts = $GLOBALS['mail_options'];
+            if (!empty($opts['reply_to']) && filter_var($opts['reply_to'], FILTER_VALIDATE_EMAIL)) {
+                $replyName = !empty($opts['reply_to_name']) ? $opts['reply_to_name'] : '';
+                $mail->addReplyTo($opts['reply_to'], $replyName);
+            }
+            // clear global options after consuming
+            unset($GLOBALS['mail_options']);
+        }
+
+        $mail->addAddress($toEmail, $toName ?: '');
+        
+        // Add attachments if provided
+        if (!empty($GLOBALS['mail_options_attachments']) && is_array($GLOBALS['mail_options_attachments'])) {
+            foreach ($GLOBALS['mail_options_attachments'] as $attachment) {
+                if (isset($attachment['path']) && file_exists($attachment['path'])) {
+                    $name = isset($attachment['name']) ? $attachment['name'] : '';
+                    $mail->addAttachment($attachment['path'], $name);
+                }
+            }
+            // clear global attachments after consuming
+            unset($GLOBALS['mail_options_attachments']);
+        }
+
+        $mail->isHTML(true);
+        $mail->Subject = $subject;
+        $mail->Body = $body;
+        $mail->AltBody = strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $body));
+        $mail->Timeout = 10;
+        $mail->SMTPKeepAlive = false;
+        $mail->SMTPOptions = [
+            'ssl' => [
+                'verify_peer' => false,
+                'verify_peer_name' => false,
+                'allow_self_signed' => true,
+            ],
+        ];
+
+        if ($mail->Port === 465) {
+            $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
+        } else {
+            $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+        }
+
+        $mail->send();
+        if ($debugInfo !== null) {
+            $debugInfo = $debugOutput;
+        }
+        return true;
+    } catch (Exception $e) {
+        $errorMessage = 'Failed to send email to ' . $toEmail . '. Error: ' . $e->getMessage() . ' (' . $mail->ErrorInfo . ')';
+        if ($debugOutput !== '') {
+            $errorMessage .= ' Debug: ' . $debugOutput;
+        }
+        writeEmailLog($errorMessage);
+        if ($debugInfo !== null) {
+            $debugInfo = $errorMessage;
+        }
+        return false;
+    }
+}

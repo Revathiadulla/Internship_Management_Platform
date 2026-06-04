@@ -8,15 +8,40 @@ if (!isset($_SESSION['user_id']) || strtolower($_SESSION['role']) !== 'coordinat
 include "db.php";
 header('Content-Type: application/json');
 
+$coordinator_id = intval($_SESSION['user_id']);
+
+// Fetch coordinator's assigned subtypes dynamically
+$assigned_subtypes = [];
+$sub_stmt = mysqli_prepare($conn, "
+    SELECT DISTINCT ps.subtype_name 
+    FROM project_subtypes ps 
+    JOIN coordinator_assignments ca ON ps.project_type_id = ca.project_type_id 
+    WHERE ca.coordinator_id = ? AND ps.status = 'Active'
+    ORDER BY ps.subtype_name ASC
+");
+if ($sub_stmt) {
+    mysqli_stmt_bind_param($sub_stmt, "i", $coordinator_id);
+    mysqli_stmt_execute($sub_stmt);
+    $sub_res = mysqli_stmt_get_result($sub_stmt);
+    while ($row = mysqli_fetch_assoc($sub_res)) {
+        $assigned_subtypes[] = $row['subtype_name'];
+    }
+    mysqli_stmt_close($sub_stmt);
+}
+
 $subtype = isset($_GET['subtype']) ? trim($_GET['subtype']) : '';
+if (empty($subtype) && !empty($assigned_subtypes)) {
+    $subtype = $assigned_subtypes[0];
+}
+
 $internship_id = isset($_GET['internship_id']) ? intval($_GET['internship_id']) : 0;
 
 // Build condition for internships
-$internship_cond = "1=1";
+$internship_cond = "i.coordinator_id = $coordinator_id";
 if ($internship_id > 0) {
-    $internship_cond = "i.id = $internship_id";
-} elseif (!empty($subtype)) {
-    $internship_cond = "i.project_subtype = '" . mysqli_real_escape_string($conn, $subtype) . "'";
+    $internship_cond .= " AND i.id = $internship_id";
+} else {
+    $internship_cond .= " AND i.project_subtype = '" . mysqli_real_escape_string($conn, $subtype) . "'";
 }
 
 // Get user_ids assigned to internships of the selected group
@@ -31,33 +56,28 @@ while ($r = mysqli_fetch_assoc($uid_res)) {
 }
 
 $log_where = "";
-if ($internship_id > 0 || !empty($subtype)) {
-    if (!empty($intern_ids)) {
-        $ids_str  = implode(',', $intern_ids);
-        $log_where = "AND d.user_id IN ($ids_str)";
-    } else {
-        $log_where = "AND 1=0";
-    }
+if (!empty($intern_ids)) {
+    $ids_str  = implode(',', $intern_ids);
+    $log_where = "AND d.user_id IN ($ids_str)";
+} else {
+    $log_where = "AND 1=0";
 }
 
 // ── Metrics ───────────────────────────────────────────────────────────────────
 
-// Total interns (all students registered)
+// Total interns (students assigned to this coordinator's internships)
 $total_interns = intval(mysqli_fetch_assoc(mysqli_query($conn,
-    "SELECT COUNT(*) as c FROM users WHERE role='student'"))['c'] ?? 0);
+    "SELECT COUNT(DISTINCT a.user_id) as c 
+     FROM internship_applications a
+     JOIN internships i ON a.internship_id = i.id
+     WHERE $internship_cond"))['c'] ?? 0);
 
-// Active interns for selected subtype (or global)
-if ($internship_id > 0 || !empty($subtype)) {
-    $active_q = "SELECT COUNT(DISTINCT a.user_id) as c 
-                 FROM internship_applications a
-                 JOIN internships i ON a.internship_id = i.id
-                 WHERE a.status IN ('Started','Internship Started','Active Intern','Selected') 
-                   AND $internship_cond";
-} else {
-    $active_q = "SELECT COUNT(DISTINCT a.user_id) as c 
-                 FROM internship_applications a
-                 WHERE a.status IN ('Started','Internship Started','Active Intern','Selected')";
-}
+// Active interns for selected subtype (or global for this coordinator)
+$active_q = "SELECT COUNT(DISTINCT a.user_id) as c 
+             FROM internship_applications a
+             JOIN internships i ON a.internship_id = i.id
+             WHERE a.status IN ('Started','Internship Started','Active Intern','Selected') 
+               AND $internship_cond";
 $active_interns = intval(mysqli_fetch_assoc(mysqli_query($conn, $active_q))['c'] ?? 0);
 
 // Total logs
@@ -67,27 +87,18 @@ $total_logs = intval(mysqli_fetch_assoc(mysqli_query($conn,
 // Completed logs (submitted today or any day — count all)
 $completed_logs = $total_logs;
 
-// Missing logs (active interns of this subtype/project who haven't logged today)
-if ($internship_id > 0 || !empty($subtype)) {
-    if (!empty($intern_ids)) {
-        $ids_str = implode(',', $intern_ids);
-        $missing_q = "SELECT COUNT(DISTINCT a.user_id) as c
-                      FROM internship_applications a
-                      WHERE a.status IN ('Started','Internship Started','Active Intern')
-                        AND a.user_id IN ($ids_str)
-                        AND a.user_id NOT IN (
-                            SELECT DISTINCT user_id FROM daily_logs WHERE log_date = CURDATE()
-                        )";
-    } else {
-        $missing_q = "SELECT 0 as c";
-    }
-} else {
+// Missing logs (active interns of this coordinator who haven't logged today)
+if (!empty($intern_ids)) {
+    $ids_str = implode(',', $intern_ids);
     $missing_q = "SELECT COUNT(DISTINCT a.user_id) as c
                   FROM internship_applications a
                   WHERE a.status IN ('Started','Internship Started','Active Intern')
+                    AND a.user_id IN ($ids_str)
                     AND a.user_id NOT IN (
                         SELECT DISTINCT user_id FROM daily_logs WHERE log_date = CURDATE()
                     )";
+} else {
+    $missing_q = "SELECT 0 as c";
 }
 $missing_logs = intval(mysqli_fetch_assoc(mysqli_query($conn, $missing_q))['c'] ?? 0);
 
@@ -97,14 +108,10 @@ $logged_today = intval(mysqli_fetch_assoc(mysqli_query($conn, $logged_today_q))[
 $pending_logs = max(0, $active_interns - $logged_today);
 
 // Completed internships
-if ($internship_id > 0 || !empty($subtype)) {
-    $completed_q = "SELECT COUNT(*) as c 
-                    FROM internship_applications a 
-                    JOIN internships i ON a.internship_id = i.id
-                    WHERE a.status = 'Completed' AND $internship_cond";
-} else {
-    $completed_q = "SELECT COUNT(*) as c FROM internship_applications a WHERE a.status = 'Completed'";
-}
+$completed_q = "SELECT COUNT(*) as c 
+                FROM internship_applications a 
+                JOIN internships i ON a.internship_id = i.id
+                WHERE a.status = 'Completed' AND $internship_cond";
 $completed_internships = intval(mysqli_fetch_assoc(mysqli_query($conn, $completed_q))['c'] ?? 0);
 
 // Completion %
@@ -115,17 +122,13 @@ $completion_pct = $total_prog > 0 ? round(($completed_internships / $total_prog)
 $assigned_pct = $total_interns > 0 ? round(($active_interns / $total_interns) * 100) : 0;
 
 // Open projects
-if ($internship_id > 0 || !empty($subtype)) {
-    $open_projects_q = "SELECT COUNT(*) as c FROM internships i WHERE i.status = 'Active' AND $internship_cond";
-} else {
-    $open_projects_q = "SELECT COUNT(*) as c FROM internships WHERE status = 'Active'";
-}
+$open_projects_q = "SELECT COUNT(*) as c FROM internships i WHERE i.status IN ('Active','Approved','Admin-Approved','Admin Approved') AND $internship_cond";
 $open_projects = intval(mysqli_fetch_assoc(mysqli_query($conn, $open_projects_q))['c'] ?? 0);
 
 // Internship title (if filtered)
 $internship_title = '';
 if ($internship_id > 0) {
-    $t_res = mysqli_query($conn, "SELECT title FROM internships WHERE id = $internship_id LIMIT 1");
+    $t_res = mysqli_query($conn, "SELECT title FROM internships i WHERE i.id = $internship_id AND $internship_cond LIMIT 1");
     if ($t_row = mysqli_fetch_assoc($t_res)) $internship_title = $t_row['title'];
 }
 
@@ -167,27 +170,72 @@ while ($rl = mysqli_fetch_assoc($recent_res)) {
 }
 
 // ── Pipeline projects ─────────────────────────────────────────────────────────
-if ($internship_id > 0 || !empty($subtype)) {
-    $pipe_q = "SELECT i.id, i.title, i.duration, i.mode, i.status, i.project_subtype, u.full_name as mentor_name 
-               FROM internships i 
-               LEFT JOIN users u ON i.assigned_mentor = u.id 
-               WHERE i.status = 'Active' AND $internship_cond LIMIT 12";
-} else {
-    $pipe_q = "SELECT i.id, i.title, i.duration, i.mode, i.status, i.project_subtype, u.full_name as mentor_name 
-               FROM internships i 
-               LEFT JOIN users u ON i.assigned_mentor = u.id 
-               WHERE i.status = 'Active' LIMIT 12";
-}
+$pipe_q = "
+    SELECT p.id, p.title, p.project_subtype, p.duration, p.mode, p.status,
+           p.mentor_name, p.team_name, p.assigned_count, p.source
+    FROM (
+        /* Source 1: Confirmed project_teams linked to internships */
+        SELECT i.id, COALESCE(i.title, t.team_name) AS title,
+                COALESCE(i.project_subtype, t.project_subtype) AS project_subtype,
+                i.duration, i.mode,
+                CASE 
+                    WHEN i.status IN ('Closed', 'Completed') THEN 'Completed'
+                    ELSE 'Active'
+                END AS status,
+                COALESCE(mu.full_name, 'Mentor Not Assigned') AS mentor_name,
+                t.team_name,
+                (SELECT COUNT(*) FROM project_team_members ptm WHERE ptm.project_team_id = t.id) AS assigned_count,
+                'team' AS source
+        FROM project_teams t
+        LEFT JOIN internships i ON t.internship_id = i.id
+        LEFT JOIN users mu ON t.mentor_id = mu.id
+        WHERE t.status IN ('Active', 'Confirmed', 'confirmed', 'active')
+          AND $internship_cond
+
+        UNION ALL
+
+        /* Source 2: Internships with Active/Approved status that are not linked to any confirmed teams */
+        SELECT i.id, i.title, i.project_subtype, i.duration, i.mode,
+               CASE 
+                   WHEN i.status IN ('Closed', 'Completed') THEN 'Completed'
+                   ELSE 'Available'
+               END AS status,
+               'Mentor Not Assigned' AS mentor_name,
+               NULL AS team_name,
+               0 AS assigned_count,
+               'internship' AS source
+        FROM internships i
+        WHERE i.status IN ('Active', 'Approved', 'Admin-Approved', 'Admin Approved')
+          AND $internship_cond
+           AND i.id NOT IN (
+               SELECT DISTINCT internship_id FROM project_teams
+           )
+    ) p
+    GROUP BY p.id
+    ORDER BY p.assigned_count DESC, p.id DESC
+    LIMIT 12";
 $pipe_res = mysqli_query($conn, $pipe_q);
 $pipeline_projects = [];
-while ($p = mysqli_fetch_assoc($pipe_res)) {
-    $ac_res = mysqli_query($conn,
-        "SELECT COUNT(*) as c FROM internship_applications
-         WHERE internship_id = {$p['id']}
-           AND status IN ('Started','Internship Started','Active Intern','Selected')");
-    $p['assigned_count'] = intval(mysqli_fetch_assoc($ac_res)['c'] ?? 0);
-    $pipeline_projects[] = $p;
+if ($pipe_res) {
+    while ($p = mysqli_fetch_assoc($pipe_res)) {
+        $pipeline_projects[] = $p;
+    }
 }
+// Deduplicate projects by id, preferring entries with a team (active internships)
+$unique_projects = [];
+foreach ($pipeline_projects as $proj) {
+    $id = $proj['id'];
+    // If not set yet, add
+    if (!isset($unique_projects[$id])) {
+        $unique_projects[$id] = $proj;
+    } else {
+        // Prefer entry with non-empty team_name
+        if (!empty($proj['team_name']) && empty($unique_projects[$id]['team_name'])) {
+            $unique_projects[$id] = $proj;
+        }
+    }
+}
+$pipeline_projects = array_values($unique_projects);
 
 // ── Internship timeline data (for specific internship) ───────────────────────
 $internship_timeline = null;
@@ -244,7 +292,7 @@ if ($internship_id > 0) {
 
 // ── Internship list for dropdown ──────────────────────────────────────────────
 function getInternshipList($conn) {
-    $res = mysqli_query($conn, "SELECT id, title FROM internships ORDER BY title ASC");
+    $res = mysqli_query($conn, "SELECT id, title FROM internships WHERE coordinator_id = " . intval($_SESSION['user_id']) . " ORDER BY title ASC");
     $list = [];
     while ($r = mysqli_fetch_assoc($res)) $list[] = $r;
     return $list;
@@ -270,11 +318,11 @@ echo json_encode([
     'internship_list'    => getInternshipList($conn),
     'projects_list'      => (function() use ($conn, $subtype) {
         $projects_by_subtype = [];
-        $proj_q = "SELECT id, title FROM internships WHERE status='Active'";
+        $proj_q = "SELECT id, title FROM internships i WHERE i.status='Active' AND i.coordinator_id = " . intval($_SESSION['user_id']);
         if (!empty($subtype)) {
-            $proj_q .= " AND project_subtype = '" . mysqli_real_escape_string($conn, $subtype) . "'";
+            $proj_q .= " AND i.project_subtype = '" . mysqli_real_escape_string($conn, $subtype) . "'";
         }
-        $proj_q .= " ORDER BY title ASC";
+        $proj_q .= " ORDER BY i.title ASC";
         $proj_res = mysqli_query($conn, $proj_q);
         while ($pr = mysqli_fetch_assoc($proj_res)) {
             $projects_by_subtype[] = $pr;

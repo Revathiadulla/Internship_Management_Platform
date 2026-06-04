@@ -10,10 +10,33 @@ if (!isset($_GET['file']) || empty($_GET['file'])) {
     exit("No file specified.");
 }
 
-$file = basename($_GET['file']);
-$filepath = __DIR__ . '/uploads/secure/' . $file;
+$raw_file = trim($_GET['file']);
+$file = basename($raw_file);
+$filepath = null;
 
-if (file_exists($filepath)) {
+if (strpos($raw_file, 'uploads/aadhaar/') === 0 || strpos($raw_file, 'uploads/pan/') === 0) {
+    $candidate = __DIR__ . '/' . $raw_file;
+    if (is_file($candidate)) {
+        $filepath = realpath($candidate);
+    }
+}
+
+if ($filepath === null) {
+    $search_dirs = [
+        __DIR__ . '/uploads/secure/',
+        __DIR__ . '/uploads/aadhaar/',
+        __DIR__ . '/uploads/pan/',
+    ];
+    foreach ($search_dirs as $dir) {
+        $candidate = $dir . $file;
+        if (is_file($candidate)) {
+            $filepath = realpath($candidate);
+            break;
+        }
+    }
+}
+
+if ($filepath !== null && file_exists($filepath)) {
     $ext = strtolower(pathinfo($file, PATHINFO_EXTENSION));
     $allowed_exts = ['pdf', 'jpg', 'jpeg', 'png', 'gif', 'doc', 'docx'];
     if (!in_array($ext, $allowed_exts)) {

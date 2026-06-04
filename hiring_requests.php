@@ -20,10 +20,10 @@ if ($q_prof && $row = mysqli_fetch_assoc($q_prof)) {
     $plan_selected = $row['plan_selected'];
 }
 
-// Redirect if no plan selected
 if (empty($plan_selected)) {
-    header("Location: company_subscription.php");
-    exit();
+    $profile = ensure_company_profile($conn, $company_id, $_SESSION['full_name'] ?? 'Nexus Tech');
+    $plan_selected = $profile['plan_selected'];
+    $company_title = $profile['company_name'];
 }
 
 // Fetch unread notifications count
@@ -296,7 +296,7 @@ if ($q_req) {
                             <textarea name="description" rows="3" placeholder="Describe the responsibilities and goals..." class="form-input"></textarea>
                         </div>
                         <div class="space-y-1">
-                            <label class="text-xs font-bold text-gray-400 uppercase tracking-widest">Requirements / Required Skills</label>
+                            <label class="text-xs font-bold text-gray-400 uppercase tracking-widest">Technology Stack (comma separated)</label>
                             <textarea name="requirements" rows="2" placeholder="e.g. React.js, TailwindCSS, basic REST APIs..." class="form-input"></textarea>
                         </div>
                         

@@ -3,6 +3,7 @@ session_start();
 include_once __DIR__ . '/includes/auth.php';
 require_role('mentor');
 include 'db.php';
+include_once __DIR__ . '/includes/mail_helper.php';
 include_once __DIR__ . '/includes/hr_module_helpers.php';
 ensure_module_schema($conn);
 
@@ -18,7 +19,7 @@ if (isset($_GET['ajax_action']) && $_GET['ajax_action'] === 'history') {
     $student_id = intval($_GET['student_id']);
     
     // Ensure student is assigned to this mentor
-    $chk_stmt = $conn->prepare("SELECT id FROM mentor_assignments WHERE mentor_id = ? AND student_id = ? AND status = 'active' LIMIT 1");
+    $chk_stmt = $conn->prepare("SELECT tm.id FROM project_team_members tm JOIN project_teams t ON tm.project_team_id = t.id WHERE t.mentor_id = ? AND tm.student_id = ? AND t.status = 'Active' LIMIT 1");
     $chk_stmt->bind_param('ii', $mentor_id, $student_id);
     $chk_stmt->execute();
     if (!$chk_stmt->get_result()->fetch_assoc()) {
@@ -54,9 +55,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $chk_stmt = $conn->prepare("
                 SELECT dl.id, dl.user_id, dl.application_id, u.full_name, dl.log_date 
                 FROM daily_logs dl 
-                JOIN mentor_assignments ma ON dl.user_id = ma.student_id AND dl.application_id = ma.application_id
+                JOIN project_team_members tm ON dl.user_id = tm.student_id
+                JOIN project_teams t ON tm.project_team_id = t.id
                 JOIN users u ON dl.user_id = u.id 
-                WHERE dl.id = ? AND ma.mentor_id = ? AND ma.status = 'active'
+                WHERE dl.id = ? AND t.mentor_id = ? AND t.status = 'Active'
                 LIMIT 1
             ");
             $chk_stmt->bind_param('ii', $log_id, $mentor_id);
@@ -78,10 +80,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     
                     // 2. Insert into mentor_feedback
                     $phase = $_POST['phase'] ?? '';
-                    $fb_stmt = $conn->prepare("INSERT INTO mentor_feedback (mentor_id, student_id, internship_id, rating, comments, phase, status) VALUES (?, ?, ?, ?, ?, ?, ?)");
-                    $fb_stmt->bind_param('iiiisss', $mentor_id, $student_id, $log_row['application_id'], $rating, $comments, $phase, $status);
+                    $mentor_name = $_SESSION['full_name'] ?? '';
+                    if (empty($mentor_name)) {
+                        $m_res = mysqli_query($conn, "SELECT full_name FROM users WHERE id = $mentor_id");
+                        if ($m_res && $m_row = mysqli_fetch_assoc($m_res)) {
+                            $mentor_name = $m_row['full_name'];
+                        }
+                    }
+                    if (empty($mentor_name)) {
+                        $mentor_name = 'Mentor';
+                    }
+                    $feedback_title = 'Daily Log Review';
+                    $fb_stmt = $conn->prepare("INSERT INTO mentor_feedback (mentor_id, student_id, internship_id, rating, comments, phase, status, user_id, feedback_title, given_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                    $fb_stmt->bind_param('iiiisssiss', $mentor_id, $student_id, $log_row['application_id'], $rating, $comments, $phase, $status, $student_id, $feedback_title, $mentor_name);
                     if (!$fb_stmt->execute()) {
                         throw new Exception("Failed to insert mentor feedback: " . $fb_stmt->error);
+                    }
+                    $fb_stmt->close();
+
+                    // ── Notify coordinators ──
+                    $title_res = mysqli_query($conn, "SELECT COALESCE(i.title, a.internship_name) as title FROM internship_applications a LEFT JOIN internships i ON a.internship_id = i.id WHERE a.id = " . intval($log_row['application_id']));
+                    $title_row = mysqli_fetch_assoc($title_res);
+                    $internship_title = $title_row['title'] ?? 'Internship';
+                    
+                    $coord_res = mysqli_query($conn, "SELECT id FROM users WHERE LOWER(role) = 'coordinator'");
+                    if ($coord_res) {
+                        $c_title = 'Mentor Feedback Added';
+                        $c_msg = "Mentor " . ($_SESSION['full_name'] ?? 'Mentor') . " reviewed daily log for " . ($log_row['full_name'] ?? 'Student') . " on '" . $internship_title . "' (Rating: $rating/5, Status: $status).";
+                        $c_type = 'info';
+                        $c_link = "coordinator_internships.php?view=" . intval($log_row['application_id']); // coordinator can see internship from app id
+                        $coord_stmt = $conn->prepare("INSERT INTO notifications (user_id, role, title, message, type, link) VALUES (?, 'coordinator', ?, ?, ?, ?)");
+                        if ($coord_stmt) {
+                            while ($c_row = mysqli_fetch_assoc($coord_res)) {
+                                $c_id = intval($c_row['id']);
+                                $coord_stmt->bind_param("issss", $c_id, $c_title, $c_msg, $c_type, $c_link);
+                                $coord_stmt->execute();
+                            }
+                            $coord_stmt->close();
+                        }
                     }
                     
                     // 3. Log activity
@@ -95,11 +131,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     
                     // 4. Notify student
                     $notif_msg = "Your log for " . date('M d, Y', strtotime($log_date)) . " has been reviewed by your mentor and marked: " . $status;
-                    $notif_stmt = $conn->prepare("INSERT INTO student_notifications (user_id, title, type, message) VALUES (?, 'Daily Log Reviewed', 'mentor', ?)");
-                    $notif_stmt->bind_param('is', $student_id, $notif_msg);
+                    $s_link = "student_daily_log.php";
+                    $notif_stmt = $conn->prepare("INSERT INTO student_notifications (user_id, title, type, message, link) VALUES (?, 'Daily Log Reviewed', 'mentor', ?, ?)");
+                    $notif_stmt->bind_param('iss', $student_id, $notif_msg, $s_link);
                     if (!$notif_stmt->execute()) {
                         throw new Exception("Failed to notify student: " . $notif_stmt->error);
                     }
+                    sendStudentNotification($student_id, $log_row['full_name'] ?? 'Student', 'Mentor Reviewed Your Daily Log', $notif_msg, [
+                        'event' => 'Mentor Feedback',
+                        'log_date' => date('M d, Y', strtotime($log_date)),
+                        'rating' => $rating,
+                        'status' => $status,
+                        'action_url' => 'http://localhost/IMP/student_dashboard.php',
+                        'action_label' => 'View Feedback'
+                    ]);
                     
                     mysqli_commit($conn);
                     $success_msg = "Daily log review submitted successfully!";
@@ -119,9 +164,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $chk_stmt = $conn->prepare("
                 SELECT dl.id, dl.user_id, dl.application_id, u.full_name, dl.log_date 
                 FROM daily_logs dl 
-                JOIN mentor_assignments ma ON dl.user_id = ma.student_id AND dl.application_id = ma.application_id
+                JOIN project_team_members tm ON dl.user_id = tm.student_id
+                JOIN project_teams t ON tm.project_team_id = t.id
                 JOIN users u ON dl.user_id = u.id 
-                WHERE dl.id = ? AND ma.mentor_id = ? AND ma.status = 'active'
+                WHERE dl.id = ? AND t.mentor_id = ? AND t.status = 'Active'
                 LIMIT 1
             ");
             $chk_stmt->bind_param('ii', $log_id, $mentor_id);
@@ -147,10 +193,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     
                     // 2. Insert into mentor_feedback
                     $phase = $_POST['phase'] ?? '';
-                    $fb_stmt = $conn->prepare("INSERT INTO mentor_feedback (mentor_id, student_id, internship_id, rating, comments, phase, status) VALUES (?, ?, ?, ?, ?, ?, ?)");
-                    $fb_stmt->bind_param('iiiisss', $mentor_id, $student_id, $log_row['application_id'], $rating, $comments, $phase, $status);
+                    $mentor_name = $_SESSION['full_name'] ?? '';
+                    if (empty($mentor_name)) {
+                        $m_res = mysqli_query($conn, "SELECT full_name FROM users WHERE id = $mentor_id");
+                        if ($m_res && $m_row = mysqli_fetch_assoc($m_res)) {
+                            $mentor_name = $m_row['full_name'];
+                        }
+                    }
+                    if (empty($mentor_name)) {
+                        $mentor_name = 'Mentor';
+                    }
+                    $feedback_title = 'Daily Log Review';
+                    $fb_stmt = $conn->prepare("INSERT INTO mentor_feedback (mentor_id, student_id, internship_id, rating, comments, phase, status, user_id, feedback_title, given_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                    $fb_stmt->bind_param('iiiisssiss', $mentor_id, $student_id, $log_row['application_id'], $rating, $comments, $phase, $status, $student_id, $feedback_title, $mentor_name);
                     if (!$fb_stmt->execute()) {
                         throw new Exception("Failed to insert mentor feedback: " . $fb_stmt->error);
+                    }
+                    $fb_stmt->close();
+
+                    // ── Notify coordinators ──
+                    $title_res = mysqli_query($conn, "SELECT COALESCE(i.title, a.internship_name) as title FROM internship_applications a LEFT JOIN internships i ON a.internship_id = i.id WHERE a.id = " . intval($log_row['application_id']));
+                    $title_row = mysqli_fetch_assoc($title_res);
+                    $internship_title = $title_row['title'] ?? 'Internship';
+                    
+                    $coord_res = mysqli_query($conn, "SELECT id FROM users WHERE LOWER(role) = 'coordinator'");
+                    if ($coord_res) {
+                        $c_title = 'Mentor Feedback Added';
+                        $c_msg = "Mentor " . ($_SESSION['full_name'] ?? 'Mentor') . " quick-approved daily log for " . ($log_row['full_name'] ?? 'Student') . " on '" . $internship_title . "'.";
+                        $c_type = 'success';
+                        $c_link = "coordinator_internships.php?view=" . intval($log_row['application_id']);
+                        $coord_stmt = $conn->prepare("INSERT INTO notifications (user_id, role, title, message, type, link) VALUES (?, 'coordinator', ?, ?, ?, ?)");
+                        if ($coord_stmt) {
+                            while ($c_row = mysqli_fetch_assoc($coord_res)) {
+                                $c_id = intval($c_row['id']);
+                                $coord_stmt->bind_param("issss", $c_id, $c_title, $c_msg, $c_type, $c_link);
+                                $coord_stmt->execute();
+                            }
+                            $coord_stmt->close();
+                        }
                     }
                     
                     // 3. Log activity
@@ -164,11 +244,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     
                     // 4. Notify student
                     $notif_msg = "Your log for " . date('M d, Y', strtotime($log_date)) . " has been quick-approved by your mentor.";
-                    $notif_stmt = $conn->prepare("INSERT INTO student_notifications (user_id, title, type, message) VALUES (?, 'Daily Log Approved', 'mentor', ?)");
-                    $notif_stmt->bind_param('is', $student_id, $notif_msg);
+                    $s_link = "student_daily_log.php";
+                    $notif_stmt = $conn->prepare("INSERT INTO student_notifications (user_id, title, type, message, link) VALUES (?, 'Daily Log Approved', 'mentor', ?, ?)");
+                    $notif_stmt->bind_param('iss', $student_id, $notif_msg, $s_link);
                     if (!$notif_stmt->execute()) {
                         throw new Exception("Failed to notify student: " . $notif_stmt->error);
                     }
+                    sendStudentNotification($student_id, $log_row['full_name'] ?? 'Student', 'Your Daily Log Has Been Approved', $notif_msg, [
+                        'event' => 'Mentor Quick Approval',
+                        'log_date' => date('M d, Y', strtotime($log_date)),
+                        'rating' => $rating,
+                        'action_url' => 'http://localhost/IMP/student_dashboard.php',
+                        'action_label' => 'View Your Log'
+                    ]);
                     
                     mysqli_commit($conn);
                     $success_msg = "Log quick-approved successfully!";
@@ -185,13 +273,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $student_id = intval($_POST['student_id']);
             
             // Validate student belongs to mentor
-            $chk_stmt = $conn->prepare("SELECT id FROM mentor_assignments WHERE mentor_id = ? AND student_id = ? AND status = 'active' LIMIT 1");
+            $chk_stmt = $conn->prepare("SELECT tm.id FROM project_team_members tm JOIN project_teams t ON tm.project_team_id = t.id WHERE t.mentor_id = ? AND tm.student_id = ? AND t.status = 'Active' LIMIT 1");
             $chk_stmt->bind_param('ii', $mentor_id, $student_id);
             $chk_stmt->execute();
             if ($chk_stmt->get_result()->fetch_assoc()) {
                 $notif_msg = "Your mentor has sent you a reminder to log your daily activity.";
-                $notif_stmt = $conn->prepare("INSERT INTO student_notifications (user_id, title, type, message) VALUES (?, 'Log submission reminder', 'mentor', ?)");
-                $notif_stmt->bind_param('is', $student_id, $notif_msg);
+                $s_link = "student_daily_log.php";
+                $notif_stmt = $conn->prepare("INSERT INTO student_notifications (user_id, title, type, message, link) VALUES (?, 'Log submission reminder', 'mentor', ?, ?)");
+                $notif_stmt->bind_param('iss', $student_id, $notif_msg, $s_link);
                 if ($notif_stmt->execute()) {
                     $act_details = "Sent log submission reminder to student #" . $student_id;
                     $act_stmt = $conn->prepare("INSERT INTO mentor_activity_logs (mentor_id, action_type, student_id, log_id, details) VALUES (?, 'reminder', ?, NULL, ?)");
@@ -210,7 +299,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // Setup WHERE condition from filters
-$where = ["ma.mentor_id = $mentor_id", "ma.status = 'active'"];
+$where = ["pt.mentor_id = $mentor_id", "pt.status = 'Active'"];
 
 $filter_student_id = isset($_GET['student_id']) ? intval($_GET['student_id']) : 0;
 if ($filter_student_id > 0) {
@@ -250,8 +339,10 @@ $count_query = "
     SELECT COUNT(DISTINCT dl.id) as total
     FROM daily_logs dl
     JOIN users u ON dl.user_id = u.id
-    JOIN mentor_assignments ma ON dl.user_id = ma.student_id AND dl.application_id = ma.application_id
-    JOIN internship_applications app ON ma.application_id = app.id
+    JOIN project_team_members ptm ON dl.user_id = ptm.student_id
+    JOIN project_teams pt ON ptm.project_team_id = pt.id
+    LEFT JOIN internships i ON pt.internship_id = i.id
+    LEFT JOIN internship_applications app ON dl.user_id = app.user_id AND pt.internship_id = app.internship_id
     WHERE $where_sql
 ";
 $count_result = mysqli_query($conn, $count_query);
@@ -261,16 +352,22 @@ $total_rows = mysqli_fetch_assoc($count_result)['total'] ?? 0;
 $logs_query = "
     SELECT 
         dl.*, 
+        dl.time_spent AS hours_worked,
+        dl.next_plan AS next_day_plan,
         u.full_name as student_name, 
         u.email as student_email,
-        app.internship_name,
+        pt.team_name,
+        COALESCE(i.title, app.internship_name) as internship_name,
+        COALESCE(i.title, app.internship_name) as internship_title,
         app.id as app_id
     FROM daily_logs dl
     JOIN users u ON dl.user_id = u.id
-    JOIN mentor_assignments ma ON dl.user_id = ma.student_id AND dl.application_id = ma.application_id
-    JOIN internship_applications app ON ma.application_id = app.id
+    JOIN project_team_members ptm ON dl.user_id = ptm.student_id
+    JOIN project_teams pt ON ptm.project_team_id = pt.id
+    LEFT JOIN internships i ON pt.internship_id = i.id
+    LEFT JOIN internship_applications app ON dl.user_id = app.user_id AND pt.internship_id = app.internship_id
     WHERE $where_sql
-    ORDER BY dl.log_date DESC, dl.created_at DESC
+    ORDER BY dl.log_date DESC, dl.id DESC
     LIMIT $limit OFFSET $offset
 ";
 $logs_result = mysqli_query($conn, $logs_query);
@@ -278,9 +375,10 @@ $logs_result = mysqli_query($conn, $logs_query);
 // Fetch assigned students list for dropdowns
 $dropdown_students_stmt = $conn->prepare("
     SELECT DISTINCT u.id, u.full_name
-    FROM mentor_assignments ma
-    JOIN users u ON ma.student_id = u.id
-    WHERE ma.mentor_id = ? AND ma.status = 'active'
+    FROM project_team_members tm
+    JOIN project_teams t ON tm.project_team_id = t.id
+    JOIN users u ON tm.student_id = u.id
+    WHERE t.mentor_id = ? AND t.status = 'Active'
     ORDER BY u.full_name ASC
 ");
 $dropdown_students_stmt->bind_param('i', $mentor_id);
@@ -291,12 +389,20 @@ $dropdown_students = $dropdown_students_stmt->get_result()->fetch_all(MYSQLI_ASS
 $pending_count_stmt = $conn->prepare("
     SELECT COUNT(*) as count 
     FROM daily_logs dl 
-    JOIN mentor_assignments ma ON dl.user_id = ma.student_id AND dl.application_id = ma.application_id
-    WHERE ma.mentor_id = ? AND ma.status = 'active' AND dl.status = 'Submitted'
+    JOIN project_team_members tm ON dl.user_id = tm.student_id
+    JOIN project_teams t ON tm.project_team_id = t.id
+    WHERE t.mentor_id = ? AND t.status = 'Active' AND dl.status = 'Submitted'
 ");
 $pending_count_stmt->bind_param('i', $mentor_id);
 $pending_count_stmt->execute();
 $total_pending = $pending_count_stmt->get_result()->fetch_assoc()['count'] ?? 0;
+
+// Extra Debug Counts
+$db_team_res = mysqli_query($conn, "SELECT COUNT(*) as cnt FROM project_teams WHERE mentor_id = $mentor_id AND status = 'Active'");
+$assigned_teams_count = intval(mysqli_fetch_assoc($db_team_res)['cnt'] ?? 0);
+
+$db_stud_res = mysqli_query($conn, "SELECT COUNT(DISTINCT student_id) as cnt FROM project_team_members ptm JOIN project_teams pt ON ptm.project_team_id = pt.id WHERE pt.mentor_id = $mentor_id AND pt.status = 'Active'");
+$assigned_students_count = intval(mysqli_fetch_assoc($db_stud_res)['cnt'] ?? 0);
 ?>
 <?php
 $action_html = '
@@ -312,6 +418,7 @@ $action_html = '
 
 page_shell_start('review_logs', 'Review Daily Logs', 'Full activity overview for your assigned interns.', $action_html);
 ?>
+
 <style>
     .status-pill { padding: 4px 12px; border-radius: 9999px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; display: inline-flex; align-items: center; border: 1px solid; }
     .status-submitted { background-color: #fffbeb; color: #d97706; border-color: #fef3c7; }
@@ -325,13 +432,13 @@ page_shell_start('review_logs', 'Review Daily Logs', 'Full activity overview for
     
     <!-- Toast status alerts -->
     <?php if ($success_msg !== ''): ?>
-        <div class="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-medium text-green-800 flex items-center gap-2">
+        <div class="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-medium text-green-800 flex items-center gap-2 alert-success">
             <span class="material-symbols-outlined text-green-600">check_circle</span>
             <span><?php echo htmlspecialchars($success_msg); ?></span>
         </div>
     <?php endif; ?>
     <?php if ($error_msg !== ''): ?>
-        <div class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800 flex items-center gap-2">
+        <div class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800 flex items-center gap-2 alert-danger">
             <span class="material-symbols-outlined text-red-600">error</span>
             <span><?php echo htmlspecialchars($error_msg); ?></span>
         </div>
@@ -559,7 +666,7 @@ page_shell_start('review_logs', 'Review Daily Logs', 'Full activity overview for
                     <?php else: ?>
                         <div class="bg-white p-12 rounded-2xl border border-gray-200 shadow-sm text-center">
                             <span class="material-symbols-outlined text-5xl text-gray-300 mb-2">assignment_late</span>
-                            <h3 class="text-lg font-bold text-gray-800">No logs found</h3>
+                            <h3 class="text-lg font-bold text-gray-800">No daily logs submitted by assigned students yet.</h3>
                             <p class="text-sm text-gray-500 mt-1">Try adjusting the filter options or keywords above.</p>
                         </div>
                     <?php endif; ?>
@@ -718,3 +825,5 @@ page_shell_start('review_logs', 'Review Daily Logs', 'Full activity overview for
         }
     </script>
 <?php page_shell_end(); ?>
+
+<script src="js/alerts.js"></script>

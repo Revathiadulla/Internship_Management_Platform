@@ -1,4 +1,6 @@
 <?php
+// error_reporting(E_ALL);
+// ini_set('display_errors', 1);
 session_start();
 include_once __DIR__ . '/includes/auth.php';
 require_module_access('applications');
@@ -34,7 +36,17 @@ foreach ($test_cols as $col => $sql) {
 $verif_cols = [
     'aadhaar_verification_status' => "ALTER TABLE internship_applications ADD COLUMN aadhaar_verification_status VARCHAR(50) DEFAULT 'Pending'",
     'pan_verification_status' => "ALTER TABLE internship_applications ADD COLUMN pan_verification_status VARCHAR(50) DEFAULT 'Pending'",
-    'document_verification_status' => "ALTER TABLE internship_applications ADD COLUMN document_verification_status VARCHAR(50) DEFAULT 'Pending'"
+    'document_verification_status' => "ALTER TABLE internship_applications ADD COLUMN document_verification_status VARCHAR(50) DEFAULT 'Pending'",
+    'aadhaar_status' => "ALTER TABLE internship_applications ADD COLUMN aadhaar_status ENUM('pending','verified','rejected') DEFAULT 'pending'",
+    'pan_status' => "ALTER TABLE internship_applications ADD COLUMN pan_status ENUM('pending','verified','rejected') DEFAULT 'pending'",
+    'aadhaar_verified_by' => "ALTER TABLE internship_applications ADD COLUMN aadhaar_verified_by INT NULL",
+    'pan_verified_by' => "ALTER TABLE internship_applications ADD COLUMN pan_verified_by INT NULL",
+    'aadhaar_verified_at' => "ALTER TABLE internship_applications ADD COLUMN aadhaar_verified_at DATETIME NULL",
+    'pan_verified_at' => "ALTER TABLE internship_applications ADD COLUMN pan_verified_at DATETIME NULL",
+    'hod_status' => "ALTER TABLE internship_applications ADD COLUMN hod_status ENUM('not_required','pending','approved','rejected') DEFAULT 'pending'",
+    'hod_id' => "ALTER TABLE internship_applications ADD COLUMN hod_id INT NULL",
+    'hod_action_at' => "ALTER TABLE internship_applications ADD COLUMN hod_action_at DATETIME NULL",
+    'final_status' => "ALTER TABLE internship_applications ADD COLUMN final_status ENUM('pending','selected','rejected') DEFAULT 'pending'"
 ];
 foreach ($verif_cols as $col => $sql) {
     $col_check = mysqli_query($conn, "SHOW COLUMNS FROM internship_applications LIKE '$col'");
@@ -46,7 +58,8 @@ foreach ($verif_cols as $col => $sql) {
 // Ensure document verification columns exist in student_profiles
 $sp_verif_cols = [
     'aadhaar_verification_status' => "ALTER TABLE student_profiles ADD COLUMN aadhaar_verification_status VARCHAR(50) DEFAULT 'Pending'",
-    'pan_verification_status' => "ALTER TABLE student_profiles ADD COLUMN pan_verification_status VARCHAR(50) DEFAULT 'Pending'"
+    'pan_verification_status' => "ALTER TABLE student_profiles ADD COLUMN pan_verification_status VARCHAR(50) DEFAULT 'Pending'",
+    'student_type' => "ALTER TABLE student_profiles ADD COLUMN student_type ENUM('pursuing','passed_out') DEFAULT 'pursuing'"
 ];
 foreach ($sp_verif_cols as $col => $sql) {
     $col_check = mysqli_query($conn, "SHOW COLUMNS FROM student_profiles LIKE '$col'");
@@ -58,10 +71,14 @@ foreach ($sp_verif_cols as $col => $sql) {
 // Filter and search values
 $status_options       = ['Applied', 'Test Completed', 'Documents Verified', 'HR Round', 'HOD Approval Pending', 'HOD Approved', 'Selected', 'Interview Scheduled', 'Offer Sent', 'Onboarding Completed', 'Rejected'];
 $verification_options = ['Pending', 'Verified', 'Rejected'];
-// Determine view mode: 'review' (default) shows all applicants, 'all' also shows all
+// Determine view mode: 'review' shows only test‑completed applications, 'all' shows every applicant
 $view = isset($_GET['view']) ? trim($_GET['view']) : 'review';
 // Base where clause
-$where_clauses = ["a.is_deleted = 0"];
+$where_clauses = ["a.is_deleted = 0"]; 
+// Apply view‑specific filter
+if ($view === 'review') {
+    $where_clauses[] = "a.test_score IS NOT NULL";
+}
 // Previously, 'review' filtered to Test Completed and passing score. This is removed to show all.
 // if ($view === 'review') {
 //     $where_clauses[] = "a.status = 'Test Completed'";
@@ -99,7 +116,41 @@ if ($search_query !== '') {
     $search_escaped  = mysqli_real_escape_string($conn, $search_query);
     $where_clauses[] = "(sp.full_name LIKE '%$search_escaped%' OR sp.email LIKE '%$search_escaped%')";
 }
+// Build WHERE clause for current view
 $where_sql = implode(' AND ', $where_clauses);
+
+// Prepare WHERE clauses for tab badge counts
+$where_clauses_no_view = $where_clauses;
+// Remove any view-specific filter (test_score condition)
+foreach ($where_clauses_no_view as $key => $clause) {
+    if (strpos($clause, 'a.test_score') !== false) {
+        unset($where_clauses_no_view[$key]);
+    }
+}
+// Removed outdated exclusion filters for review view
+    // WHERE clause for HR Review tab (test_score IS NOT NULL)
+    $where_clauses_review = $where_clauses_no_view;
+    $where_clauses_review[] = "a.test_score IS NOT NULL";
+    // Show ONLY HR Round or HR Review
+    $where_clauses_review[] = "a.status IN ('HR Round', 'HR Review')";
+$review_where_sql = implode(' AND ', $where_clauses_review);
+if (empty($review_where_sql)) { $review_where_sql = '1'; }
+// When showing the HR Review tab, apply the same filter to the main query and pagination
+if ($view === 'review') {
+    $where_sql = $review_where_sql; // ensures pagination total and data rows match the count
+}
+
+// WHERE clause for All Applicants tab (no additional view filter)
+$all_where_sql = implode(' AND ', $where_clauses_no_view);
+if (empty($all_where_sql)) { $all_where_sql = '1'; }
+// Count for HR Review tab
+$review_count_sql = "SELECT COUNT(*) as total FROM internship_applications a LEFT JOIN internships i ON a.internship_id = i.id AND a.internship_id > 0 LEFT JOIN student_profiles sp ON a.user_id = sp.user_id WHERE $review_where_sql";
+$review_count_result = mysqli_query($conn, $review_count_sql);
+$review_total = $review_count_result ? (int)mysqli_fetch_assoc($review_count_result)['total'] : 0;
+// Count for All Applicants tab
+$all_count_sql = "SELECT COUNT(*) as total FROM internship_applications a LEFT JOIN internships i ON a.internship_id = i.id AND a.internship_id > 0 LEFT JOIN student_profiles sp ON a.user_id = sp.user_id WHERE $all_where_sql";
+$all_count_result = mysqli_query($conn, $all_count_sql);
+$all_total = $all_count_result ? (int)mysqli_fetch_assoc($all_count_result)['total'] : 0;
 
 // Total count for pagination (same filters, no LIMIT)
 $count_sql    = "SELECT COUNT(*) as total
@@ -108,6 +159,9 @@ $count_sql    = "SELECT COUNT(*) as total
                  LEFT JOIN student_profiles sp ON a.user_id = sp.user_id
                  WHERE $where_sql";
 $count_result = mysqli_query($conn, $count_sql);
+if (!$count_result) {
+    die("Count Query Failed: " . mysqli_error($conn) . " | SQL: " . htmlspecialchars($count_sql));
+}
 $total_rows   = (int) mysqli_fetch_assoc($count_result)['total'];
 $total_pages  = max(1, (int) ceil($total_rows / $per_page));
 
@@ -131,7 +185,9 @@ $app_sql = "SELECT a.id as app_id, a.user_id, a.status, a.applied_date, a.educat
                    sp.full_name, sp.email, sp.college_name, sp.course,
                    sp.resume_file, $resume_url_select,
                    sp.aadhaar_file, sp.pan_file,
-                   a.aadhaar_verification_status, a.pan_verification_status
+                   a.aadhaar_verification_status, a.pan_verification_status,
+                   a.aadhaar_status, a.pan_status, a.hod_status, a.final_status,
+                   sp.student_type
             FROM internship_applications a
             LEFT JOIN internships i       ON a.internship_id = i.id AND a.internship_id > 0
             LEFT JOIN student_profiles sp ON a.user_id = sp.user_id
@@ -139,6 +195,9 @@ $app_sql = "SELECT a.id as app_id, a.user_id, a.status, a.applied_date, a.educat
             ORDER BY a.applied_date DESC
             LIMIT $per_page OFFSET $offset";
 $app_result = mysqli_query($conn, $app_sql);
+if (!$app_result) {
+    die("Database Query Failed: " . mysqli_error($conn) . " | SQL: " . htmlspecialchars($app_sql));
+}
 
 // Build query string helper — preserves all active filters when changing page
 function paginate_url(int $page, array $filters): string {
@@ -152,8 +211,8 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
 
       <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
 <div class="flex mb-4 space-x-2">
-  <a href="hr_applications.php?view=review" class="px-4 py-2 rounded <?= $view === 'review' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-800' ?>">HR Review</a>
-  <a href="hr_applications.php?view=all" class="px-4 py-2 rounded <?= $view === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-800' ?>">All Applicants</a>
+  <a href="hr_applications.php?view=review" class="px-4 py-2 rounded <?= $view === 'review' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-800' ?>">HR Review (<?php echo $review_total; ?>)</a>
+  <a href="hr_applications.php?view=all" class="px-4 py-2 rounded <?= $view === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-800' ?>">All Applicants (<?php echo $all_total; ?>)</a>
 </div>
         <form method="get" class="grid gap-4 xl:grid-cols-4">
           <div>
@@ -229,7 +288,11 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
           </div>
           <!-- Heading -->
           <h3 class="text-base font-bold text-slate-700 mb-1">
-            <?php echo $has_filters ? 'No applications found' : 'No applications yet'; ?>
+            <?php if ($view === 'review'): ?>
+                No test completed applications available for HR review.
+            <?php else: ?>
+                <?php echo $has_filters ? 'No applications found' : 'No applications yet'; ?>
+            <?php endif; ?>
           </h3>
           <!-- Subtitle -->
           <p class="text-sm text-slate-400 max-w-sm">
@@ -283,31 +346,23 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
           <table class="w-full text-left border-collapse">
             <thead>
               <tr class="bg-slate-50/75 border-b border-slate-100 text-slate-400 text-[11px] font-bold uppercase tracking-wider">
-                <th class="py-4 px-6">
-                  <label class="inline-flex items-center gap-2 text-slate-500">
-                    <input id="bulk-select-all" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
-                  </label>
-                </th>
-                <th class="py-4 px-6">Candidate</th>
-                <th class="py-4 px-6">Internship</th>
+                <th class="py-4 px-6">Student Name</th>
+                <th class="py-4 px-6">Internship Applied</th>
                 <th class="py-4 px-6">Applied Date</th>
-                <th class="py-4 px-6">Education</th>
-                <th class="py-4 px-6">Status</th>
-                <th class="py-4 px-6">HOD</th>
-                <th class="py-4 px-6">Verification</th>
-                <th class="py-4 px-6">Test Score</th>
-                <th class="py-4 px-6">Test Result</th>
-                <th class="py-4 px-6">Update</th>
+                <th class="py-4 px-6">Test Percentage</th>
+                <th class="py-4 px-6">Current Status</th>
+                <th class="py-4 px-6">Aadhaar Status</th>
+                <th class="py-4 px-6">PAN Status</th>
+                <th class="py-4 px-6 text-center">Actions</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-100 text-sm text-slate-600">
-              <?php while ($app = mysqli_fetch_assoc($app_result)): ?>
+              <?php while ($app = mysqli_fetch_assoc($app_result)): 
+                  $a_status = $app['aadhaar_status'] ?? 'pending';
+                  $p_status = $app['pan_status'] ?? 'pending';
+              ?>
                 <tr class="hover:bg-slate-50/50 transition-colors">
-                  <td class="py-4 px-6">
-                    <label class="inline-flex items-center">
-                      <input type="checkbox" class="bulk-select-row h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" data-app-id="<?php echo $app['app_id']; ?>">
-                    </label>
-                  </td>
+                  <!-- Student Name -->
                   <td class="py-4 px-6">
                     <div class="flex items-center gap-3">
                       <img class="w-10 h-10 rounded-full border border-slate-200" src="https://ui-avatars.com/api/?name=<?php echo urlencode($app['full_name']); ?>&background=random" alt="<?php echo htmlspecialchars($app['full_name']); ?>">
@@ -317,230 +372,57 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
                       </div>
                     </div>
                   </td>
+                  <!-- Internship Applied -->
                   <td class="py-4 px-6">
                     <p class="font-medium text-slate-800"><?php echo htmlspecialchars($app['title']); ?></p>
                     <p class="text-xs text-slate-400"><?php echo htmlspecialchars($app['duration']); ?> • <?php echo htmlspecialchars($app['mode']); ?></p>
                   </td>
+                  <!-- Applied Date -->
                   <td class="py-4 px-6 text-slate-500 font-medium">
                     <?php echo date('M d, Y', strtotime($app['applied_date'])); ?>
                   </td>
+                  <!-- Test Score -->
                   <td class="py-4 px-6">
-                    <span class="px-2 py-1 <?php echo ($app['education_status'] === 'Pursuing') ? 'bg-blue-50 text-blue-700 border-blue-100' : 'bg-purple-50 text-purple-700 border-purple-100'; ?> rounded text-[10px] font-bold border uppercase">
-                      <?php echo htmlspecialchars($app['education_status']); ?>
-                    </span>
+                      <?php if (!empty($app['test_score'])): ?>
+                        <span class="font-medium text-slate-800"><?php echo $app['test_score']; ?>%</span>
+                      <?php else: ?>
+                        <span class="text-slate-400">N/A</span>
+                      <?php endif; ?>
                   </td>
+                  <!-- Current Status -->
                   <td class="py-4 px-6">
                     <span class="inline-flex px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wide border uppercase <?php echo getStatusBadgeClass($app['status']); ?>">
                       <?php echo htmlspecialchars($app['status']); ?>
                     </span>
                   </td>
+                  <!-- Aadhaar Status -->
                   <td class="py-4 px-6">
-                    <?php if ($app['education_status'] === 'Pursuing'): ?>
-                      <?php
-                        $hod_status = $app['hod_approval_status'] ?? 'Pending';
-                        $hod_display = $hod_status;
-                        if ($hod_status === 'Approved') {
-                            $hod_display = 'HOD Approved';
-                        } elseif ($hod_status === 'Rejected') {
-                            $hod_display = 'HOD Rejected';
-                        }
-                      ?>
-                      <span class="inline-flex px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wide border uppercase <?php echo getStatusBadgeClass($hod_status); ?>">
-                        <?php echo htmlspecialchars($hod_display); ?>
-                      </span>
-                    <?php else: ?>
-                      <span class="text-slate-400 text-xs">N/A</span>
-                    <?php endif; ?>
+                    <?php
+                    $a_badge = 'bg-gray-100 text-gray-700 border-gray-200';
+                    if ($a_status === 'verified') $a_badge = 'bg-green-100 text-green-700 border-green-200';
+                    if ($a_status === 'rejected') $a_badge = 'bg-red-100 text-red-700 border-red-200';
+                    ?>
+                    <span class="inline-flex px-2 py-0.5 rounded text-[10px] font-bold uppercase border <?php echo $a_badge; ?>">
+                      <?php echo htmlspecialchars($a_status); ?>
+                    </span>
                   </td>
+                  <!-- PAN Status -->
                   <td class="py-4 px-6">
-                    <div class="space-y-1">
-                      <span class="inline-flex px-2 py-0.5 rounded text-[9px] font-bold uppercase border <?php echo getVerificationBadgeClass($app['verification_status'] ?? 'Pending'); ?>" title="Overall Document Verification">
-                        DOCS: <?php echo htmlspecialchars($app['verification_status'] ?: 'Pending'); ?>
-                      </span>
-                      <?php if (!empty($app['aadhaar_file'])): ?>
-                        <br>
-                        <span class="inline-flex px-2 py-0.5 rounded text-[9px] font-bold uppercase border <?php echo getVerificationBadgeClass($app['aadhaar_verification_status'] ?? 'Pending'); ?>" title="Aadhaar Verification Status">
-                          Aadhaar: <?php echo htmlspecialchars($app['aadhaar_verification_status'] ?: 'Pending'); ?>
-                        </span>
-                      <?php endif; ?>
-                      <?php if (!empty($app['pan_file'])): ?>
-                        <br>
-                        <span class="inline-flex px-2 py-0.5 rounded text-[9px] font-bold uppercase border <?php echo getVerificationBadgeClass($app['pan_verification_status'] ?? 'Pending'); ?>" title="PAN Verification Status">
-                          PAN: <?php echo htmlspecialchars($app['pan_verification_status'] ?: 'Pending'); ?>
-                        </span>
-                      <?php endif; ?>
-                    </div>
+                    <?php
+                    $p_badge = 'bg-gray-100 text-gray-700 border-gray-200';
+                    if ($p_status === 'verified') $p_badge = 'bg-green-100 text-green-700 border-green-200';
+                    if ($p_status === 'rejected') $p_badge = 'bg-red-100 text-red-700 border-red-200';
+                    ?>
+                    <span class="inline-flex px-2 py-0.5 rounded text-[10px] font-bold uppercase border <?php echo $p_badge; ?>">
+                      <?php echo htmlspecialchars($p_status); ?>
+                    </span>
                   </td>
-                  <td class="py-4 px-6">
-                    <?php if (isset($app['test_score'])): ?>
-                      <span class="font-medium text-slate-800"><?php echo $app['test_score']; ?></span>
-                    <?php else: ?>
-                      <span class="text-slate-400">N/A</span>
-                    <?php endif; ?>
+                  <!-- Actions -->
+                  <td class="py-4 px-6 text-center">
+                    <a href="hr_applicant_detail.php?app_id=<?php echo $app['app_id']; ?>" class="px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-xs font-semibold hover:bg-blue-100 transition inline-block">
+                      View
+                    </a>
                   </td>
-                  <td class="py-4 px-6">
-                    <?php if (!empty($app['test_result'])): ?>
-                      <span class="font-medium text-slate-800"><?php echo htmlspecialchars($app['test_result']); ?></span>
-                    <?php else: ?>
-                      <span class="text-slate-400">N/A</span>
-                    <?php endif; ?>
-                  </td>
-                  <td class="py-4 px-6">
-                    <div class="space-y-2">
-                      <select class="status-update-select w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-blue-600 focus:border-transparent outline-none" data-app-id="<?php echo $app['app_id']; ?>" data-education="<?php echo htmlspecialchars($app['education_status']); ?>">
-                        <option value="">-- Update Status --</option>
-                        <option value="Applied" <?php echo $app['status'] === 'Applied' ? 'selected' : ''; ?>>Applied</option>
-                        <option value="Test Completed" <?php echo $app['status'] === 'Test Completed' ? 'selected' : ''; ?>>Test Completed</option>
-                        <option value="Documents Verified" <?php echo $app['status'] === 'Documents Verified' ? 'selected' : ''; ?>>Documents Verified</option>
-                        <option value="Interview Scheduled" <?php echo $app['status'] === 'Interview Scheduled' ? 'selected' : ''; ?>>Interview Scheduled</option>
-                        <option value="HR Round" <?php echo $app['status'] === 'HR Round' ? 'selected' : ''; ?>>HR Round</option>
-                        <?php if ($app['education_status'] === 'Pursuing'): ?>
-                          <option value="HOD Approval Pending" <?php echo $app['status'] === 'HOD Approval Pending' ? 'selected' : ''; ?>>HOD Approval Pending</option>
-                          <option value="HOD Approved" <?php echo $app['status'] === 'HOD Approved' ? 'selected' : ''; ?>>HOD Approved</option>
-                        <?php endif; ?>
-                        <?php if ($app['education_status'] !== 'Pursuing' || $app['status'] === 'HOD Approved' || $app['status'] === 'Selected'): ?>
-                          <option value="Selected" <?php echo $app['status'] === 'Selected' ? 'selected' : ''; ?>>Selected/Hired</option>
-                        <?php endif; ?>
-                        <option value="Offer Sent" <?php echo $app['status'] === 'Offer Sent' ? 'selected' : ''; ?>>Offer Sent</option>
-                        <option value="Onboarding Completed" <?php echo $app['status'] === 'Onboarding Completed' ? 'selected' : ''; ?>>Onboarding Completed</option>
-                        <option value="Rejected" <?php echo $app['status'] === 'Rejected' ? 'selected' : ''; ?>>Rejected</option>
-                      </select>
-                      <select class="verification-update-select w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-blue-600 focus:border-transparent outline-none" data-app-id="<?php echo $app['app_id']; ?>">
-                        <option value="">-- Verification Status --</option>
-                        <option value="Pending" <?php echo ($app['verification_status'] ?? 'Pending') === 'Pending' ? 'selected' : ''; ?>>Pending</option>
-                        <option value="Verified" <?php echo ($app['verification_status'] ?? 'Pending') === 'Verified' ? 'selected' : ''; ?>>Verified</option>
-                        <option value="Rejected" <?php echo ($app['verification_status'] ?? 'Pending') === 'Rejected' ? 'selected' : ''; ?>>Rejected</option>
-                      </select>
-
-                      <!-- Granular verification action buttons -->
-                      <div class="mt-2 space-y-1">
-                        <?php if (!empty($app['aadhaar_file']) && ($app['aadhaar_verification_status'] ?? 'Pending') !== 'Verified'): ?>
-                          <button type="button" class="verify-single-doc-btn w-full text-center px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-100 rounded text-[10px] font-semibold flex items-center justify-center gap-1 transition" data-app-id="<?php echo $app['app_id']; ?>" data-doc-type="aadhaar">
-                            <span class="material-symbols-outlined text-[12px]">done</span> Verify Aadhaar
-                          </button>
-                        <?php endif; ?>
-                        <?php if (!empty($app['pan_file']) && ($app['pan_verification_status'] ?? 'Pending') !== 'Verified'): ?>
-                          <button type="button" class="verify-single-doc-btn w-full text-center px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-100 rounded text-[10px] font-semibold flex items-center justify-center gap-1 transition" data-app-id="<?php echo $app['app_id']; ?>" data-doc-type="pan">
-                            <span class="material-symbols-outlined text-[12px]">done</span> Verify PAN
-                          </button>
-                        <?php endif; ?>
-                        <?php if (($app['verification_status'] ?? 'Pending') !== 'Verified'): ?>
-                          <button type="button" class="verify-single-doc-btn w-full text-center px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-[10px] font-bold shadow-sm flex items-center justify-center gap-1 transition" data-app-id="<?php echo $app['app_id']; ?>" data-doc-type="all">
-                            <span class="material-symbols-outlined text-[12px]">verified</span> Verify All Docs
-                          </button>
-                        <?php endif; ?>
-                        
-                        <!-- Send HOD Approval flow -->
-                        <?php if ($app['education_status'] === 'Pursuing' && ($app['hod_approval_status'] ?? 'Pending') === 'Pending'): ?>
-                          <button type="button" class="send-hod-approval-btn w-full text-center px-2 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-[10px] font-bold shadow-sm flex items-center justify-center gap-1 transition" data-app-id="<?php echo $app['app_id']; ?>">
-                            <span class="material-symbols-outlined text-[12px]">send</span> Send HOD Approval
-                          </button>
-                        <?php endif; ?>
-
-                        <!-- Direct Select Student button -->
-                        <?php 
-                        $can_select = false;
-                        // Non-pursuing students can be selected directly
-                        if ($app['education_status'] !== 'Pursuing' && $app['status'] !== 'Selected') {
-                            $can_select = true;
-                        }
-                        // Pursuing students require HOD approval
-                        if ($app['education_status'] === 'Pursuing' && ($app['hod_approval_status'] ?? '') === 'Approved' && $app['status'] !== 'Selected') {
-                            $can_select = true;
-                        }
-                        // If HOD Rejected, selection is not allowed (can_select stays false)
-                        if ($app['education_status'] === 'Pursuing' && ($app['hod_approval_status'] ?? '') === 'Rejected') {
-                            $can_select = false;
-                        }
-                        if ($can_select): 
-                        ?>
-                          <button type="button" class="select-student-btn w-full text-center px-2 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10px] font-bold shadow-sm flex items-center justify-center gap-1 transition" data-app-id="<?php echo $app['app_id']; ?>">
-                            <span class="material-symbols-outlined text-[12px]">check_circle</span> Select Student
-                          </button>
-                        <?php endif; ?>
-                      </div>
-                    </div>
-                  </td>
-                  <td class="py-4 px-6">
-                    <div class="flex items-center gap-2">
-                      <a href="hr_applicant_detail.php?app_id=<?php echo $app['app_id']; ?>" class="p-2 text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors" title="View Profile">
-                        <span class="material-symbols-outlined text-[18px]">visibility</span>
-                      </a>
-                      <a href="view_application_status.php?app_id=<?php echo $app['app_id']; ?>" class="p-2 text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors" title="View Timeline">
-                        <span class="material-symbols-outlined text-[18px]">timeline</span>
-                      </a>
-                      <a href="javascript:void(0)" class="p-2 text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-colors reminder-btn" data-app-id="<?php echo $app['app_id']; ?>" title="Send Reminder Email">
-                        <span class="material-symbols-outlined text-[18px]">mail</span>
-                      </a>
-                      <?php
-                        $resume = !empty($app['resume_file']) ? trim($app['resume_file']) : '';
-                        $resume_url = !empty($app['resume_url']) ? trim($app['resume_url']) : '';
-                        $is_remote = false;
-                        $resume_link = '#';
-
-                        if ($resume_url !== '' && (strpos($resume_url, 'http://') === 0 || strpos($resume_url, 'https://') === 0)) {
-                            $resume_link = $resume_url;
-                            $is_remote = true;
-                        } elseif ($resume !== '' && (strpos($resume, 'http://') === 0 || strpos($resume, 'https://') === 0)) {
-                            $resume_link = $resume;
-                            $is_remote = true;
-                        }
-
-                        if ($is_remote) {
-                            $has_resume = true;
-                            $view_href = $resume_link;
-                            $download_href = $resume_link;
-                        } else {
-                            $safe   = $resume !== '' ? urlencode(basename($resume)) : '';
-                            $ext_r  = $resume !== '' ? strtolower(pathinfo($resume, PATHINFO_EXTENSION)) : '';
-                            $allowed_r = ['pdf', 'doc', 'docx'];
-                            $has_resume = $safe !== '' && in_array($ext_r, $allowed_r, true);
-                            $view_href = "resume_serve.php?file=" . $safe . "&mode=view";
-                            $download_href = "resume_serve.php?file=" . $safe . "&mode=download";
-                        }
-                        $profile_mock = [
-                            'resume_file' => $resume,
-                            'resume_url' => $resume_url
-                        ];
-                        $exists = check_resume_exists($profile_mock);
-                      ?>
-                      <?php if ($has_resume): ?>
-                        <!-- View resume -->
-                        <a href="<?php echo $view_href; ?>"
-                           target="_blank"
-                           data-resume-exists="<?php echo $exists ? 'true' : 'false'; ?>"
-                           class="p-2 text-emerald-600 bg-emerald-50 rounded-lg hover:bg-emerald-100 transition-colors"
-                           title="View Resume <?php echo !$is_remote ? '(' . htmlspecialchars(strtoupper($ext_r)) . ')' : ''; ?>">
-                           <span class="material-symbols-outlined text-[18px]">description</span>
-                        </a>
-                      <?php else: ?>
-                        <span class="px-2 py-1 text-[10px] font-semibold text-slate-400 bg-slate-100 rounded-lg" title="No resume uploaded">
-                          No Resume
-                        </span>
-                      <?php endif; ?>
-
-                      <!-- View Aadhaar -->
-                      <?php if (!empty($app['aadhaar_file'])): ?>
-                        <a href="view_document.php?file=<?php echo urlencode(basename($app['aadhaar_file'])); ?>"
-                           target="_blank"
-                           class="p-2 text-amber-600 bg-amber-50 rounded-lg hover:bg-amber-100 transition-colors"
-                           title="View Aadhaar">
-                           <span class="material-symbols-outlined text-[18px]">badge</span>
-                        </a>
-                      <?php endif; ?>
-
-                      <!-- View PAN -->
-                      <?php if (!empty($app['pan_file'])): ?>
-                        <a href="view_document.php?file=<?php echo urlencode(basename($app['pan_file'])); ?>"
-                           target="_blank"
-                           class="p-2 text-cyan-600 bg-cyan-50 rounded-lg hover:bg-cyan-100 transition-colors"
-                           title="View PAN">
-                           <span class="material-symbols-outlined text-[18px]">credit_card</span>
-                        </a>
-                      <?php endif; ?>
-                    </div>
-                  </td>
-                </tr>
               <?php endwhile; ?>
             </tbody>
           </table>

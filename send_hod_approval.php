@@ -51,11 +51,8 @@ $update->bind_param('ssi', $token, $status, $app_id);
 $update->execute();
 $update->close();
 
-// Send email using the helper script we created
-require_once __DIR__ . '/send_hod_approval_email.php';
-// The script expects POST variables, but we can directly call the function inside that file.
-// To avoid duplication, we'll call the same logic inline here:
-$approval_link = hod_approval_url($app_id, $token); $approve_link = $approval_link . '&decision=approve'; $reject_link = $approval_link . '&decision=reject';
+$approve_link = hod_approval_url($app_id, $token, 'approve');
+$reject_link = hod_approval_url($app_id, $token, 'reject');
 $subject = "HOD Approval Required for Internship Application #$app_id";
 $message = "<html><body>\n<p>Dear HOD,</p>\n<p>The student <strong>{$app['full_name']}</strong> ({$app['student_email']}) has completed the test for the internship <strong>{$app['internship_title']}</strong>.\nTest Score: {$app['test_score']} (Result: {$app['test_result']}).</p>\n<p>Please review and make a decision:</p>\n<p><a href='$approve_link'>Approve Application</a> | <a href='$reject_link'>Reject Application</a></p>\n<p>This link will expire in 7 days.</p>\n<p>Best regards,<br/>Internship Management System</p>\n</body></html>";
 $headers = "MIME-Version: 1.0\r\n".

@@ -9,19 +9,82 @@ ensure_module_schema($conn);
 $mentor_id = current_user_id();
 
 // Fetch unread notifications count
-$unread_sql = "SELECT COUNT(*) as count FROM mentor_notifications WHERE mentor_id = '$mentor_id' AND is_read = 0";
+$unread_sql = "SELECT COUNT(*) as count FROM notifications WHERE user_id = '$mentor_id' AND is_read = 0";
 $unread_res = mysqli_query($conn, $unread_sql);
 $unread_row = mysqli_fetch_assoc($unread_res);
 $unread_count = isset($unread_row['count']) ? $unread_row['count'] : 0;
 
 // Fetch all notifications for display
-$notifications_sql = "SELECT * FROM mentor_notifications WHERE mentor_id = '$mentor_id' ORDER BY created_at DESC";
+$notifications_sql = "SELECT * FROM notifications WHERE user_id = '$mentor_id' ORDER BY created_at DESC";
 $notifications_result = mysqli_query($conn, $notifications_sql);
 $total_notifications = mysqli_num_rows($notifications_result);
+
+// Ensure link column exists
+$check_link_col = mysqli_query($conn, "SHOW COLUMNS FROM notifications LIKE 'link'");
+if ($check_link_col && mysqli_num_rows($check_link_col) === 0) {
+    mysqli_query($conn, "ALTER TABLE notifications ADD COLUMN link VARCHAR(255) DEFAULT NULL");
+}
+
+// Fetch active assigned teams and students for notification form
+$teams_data = [];
+$teams_res = mysqli_query($conn, "SELECT id, team_name FROM project_teams WHERE mentor_id = $mentor_id AND status = 'Active'");
+$assigned_teams_count = mysqli_num_rows($teams_res);
+while ($t = mysqli_fetch_assoc($teams_res)) {
+    $t_id = intval($t['id']);
+    $teams_data[$t_id] = [
+        'name' => $t['team_name'],
+        'students' => []
+    ];
+    $st_res = mysqli_query($conn, "SELECT u.id, u.full_name FROM project_team_members ptm JOIN users u ON ptm.student_id = u.id WHERE ptm.project_team_id = $t_id");
+    while ($s = mysqli_fetch_assoc($st_res)) {
+        $teams_data[$t_id]['students'][] = [
+            'id' => intval($s['id']),
+            'name' => $s['full_name']
+        ];
+    }
+}
 
 page_shell_start('notifications', 'Notifications', 'Stay updated on intern submissions, assignments, and milestones.');
 ?>
 <div class="max-w-4xl mx-auto space-y-6">
+    <!-- Send Notification Section -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 mt-6">
+        <h2 class="text-lg font-semibold text-slate-800 mb-4">Send Notification to Students</h2>
+        <form method="post" action="mentor_send_notification.php" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1">Select Team</label>
+                <select name="team_id" id="notif-team-id" required class="w-full border border-slate-200 rounded p-2" onchange="updateNotifStudents(this.value)">
+                    <option value="">Select Team</option>
+                    <?php
+                    if ($assigned_teams_count > 0) {
+                        mysqli_data_seek($teams_res, 0);
+                        while ($t = mysqli_fetch_assoc($teams_res)) {
+                            echo "<option value='{$t['id']}'>" . htmlspecialchars($t['team_name']) . "</option>";
+                        }
+                    }
+                    ?>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1">Select Student</label>
+                <select name="student_id" id="notif-student-id" required class="w-full border border-slate-200 rounded p-2">
+                    <option value="all">All Students in Team</option>
+                </select>
+            </div>
+            <div class="md:col-span-2">
+                <label class="block text-sm font-medium text-slate-700 mb-1">Subject</label>
+                <input type="text" name="subject" required class="w-full border border-slate-200 rounded p-2" placeholder="Enter message subject" />
+            </div>
+            <div class="md:col-span-2">
+                <label class="block text-sm font-medium text-slate-700 mb-1">Message</label>
+                <textarea name="message" rows="4" required class="w-full border border-slate-200 rounded p-2" placeholder="Type your message here..."></textarea>
+            </div>
+            <div class="md:col-span-2 flex justify-end">
+                <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Send Notification</button>
+            </div>
+        </form>
+    </div>
+
     <div class="flex items-center justify-between border-b border-slate-100 pb-5">
         <div>
             <div class="flex items-center gap-2">
@@ -63,10 +126,18 @@ page_shell_start('notifications', 'Notifications', 'Stay updated on intern submi
                     $bg_class = 'bg-green-50 text-green-600';
                 }
             ?>
+                <?php $notif_link = !empty($row['link']) ? $row['link'] : ''; ?>
+                <?php if ($notif_link): ?>
+                <a href="mark_notification_read.php?action=read_redirect&id=<?php echo $row['id']; ?>&fallback=mentor_notifications.php" class="notification-card block bg-white rounded-2xl border <?php echo $is_read ? 'border-slate-100' : 'border-blue-100 shadow-sm'; ?> p-5 transition-all flex items-start gap-4 hover:border-blue-300 cursor-pointer"
+                     data-id="<?php echo $row['id']; ?>"
+                     data-type="<?php echo htmlspecialchars(strtolower($type)); ?>"
+                     data-read="<?php echo $is_read ? 'true' : 'false'; ?>">
+                <?php else: ?>
                 <div class="notification-card bg-white rounded-2xl border <?php echo $is_read ? 'border-slate-100' : 'border-blue-100 shadow-sm'; ?> p-5 transition-all flex items-start gap-4"
                      data-id="<?php echo $row['id']; ?>"
                      data-type="<?php echo htmlspecialchars(strtolower($type)); ?>"
                      data-read="<?php echo $is_read ? 'true' : 'false'; ?>">
+                <?php endif; ?>
                     
                     <!-- Icon -->
                     <div class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 <?php echo $bg_class; ?>">
@@ -90,11 +161,15 @@ page_shell_start('notifications', 'Notifications', 'Stay updated on intern submi
 
                     <!-- Action Button -->
                     <?php if (!$is_read): ?>
-                        <button class="btn-mark-single-read self-center text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50/50 hover:bg-blue-50 border border-blue-100 rounded-lg px-3 py-1.5 transition-colors shrink-0 cursor-pointer">
+                        <button class="btn-mark-single-read self-center text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50/50 hover:bg-blue-50 border border-blue-100 rounded-lg px-3 py-1.5 transition-colors shrink-0 cursor-pointer z-10 relative" onclick="event.preventDefault(); event.stopPropagation();">
                             Mark Read
                         </button>
                     <?php endif; ?>
+                <?php if ($notif_link): ?>
+                </a>
+                <?php else: ?>
                 </div>
+                <?php endif; ?>
             <?php endwhile; ?>
         <?php else: ?>
             <div class="py-16 text-center bg-white border border-slate-100 rounded-2xl shadow-sm">
@@ -182,7 +257,9 @@ page_shell_start('notifications', 'Notifications', 'Stay updated on intern submi
                     if (data.success) {
                         // Soft fade new visual indicators
                         card.setAttribute("data-read", "true");
-                        card.className = "notification-card bg-white rounded-2xl border border-slate-100 p-5 transition-all flex items-start gap-4";
+                        card.className = card.tagName.toLowerCase() === 'a'
+                            ? "notification-card block bg-white rounded-2xl border border-slate-100 p-5 transition-all flex items-start gap-4 hover:border-blue-300"
+                            : "notification-card bg-white rounded-2xl border border-slate-100 p-5 transition-all flex items-start gap-4";
                         
                         const dot = card.querySelector(".new-dot");
                         if (dot) dot.remove();
@@ -210,7 +287,9 @@ page_shell_start('notifications', 'Notifications', 'Stay updated on intern submi
                     if (data.success) {
                         cards.forEach(card => {
                             card.setAttribute("data-read", "true");
-                            card.className = "notification-card bg-white rounded-2xl border border-slate-100 p-5 transition-all flex items-start gap-4";
+                            card.className = card.tagName.toLowerCase() === 'a'
+                                ? "notification-card block bg-white rounded-2xl border border-slate-100 p-5 transition-all flex items-start gap-4 hover:border-blue-300"
+                                : "notification-card bg-white rounded-2xl border border-slate-100 p-5 transition-all flex items-start gap-4";
                             const dot = card.querySelector(".new-dot");
                             if (dot) dot.remove();
                             const btn = card.querySelector(".btn-mark-single-read");
@@ -245,6 +324,21 @@ page_shell_start('notifications', 'Notifications', 'Stay updated on intern submi
             }
         }
     });
+</script>
+<script>
+const teamsData = <?= json_encode($teams_data) ?>;
+function updateNotifStudents(teamId) {
+    const studentSelect = document.getElementById('notif-student-id');
+    studentSelect.innerHTML = '<option value="all">All Students in Team</option>';
+    if (teamsData[teamId] && teamsData[teamId].students) {
+        teamsData[teamId].students.forEach(s => {
+            const opt = document.createElement('option');
+            opt.value = s.id;
+            opt.textContent = s.name;
+            studentSelect.appendChild(opt);
+        });
+    }
+}
 </script>
 <?php
 page_shell_end();

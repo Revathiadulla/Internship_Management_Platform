@@ -1,0 +1,262 @@
+[2026-06-02 17:25:08] SMTP configuration error: Missing SMTP configuration: MAIL_HOST MAIL_PORT MAIL_USERNAME MAIL_PASSWORD MAIL_FROM_EMAIL 
+========================================================================
+[2026-06-02 17:25:08] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: revathiadulla@gmail.com (Revathi Adulla) [ID: 68]
+SUBJECT: Welcome to IMP - Account Registration Successful
+MESSAGE TEXT: Dear Revathi Adulla,
+
+Welcome to the Internship Management Platform (IMP)!
+
+Your account has been registered successfully as a Student with the email address: revathiadulla@gmail.com.
+
+You can now log in to your student dashboard to complete your profile, browse available internships, and track applications.
+METADATA: {"event":"Account Registration","registered_name":"Revathi Adulla","registered_email":"revathiadulla@gmail.com","assigned_role":"Student","status":"Active","action_url":"http:\/\/localhost\/IMP\/login.php","action_label":"Log In to IMP"}
+------------------------------------------------------------------------
+SMTP LOGS:
+PHPMailer sending failed. Check email_notifications.log.
+------------------------------------------------------------------------
+HTML body generated (5746 bytes).
+========================================================================
+
+[2026-06-02 17:48:56] SMTP configuration error: Missing SMTP configuration: MAIL_HOST MAIL_PORT MAIL_USERNAME MAIL_PASSWORD MAIL_FROM_EMAIL 
+========================================================================
+[2026-06-02 17:48:56] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: revathiadulla@gmail.com (Revathi Adulla) [ID: 68]
+SUBJECT: IMP Application Submitted: Web Development Intern
+MESSAGE TEXT: Dear Revathi Adulla,
+
+Your application for the "Web Development Intern" internship has been successfully submitted to the platform.
+
+Your current application status is: **Applied**.
+
+Please remember that you are required to complete your skills assessment test (if applicable) within 48 hours of application submission.
+
+Thank you for choosing IMP!
+METADATA: {"event":"Internship Application","internship_position":"Web Development Intern","education_status":"Pursuing","current_status":"Applied","action_url":"http:\/\/localhost\/IMP\/student_applications.php","action_label":"View Application Status"}
+------------------------------------------------------------------------
+SMTP LOGS:
+PHPMailer sending failed. Check email_notifications.log.
+------------------------------------------------------------------------
+HTML body generated (5664 bytes).
+========================================================================
+
+[2026-06-02 17:48:56] SMTP configuration error: Missing SMTP configuration: MAIL_HOST MAIL_PORT MAIL_USERNAME MAIL_PASSWORD MAIL_FROM_EMAIL 
+========================================================================
+[2026-06-02 17:48:56] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: revathiadulla@gmail.com (Revathi Adulla) [ID: 68]
+SUBJECT: Exam Invitation for Web Development Intern
+MESSAGE TEXT: Dear Revathi Adulla,
+
+You are invited to take the skills assessment test for the 'Web Development Intern' internship. Please complete the exam using the following link (valid for 48 hours): https://internship-management-platform-1.onrender.com/student_test.php?app_id=68
+
+Best regards,
+Internship Management Platform Team
+METADATA: {"event":"Exam Invitation","action_url":"https:\/\/internship-management-platform-1.onrender.com\/student_test.php?app_id=68","action_label":"Take Exam"}
+------------------------------------------------------------------------
+SMTP LOGS:
+PHPMailer sending failed. Check email_notifications.log.
+------------------------------------------------------------------------
+HTML body generated (5099 bytes).
+========================================================================
+
+[2026-06-02 18:44:03] SMTP configuration error: Missing SMTP configuration: MAIL_HOST MAIL_PORT MAIL_USERNAME MAIL_PASSWORD MAIL_FROM_EMAIL 
+========================================================================
+[2026-06-02 18:44:03] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: imp.webportal2026@gmail.com (Admin) [ID: 38]
+SUBJECT: IMP – New Project Awaiting Approval: IMP
+MESSAGE TEXT: Hello Admin,
+
+Coordinator Jaya has submitted a new project posting that requires your review and approval.
+
+Project: IMP
+Type: Development / Web Development
+Duration: 3 Months | Mode: Remote
+
+Please log in to the Admin panel to Approve, Reject, or Request Changes.
+METADATA: {"event":"New Project Pending Approval","project_title":"IMP","submitted_by":"Jaya","duration":"3 Months","mode":"Remote","action_url":"http:\/\/localhost\/IMP\/admin_internships.php?status=Pending+Approval","action_label":"Review Project Posting"}
+------------------------------------------------------------------------
+SMTP LOGS:
+PHPMailer sending failed. Check email_notifications.log.
+------------------------------------------------------------------------
+HTML body generated (5709 bytes).
+========================================================================
+
+[2026-06-02 20:30:12] SMTP configuration error: Missing SMTP configuration: MAIL_HOST MAIL_PORT MAIL_USERNAME MAIL_PASSWORD MAIL_FROM_EMAIL 
+========================================================================
+[2026-06-02 20:30:12] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: jaya@gmail.com (Jaya) [ID: 3]
+SUBJECT: IMP – Project Review Decision: Approved – IMP
+MESSAGE TEXT: Dear Jaya,
+
+Your project posting "IMP" has been reviewed by the Admin.
+
+Decision: Approved
+
+Please log in to your Coordinator dashboard to view the updated status.
+METADATA: {"event":"Project Review: Approved","project_title":"IMP","decision":"Approved","admin_remarks":"No remarks","action_url":"http:\/\/localhost\/IMP\/coordinator_internships.php","action_label":"View My Postings"}
+------------------------------------------------------------------------
+SMTP LOGS:
+PHPMailer sending failed. Check email_notifications.log.
+------------------------------------------------------------------------
+HTML body generated (5424 bytes).
+========================================================================
+
+[2026-06-02 21:48:30] SMTP configuration error: Missing SMTP configuration: MAIL_HOST MAIL_PORT MAIL_USERNAME MAIL_PASSWORD MAIL_FROM_EMAIL 
+========================================================================
+[2026-06-02 21:48:30] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: revathiadulla@gmail.com (Revathi Adulla) [ID: 69]
+SUBJECT: Welcome to IMP - Account Registration Successful
+MESSAGE TEXT: Dear Revathi Adulla,
+
+Welcome to the Internship Management Platform (IMP)!
+
+Your account has been registered successfully as a Student with the email address: revathiadulla@gmail.com.
+
+You can now log in to your student dashboard to complete your profile, browse available internships, and track applications.
+METADATA: {"event":"Account Registration","registered_name":"Revathi Adulla","registered_email":"revathiadulla@gmail.com","assigned_role":"Student","status":"Active","action_url":"http:\/\/localhost\/IMP\/login.php","action_label":"Log In to IMP"}
+------------------------------------------------------------------------
+SMTP LOGS:
+PHPMailer sending failed. Check email_notifications.log.
+------------------------------------------------------------------------
+HTML body generated (5746 bytes).
+========================================================================
+
+[2026-06-02 21:49:33] SMTP configuration error: Missing SMTP configuration: MAIL_HOST MAIL_PORT MAIL_USERNAME MAIL_PASSWORD MAIL_FROM_EMAIL 
+========================================================================
+[2026-06-02 21:49:33] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: revathiadulla@gmail.com (Revathi Adulla) [ID: 69]
+SUBJECT: IMP Application Submitted: Web Development Intern
+MESSAGE TEXT: Dear Revathi Adulla,
+
+Your application for the "Web Development Intern" internship has been successfully submitted to the platform.
+
+Your current application status is: **Applied**.
+
+Please remember that you are required to complete your skills assessment test (if applicable) within 48 hours of application submission.
+
+Thank you for choosing IMP!
+METADATA: {"event":"Internship Application","internship_position":"Web Development Intern","education_status":"Pursuing","current_status":"Applied","action_url":"http:\/\/localhost\/IMP\/student_applications.php","action_label":"View Application Status"}
+------------------------------------------------------------------------
+SMTP LOGS:
+PHPMailer sending failed. Check email_notifications.log.
+------------------------------------------------------------------------
+HTML body generated (5664 bytes).
+========================================================================
+
+[2026-06-02 21:49:33] SMTP configuration error: Missing SMTP configuration: MAIL_HOST MAIL_PORT MAIL_USERNAME MAIL_PASSWORD MAIL_FROM_EMAIL 
+========================================================================
+[2026-06-02 21:49:33] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: revathiadulla@gmail.com (Revathi Adulla) [ID: 69]
+SUBJECT: Exam Invitation for Web Development Intern
+MESSAGE TEXT: Dear Revathi Adulla,
+
+You are invited to take the skills assessment test for the 'Web Development Intern' internship. Please complete the exam using the following link (valid for 48 hours): https://internship-management-platform-1.onrender.com/student_test.php?application_id=73
+
+Best regards,
+Internship Management Platform Team
+METADATA: {"event":"Exam Invitation","action_url":"https:\/\/internship-management-platform-1.onrender.com\/student_test.php?application_id=73","action_label":"Take Exam"}
+------------------------------------------------------------------------
+SMTP LOGS:
+PHPMailer sending failed. Check email_notifications.log.
+------------------------------------------------------------------------
+HTML body generated (5115 bytes).
+========================================================================
+
+[2026-06-03 06:15:52] SMTP configuration error: Missing SMTP configuration: MAIL_HOST MAIL_PORT MAIL_USERNAME MAIL_PASSWORD MAIL_FROM_EMAIL 
+========================================================================
+[2026-06-03 06:15:52] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: revathiadulla@gmail.com (Revathi Adulla) [ID: 69]
+SUBJECT: IMP Application Submitted: IMP
+MESSAGE TEXT: Dear Revathi Adulla,
+
+Your application for the "IMP" internship has been successfully submitted to the platform.
+
+Your current application status is: **Applied**.
+
+Please remember that you are required to complete your skills assessment test (if applicable) within 48 hours of application submission.
+
+Thank you for choosing IMP!
+METADATA: {"event":"Internship Application","internship_position":"IMP","education_status":"Pursuing","current_status":"Applied","action_url":"http:\/\/localhost\/IMP\/student_applications.php","action_label":"View Application Status"}
+------------------------------------------------------------------------
+SMTP LOGS:
+PHPMailer sending failed. Check email_notifications.log.
+------------------------------------------------------------------------
+HTML body generated (5607 bytes).
+========================================================================
+
+[2026-06-03 06:15:52] SMTP configuration error: Missing SMTP configuration: MAIL_HOST MAIL_PORT MAIL_USERNAME MAIL_PASSWORD MAIL_FROM_EMAIL 
+========================================================================
+[2026-06-03 06:15:52] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: revathiadulla@gmail.com (Revathi Adulla) [ID: 69]
+SUBJECT: Exam Invitation for IMP
+MESSAGE TEXT: Dear Revathi Adulla,
+
+You are invited to take the skills assessment test for the 'IMP' internship. Please complete the exam using the following link (valid for 48 hours): https://internship-management-platform-1.onrender.com/student_test.php?application_id=75
+
+Best regards,
+Internship Management Platform Team
+METADATA: {"event":"Exam Invitation","action_url":"https:\/\/internship-management-platform-1.onrender.com\/student_test.php?application_id=75","action_label":"Take Exam"}
+------------------------------------------------------------------------
+SMTP LOGS:
+PHPMailer sending failed. Check email_notifications.log.
+------------------------------------------------------------------------
+HTML body generated (5077 bytes).
+========================================================================
+
+[2026-06-03 08:17:06] Missing SMTP configuration. Please set SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, SMTP_FROM_EMAIL.
+[2026-06-03 08:21:03] Failed to send email to revathiadulla@gmail.com. Error: SMTP Error: Could not authenticate. (SMTP Error: Could not authenticate.)
+[2026-06-03 08:21:09] Failed to send email to revathiadulla@gmail.com. Error: SMTP Error: Could not authenticate. (SMTP Error: Could not authenticate.)
+[2026-06-03 08:28:35] Missing SMTP configuration. Please set SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, SMTP_FROM_EMAIL.
+[2026-06-04 11:04:36] Failed to send email to imp.webportal2026@gmail.com. Error: SMTP Error: Could not connect to SMTP host. (SMTP Error: Could not connect to SMTP host.) Debug: [2] SERVER -> CLIENT:
+[2] SMTP Error: Could not connect to SMTP host.
+
+========================================================================
+[2026-06-04 11:04:36] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: imp.webportal2026@gmail.com (Admin) [ID: 38]
+SUBJECT: Student Report: Revathi Adulla - Poor Performance
+MESSAGE TEXT: A mentor has submitted a report for student Revathi Adulla in internship 'Web Development Intern'.
+
+Reason: Poor Performance
+Remarks: Test remarks from simulation
+
+Please review and take appropriate action.
+METADATA: {"event":"Student Report","student":"Revathi Adulla","internship":"Web Development Intern","reason":"Poor Performance","action_url":"http:\/\/localhost\/IMP\/admin_student_reports.php","action_label":"Review Reports","recipient_name":"Admin"}
+------------------------------------------------------------------------
+SMTP LOGS:
+PHPMailer sending failed. Check email_notifications.log.
+------------------------------------------------------------------------
+HTML body generated (5634 bytes).
+========================================================================
+
+[2026-06-04 14:21:31] Failed to send email to revathiadulla@gmail.com. Error: SMTP Error: Could not connect to SMTP host. Failed to connect to server (SMTP Error: Could not connect to SMTP host. Failed to connect to server SMTP server error: Failed to connect to server Additional SMTP info: php_network_getaddresses: getaddrinfo for smtp.gmail.com failed: No such host is known. ) Debug: [1] SMTP ERROR: Failed to connect to server: php_network_getaddresses: getaddrinfo for smtp.gmail.com failed: No such host is known.  (0)
+[2] SMTP Error: Could not connect to SMTP host. Failed to connect to server
+
+========================================================================
+[2026-06-04 14:21:31] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: revathiadulla@gmail.com (Revathi Adulla) [ID: 69]
+SUBJECT: Project Assigned
+MESSAGE TEXT: Dear Revathi Adulla,
+
+You have been assigned to project 'IMP'.
+
+Please check your student dashboard for your project and team details.
+METADATA: {"event":"Project Assignment","project_title":"IMP","team_name":"alpha","mentor_id":66,"action_url":"http:\/\/localhost\/IMP\/student_dashboard.php","action_label":"View Assigned Project","recipient_name":"Revathi Adulla"}
+------------------------------------------------------------------------
+SMTP LOGS:
+PHPMailer sending failed. Check email_notifications.log.
+------------------------------------------------------------------------
+HTML body generated (5514 bytes).
+========================================================================
+

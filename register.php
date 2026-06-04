@@ -2,6 +2,7 @@
 ob_start();
 session_start();
 include "db.php";
+include_once __DIR__ . "/includes/auth.php";
 include_once __DIR__ . "/includes/mail_helper.php";
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
@@ -59,43 +60,64 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
     $hashed_password = password_hash($password, PASSWORD_DEFAULT);
 
-    $sql = "INSERT INTO users (full_name, email, password, role, phone)
-            VALUES ('" . mysqli_real_escape_string($conn, $full_name) . "', '" . mysqli_real_escape_string($conn, $email) . "', '$hashed_password', '" . mysqli_real_escape_string($conn, $role) . "', '" . mysqli_real_escape_string($conn, $phone) . "')";
+    $status = in_array($role, ['hr', 'mentor', 'coordinator']) ? 'pending_approval' : 'approved';
+
+    $sql = "INSERT INTO users (full_name, email, password, role, phone, status)
+            VALUES ('" . mysqli_real_escape_string($conn, $full_name) . "', '" . mysqli_real_escape_string($conn, $email) . "', '$hashed_password', '" . mysqli_real_escape_string($conn, $role) . "', '" . mysqli_real_escape_string($conn, $phone) . "', '$status')";
 
     if (mysqli_query($conn, $sql)) {
-        // Automatically log in the user after successful registration
+        // Automatically log in the user after successful registration only if approved
         $user_id = mysqli_insert_id($conn);
-        $_SESSION['user_id'] = $user_id;
-        $_SESSION['full_name'] = $full_name;
-        $_SESSION['email'] = $email;
-        $_SESSION['role'] = $role;
+        
+        if ($status === 'approved') {
+            $_SESSION['user_id'] = $user_id;
+            $_SESSION['full_name'] = $full_name;
+            $_SESSION['email'] = $email;
+            $_SESSION['role'] = $role;
+        }
 
-        // Send registration email notification
+        if ($role === 'company') {
+            ensure_company_profile($conn, $user_id, $full_name);
+        }
+
+        // Send registration notification and email to the registrant
         $reg_subject = "Welcome to IMP - Account Registration Successful";
         $reg_message = "Dear $full_name,\n\nWelcome to the Internship Management Platform (IMP)!\n\nYour account has been registered successfully as a " . ucfirst($role) . " with the email address: $email.\n\n" . 
                        ($role !== 'student' ? "Note: Your account is currently pending administrator approval. You will receive another notification once your account has been approved and activated." : "You can now log in to your student dashboard to complete your profile, browse available internships, and track applications.");
-        $email_sent = sendEmailNotification($email, $reg_subject, $reg_message, [
+        notifyUser($user_id, $role, $email, 'Account Registration Successful', $reg_message, [
             'event' => 'Account Registration',
             'registered_name' => $full_name,
-            'registered_email' => $email,
             'assigned_role' => ucfirst($role),
             'status' => ($role !== 'student' ? 'Pending Approval' : 'Active'),
             'action_url' => 'http://localhost/IMP/login.php',
             'action_label' => 'Log In to IMP'
-        ]);
+        ], 'registration');
+
+        // Notify admins of the new user registration
+        $admin_res = mysqli_query($conn, "SELECT id, email FROM users WHERE LOWER(role) = 'admin'");
+        if ($admin_res) {
+            $admin_title = "New User Registered";
+            $admin_message = "$full_name has registered a new account as " . ucfirst($role) . ".";
+            while ($admin_row = mysqli_fetch_assoc($admin_res)) {
+                $admin_id = intval($admin_row['id']);
+                $admin_email = trim($admin_row['email']);
+                notifyUser($admin_id, 'admin', $admin_email, $admin_title, $admin_message, [
+                    'event' => 'New Student Registered',
+                    'user_name' => $full_name,
+                    'user_email' => $email,
+                    'assigned_role' => ucfirst($role),
+                    'action_url' => 'http://localhost/IMP/admin_users.php',
+                    'action_label' => 'Review Users'
+                ], 'new_registration');
+            }
+        }
 
         if ($role === 'student') {
             $msg = "Account created! Please log in to continue.";
-            if (!$email_sent) {
-                $msg .= " (Note: Welcome email could not be sent due to SMTP configuration, see email_notifications.log)";
-            }
             header("Location: login.php?success=" . urlencode($msg));
             exit();
         } else {
             $msg = "Account created! Please wait for admin approval, then log in.";
-            if (!$email_sent) {
-                $msg .= " (Note: Welcome email could not be sent due to SMTP configuration, see email_notifications.log)";
-            }
             header("Location: login.php?success=" . urlencode($msg));
             exit();
         }

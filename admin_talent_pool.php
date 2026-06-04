@@ -294,59 +294,7 @@ $header_photo = $header_user['profile_photo'] ?? '';
 
 <div class="flex flex-1 overflow-hidden">
     <!-- Sidebar -->
-    <aside class="w-64 bg-white border-r border-gray-200 p-6 flex flex-col justify-between overflow-y-auto shrink-0">
-        <div class="space-y-6">
-            <div>
-                <h2 class="text-[10px] font-bold text-gray-400 tracking-widest mb-4 uppercase">Main Menu</h2>
-                <nav class="flex flex-col gap-1">
-                    <a href="admin_dashboard.php" class="flex items-center gap-3 text-gray-700 px-4 py-2.5 rounded-lg hover:bg-gray-50 text-sm font-medium transition-colors">
-                        <span class="material-symbols-outlined text-xl">dashboard</span>
-                        Dashboard
-                    </a>
-                    <a href="admin_users.php" class="flex items-center gap-3 text-gray-700 px-4 py-2.5 rounded-lg hover:bg-gray-50 text-sm font-medium transition-colors">
-                        <span class="material-symbols-outlined text-xl">group</span>
-                        Users
-                    </a>
-                    <a href="admin_internships.php" class="flex items-center gap-3 text-gray-700 px-4 py-2.5 rounded-lg hover:bg-gray-50 text-sm font-medium transition-colors">
-                        <span class="material-symbols-outlined text-xl">work</span>
-                        Internships
-                    </a>
-                    <a href="admin_applications.php" class="flex items-center gap-3 text-gray-700 px-4 py-2.5 rounded-lg hover:bg-gray-50 text-sm font-medium transition-colors">
-                        <span class="material-symbols-outlined text-xl">assignment</span>
-                        Applications
-                    </a>
-                    <a href="admin_projects.php" class="flex items-center gap-3 text-gray-700 px-4 py-2.5 rounded-lg hover:bg-gray-50 text-sm font-medium transition-colors">
-                        <span class="material-symbols-outlined text-xl">account_tree</span>
-                        Projects
-                    </a>
-                    <a href="admin_daily_logs.php" class="flex items-center gap-3 text-gray-700 px-4 py-2.5 rounded-lg hover:bg-gray-50 text-sm font-medium transition-colors">
-                        <span class="material-symbols-outlined text-xl">monitoring</span>
-                        Daily Logs
-                    </a>
-                    <a href="admin_reports.php" class="flex items-center gap-3 text-gray-700 px-4 py-2.5 rounded-lg hover:bg-gray-50 text-sm font-medium transition-colors">
-                        <span class="material-symbols-outlined text-xl">analytics</span>
-                        Reports
-                    </a>
-                    <a href="admin_notifications.php" class="flex items-center gap-3 text-gray-700 px-4 py-2.5 rounded-lg hover:bg-gray-50 text-sm font-medium transition-colors">
-                        <span class="material-symbols-outlined text-xl">campaign</span>
-                        Notifications
-                    </a>
-                    <a href="admin_talent_pool.php" class="flex items-center gap-3 bg-blue-50 text-blue-700 border-l-4 border-blue-600 px-4 py-2.5 rounded-r-lg text-sm font-bold">
-                        <span class="material-symbols-outlined text-xl">stars</span>
-                        Talent Pool
-                    </a>
-                </nav>
-            </div>
-        </div>
-        <div>
-            <nav class="flex flex-col gap-1 border-t border-gray-150 pt-4">
-                <a href="logout.php" class="flex items-center gap-3 text-red-600 px-4 py-2.5 rounded-lg hover:bg-red-50 text-sm font-medium transition-colors">
-                    <span class="material-symbols-outlined text-xl">logout</span>
-                    Logout
-                </a>
-            </nav>
-        </div>
-    </aside>
+    <?php include 'includes/admin_sidebar.php'; ?>
 
     <!-- Main Content -->
     <main class="flex-1 p-8 overflow-y-auto bg-gray-50">
@@ -373,13 +321,13 @@ $header_photo = $header_user['profile_photo'] ?? '';
 
             <!-- Flash Messages -->
             <?php if ($success_msg): ?>
-            <div class="bg-green-50 border border-green-200 text-green-800 px-5 py-3 rounded-xl flex items-center gap-2 text-sm font-medium">
+            <div class="bg-green-50 border border-green-200 text-green-800 px-5 py-3 rounded-xl flex items-center gap-2 text-sm font-medium alert-success">
                 <span class="material-symbols-outlined text-green-600">check_circle</span>
                 <?php echo htmlspecialchars($success_msg); ?>
             </div>
             <?php endif; ?>
             <?php if ($error_msg): ?>
-            <div class="bg-red-50 border border-red-200 text-red-800 px-5 py-3 rounded-xl flex items-center gap-2 text-sm font-medium">
+            <div class="bg-red-50 border border-red-200 text-red-800 px-5 py-3 rounded-xl flex items-center gap-2 text-sm font-medium alert-danger">
                 <span class="material-symbols-outlined text-red-600">error</span>
                 <?php echo htmlspecialchars($error_msg); ?>
             </div>
@@ -977,5 +925,6 @@ if (searchInput) {
     });
 }
 </script>
+<script src="js/alerts.js"></script>
 </body>
 </html>

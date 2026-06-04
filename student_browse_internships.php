@@ -33,13 +33,77 @@ $active_sql = "SELECT a.id as app_id FROM internship_applications a
 $active_result = mysqli_query($conn, $active_sql);
 $has_active = mysqli_num_rows($active_result) > 0;
 
-// Fetch all active internships from DB
-$sql_internships = "SELECT * FROM internships WHERE status = 'Active'";
-$result_internships = mysqli_query($conn, $sql_internships);
-$db_internships = [];
-while ($row = mysqli_fetch_assoc($result_internships)) {
-    $db_internships[] = $row;
+// Fetch active project types
+$pt_res = mysqli_query($conn, "SELECT * FROM project_types WHERE status = 'Active' ORDER BY type_name ASC");
+$project_types = [];
+while ($t = mysqli_fetch_assoc($pt_res)) {
+    $project_types[] = $t;
 }
+
+// Fetch active project subtypes (only where subtype and type are active)
+$ps_res = mysqli_query($conn, "SELECT s.*, t.type_name FROM project_subtypes s JOIN project_types t ON s.project_type_id = t.id WHERE s.status = 'Active' AND t.status = 'Active' ORDER BY s.subtype_name ASC");
+$project_subtypes = [];
+while ($s = mysqli_fetch_assoc($ps_res)) {
+    $project_subtypes[] = $s;
+}
+
+// Helper function to resolve or create default internship record for an active subtype
+function get_or_create_default_internship($conn, $project_type, $project_subtype, $sub_skills, $sub_mode, $sub_duration) {
+    // Check if an active default internship already exists for this type and subtype
+    $stmt = $conn->prepare("SELECT * FROM internships WHERE TRIM(LOWER(project_type)) = TRIM(LOWER(?)) AND TRIM(LOWER(project_subtype)) = TRIM(LOWER(?)) AND status IN ('Active', 'Approved') AND is_deleted = 0 LIMIT 1");
+    $stmt->bind_param("ss", $project_type, $project_subtype);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    if ($row = $res->fetch_assoc()) {
+        $stmt->close();
+        return $row;
+    }
+    $stmt->close();
+
+    // Not found, auto-create a default posting for the subtype
+    $duration = !empty($sub_duration) ? $sub_duration : '3 Months';
+    $mode = !empty($sub_mode) ? $sub_mode : 'Remote';
+    $skills = !empty($sub_skills) ? $sub_skills : '';
+
+    $title = $project_type . ' - ' . $project_subtype;
+    $status = 'Active';
+    $difficulty = 'Medium';
+    $openings = 2;
+    $coordinator_id = 3; // Default coordinator id
+    $approval_status = 'Approved'; // Automatically approved to make it active and available
+
+    $stmt_ins = $conn->prepare("INSERT INTO internships (title, duration, mode, skills, status, project_type, project_subtype, technology_stack, difficulty_level, openings, coordinator_id, approval_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt_ins->bind_param("sssssssssiis", $title, $duration, $mode, $skills, $status, $project_type, $project_subtype, $skills, $difficulty, $openings, $coordinator_id, $approval_status);
+    $stmt_ins->execute();
+    
+    $new_id = $stmt_ins->insert_id;
+    $stmt_ins->close();
+
+    // Fetch the newly created record
+    $stmt_sel = $conn->prepare("SELECT * FROM internships WHERE id = ? LIMIT 1");
+    $stmt_sel->bind_param("i", $new_id);
+    $stmt_sel->execute();
+    $res_sel = $stmt_sel->get_result();
+    $new_row = $res_sel->fetch_assoc();
+    $stmt_sel->close();
+
+    return $new_row;
+}
+
+// Collect unique skills from project subtypes for dynamic skills filtering
+$unique_skills = [];
+foreach ($project_subtypes as $sub) {
+    if (!empty($sub['skills'])) {
+        $skills_list = explode(',', $sub['skills']);
+        foreach ($skills_list as $skill) {
+            $trimmed = trim($skill);
+            if ($trimmed !== '') {
+                $unique_skills[strtolower($trimmed)] = $trimmed;
+            }
+        }
+    }
+}
+ksort($unique_skills);
 ?>
 <!DOCTYPE html>
 <html class="light" lang="en">
@@ -211,9 +275,9 @@ while ($row = mysqli_fetch_assoc($result_internships)) {
             <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Domain / Vertical</label>
             <select id="filter-domain" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-700 focus:outline-none focus:border-blue-600 transition-colors cursor-pointer">
               <option value="">All Domains</option>
-              <option value="development">Development</option>
-              <option value="design">Design</option>
-              <option value="marketing">Marketing</option>
+              <?php foreach ($project_types as $pt): ?>
+                <option value="<?php echo htmlspecialchars(strtolower(trim($pt['type_name']))); ?>"><?php echo htmlspecialchars($pt['type_name']); ?></option>
+              <?php endforeach; ?>
             </select>
           </div>
           <!-- Duration Filter -->
@@ -243,14 +307,9 @@ while ($row = mysqli_fetch_assoc($result_internships)) {
             <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Skills</label>
             <select id="filter-skill" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-700 focus:outline-none focus:border-blue-600 transition-colors cursor-pointer">
               <option value="">All Skills</option>
-              <option value="react">React.js</option>
-              <option value="node">Node.js</option>
-              <option value="python">Python</option>
-              <option value="sql">SQL</option>
-              <option value="figma">Figma</option>
-              <option value="flutter">Flutter</option>
-              <option value="seo">SEO</option>
-              <option value="photoshop">Photoshop</option>
+              <?php foreach ($unique_skills as $val => $label): ?>
+                <option value="<?php echo htmlspecialchars($val); ?>"><?php echo htmlspecialchars($label); ?></option>
+              <?php endforeach; ?>
             </select>
           </div>
           <!-- Clear Button -->
@@ -265,877 +324,140 @@ while ($row = mysqli_fetch_assoc($result_internships)) {
       <!-- Domain Quick-Filter Chips -->
       <div class="flex flex-wrap gap-2 items-center">
         <span class="text-xs font-bold text-slate-400 uppercase tracking-wider mr-1">Quick Filter:</span>
-        <button class="filter-chip px-4 py-1.5 rounded-full border border-slate-200 bg-white text-xs font-semibold text-slate-600 hover:border-blue-400 hover:text-blue-600" data-chip="all">All</button>
-        <button class="filter-chip px-4 py-1.5 rounded-full border border-blue-200 bg-blue-50 text-xs font-semibold text-blue-700 hover:border-blue-400" data-chip="development">
-          <span class="inline-flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">code</span> Development</span>
-        </button>
-        <button class="filter-chip px-4 py-1.5 rounded-full border border-purple-200 bg-purple-50 text-xs font-semibold text-purple-700 hover:border-purple-400" data-chip="design">
-          <span class="inline-flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">palette</span> Design</span>
-        </button>
-        <button class="filter-chip px-4 py-1.5 rounded-full border border-orange-200 bg-orange-50 text-xs font-semibold text-orange-700 hover:border-orange-400" data-chip="marketing">
-          <span class="inline-flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">campaign</span> Marketing</span>
-        </button>
+        <button class="filter-chip px-4 py-1.5 rounded-full border border-slate-200 bg-white text-xs font-semibold text-slate-600 hover:border-blue-400 hover:text-blue-600 active" data-chip="all">All</button>
+        <?php foreach ($project_types as $pt): 
+            $slug = strtolower(trim($pt['type_name']));
+            $icon = match($slug) {
+                'development' => 'code',
+                'design' => 'palette',
+                'marketing' => 'campaign',
+                default => 'category'
+            };
+            $bg_cls = match($slug) {
+                'development' => 'bg-blue-50 text-blue-700 border-blue-200 hover:border-blue-400',
+                'design' => 'bg-purple-50 text-purple-700 border-purple-200 hover:border-purple-400',
+                'marketing' => 'bg-orange-50 text-orange-700 border-orange-200 hover:border-orange-400',
+                default => 'bg-slate-50 text-slate-700 border-slate-200 hover:border-slate-400'
+            };
+        ?>
+            <button class="filter-chip px-4 py-1.5 rounded-full border <?php echo $bg_cls; ?> text-xs font-semibold" data-chip="<?php echo htmlspecialchars($slug); ?>">
+              <span class="inline-flex items-center gap-1"><span class="material-symbols-outlined text-[14px]"><?php echo $icon; ?></span> <?php echo htmlspecialchars($pt['type_name']); ?></span>
+            </button>
+        <?php endforeach; ?>
       </div>
 
       <!-- ===== VERTICAL SECTIONS ===== -->
       <div id="all-sections" class="space-y-12 pb-12">
-
-        <!-- ── DEVELOPMENT PROJECTS ── -->
-        <section class="vertical-section" data-vertical="development">
-          <div class="flex items-center gap-4 mb-6">
-            <div class="section-header-bar border-blue-500 pl-4 flex items-center gap-3">
-              <div class="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                <span class="material-symbols-outlined text-blue-600">code</span>
+        <?php 
+        $has_any_internship_overall = false;
+        foreach ($project_types as $pt): 
+            $pt_slug = strtolower(trim($pt['type_name']));
+            $pt_color_cls = match($pt_slug) {
+                'development' => 'text-blue-600 border-blue-500 bg-blue-50/50',
+                'design' => 'text-purple-600 border-purple-500 bg-purple-50/50',
+                'marketing' => 'text-orange-600 border-orange-500 bg-orange-50/50',
+                default => 'text-slate-600 border-slate-500 bg-slate-50/50'
+            };
+            
+            // Get subtypes for this type
+            $subtypes_for_type = array_filter($project_subtypes, function($sub) use ($pt) {
+                return intval($sub['project_type_id']) === intval($pt['id']);
+            });
+            
+            if (empty($subtypes_for_type)) continue;
+            
+            // Track if any active subtype gets rendered
+            $has_any_subtype_here = false;
+        ?>
+            <!-- ── <?php echo strtoupper($pt['type_name']); ?> PROJECTS ── -->
+            <section class="vertical-section" data-vertical="<?php echo htmlspecialchars($pt_slug); ?>">
+              <!-- Project Type Section Header -->
+              <div class="flex items-center gap-4 mb-6">
+                <div class="section-header-bar border-l-4 pl-4 flex items-center gap-3 <?php echo explode(' ', $pt_color_cls)[1]; ?>">
+                  <h2 class="text-xl font-extrabold text-slate-800 tracking-tight flex items-center gap-2">
+                    <span class="material-symbols-outlined text-[24px] <?php echo explode(' ', $pt_color_cls)[0]; ?>"><?php echo $pt_slug === 'development' ? 'code' : ($pt_slug === 'design' ? 'palette' : ($pt_slug === 'marketing' ? 'campaign' : 'category')); ?></span>
+                    <?php echo htmlspecialchars($pt['type_name']); ?> Projects
+                  </h2>
+                </div>
               </div>
-              <div>
-                <h2 class="text-xl font-black text-slate-800">Development Projects</h2>
-                <p class="text-xs text-slate-500 font-medium">Web, Mobile & Backend engineering roles</p>
-              </div>
-            </div>
-            <div class="ml-auto flex items-center gap-2">
-              <span class="px-3 py-1 bg-blue-50 text-blue-700 text-xs font-bold rounded-full border border-blue-100" id="dev-count">3 Openings</span>
-            </div>
-          </div>
 
-          <!-- Sub-section: Web Development -->
-          <div class="mb-8">
-            <div class="flex items-center gap-2 mb-4">
-              <span class="material-symbols-outlined text-blue-400 text-[18px]">web</span>
-              <h3 class="text-sm font-bold text-slate-600 uppercase tracking-wider">Web Development</h3>
-              <div class="flex-1 h-px bg-slate-100 ml-2"></div>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-
-              <!-- Static Card: Web Dev Intern -->
-              <div class="internship-card bg-white rounded-2xl border border-slate-100 p-6 flex flex-col justify-between shadow-sm"
-                   data-title="web development intern" data-duration="3 months" data-mode="remote"
-                   data-skills="react.js html css tailwind javascript" data-vertical="development">
-                <div>
-                  <div class="flex items-start justify-between mb-4">
-                    <div class="w-11 h-11 bg-blue-100 rounded-xl flex items-center justify-center">
-                      <span class="material-symbols-outlined text-blue-600">web</span>
+              <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <?php 
+                foreach ($subtypes_for_type as $sub): 
+                    $has_any_subtype_here = true;
+                    $has_any_internship_overall = true;
+                    
+                    // Get or create the matching active default internship record in database
+                    $row = get_or_create_default_internship($conn, $pt['type_name'], $sub['subtype_name'], $sub['skills'], $sub['mode'], $sub['duration']);
+                    
+                    $card_type = $pt['type_name'];
+                    $card_subtype = $sub['subtype_name'];
+                    $card_duration = !empty($sub['duration']) ? $sub['duration'] : ($row ? $row['duration'] : '3 Months');
+                    $card_mode = !empty($sub['mode']) ? $sub['mode'] : ($row ? $row['mode'] : 'Remote');
+                    $card_skills = !empty($sub['skills']) ? $sub['skills'] : ($row ? ($row['technology_stack'] ?: $row['skills']) : '');
+                ?>
+                    <div class="internship-card bg-white rounded-2xl border border-slate-200/85 p-6 flex flex-col justify-between shadow-sm"
+                         data-title="<?php echo htmlspecialchars(strtolower($row['title'])); ?>"
+                         data-type="<?php echo htmlspecialchars(strtolower($card_type)); ?>"
+                         data-subtype="<?php echo htmlspecialchars(strtolower($card_subtype)); ?>"
+                         data-duration="<?php echo htmlspecialchars(strtolower($card_duration)); ?>"
+                         data-mode="<?php echo htmlspecialchars(strtolower($card_mode)); ?>"
+                         data-skills="<?php echo htmlspecialchars(strtolower($card_skills)); ?>"
+                         data-vertical="<?php echo htmlspecialchars($pt_slug); ?>">
+                      <div>
+                        <div class="flex items-start justify-between mb-4">
+                          <span class="px-2.5 py-1 bg-green-50 text-green-700 text-[10px] font-bold rounded-full uppercase tracking-wider border border-green-100">● Active</span>
+                        </div>
+                        
+                        <!-- Main Heading: Project Subtype (Inside Card) -->
+                        <h3 class="font-extrabold text-slate-800 text-lg leading-snug mb-3"><?php echo htmlspecialchars($card_subtype); ?></h3>
+                        
+                        <!-- Duration · Mode -->
+                        <div class="flex items-center gap-2 text-xs text-slate-500 font-medium mb-4">
+                          <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">schedule</span> <?php echo htmlspecialchars($card_duration); ?></span>
+                          <span class="text-slate-300">•</span>
+                          <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">laptop_mac</span> <?php echo htmlspecialchars($card_mode); ?></span>
+                        </div>
+                        
+                        <!-- Skills Tags -->
+                        <div class="flex flex-wrap gap-1.5 mb-4">
+                          <?php 
+                            $skills_arr = explode(',', $card_skills);
+                            foreach ($skills_arr as $skill): if (trim($skill) !== ''):
+                          ?>
+                          <span class="px-2.5 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg"><?php echo htmlspecialchars(trim($skill)); ?></span>
+                          <?php endif; endforeach; ?>
+                        </div>
+                      </div>
+                      
+                      <div class="flex items-center justify-between pt-4 border-t border-slate-100">
+                        <span class="text-[11px] font-bold text-slate-400">Recently Posted</span>
+                        <a href="internship_application_form.php?internship_id=<?php echo (int)$row['id']; ?>" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-colors shadow-sm flex items-center gap-1">
+                          <span class="material-symbols-outlined text-[14px]">bolt</span> Easy Apply
+                        </a>
+                      </div>
                     </div>
-                    <span class="px-2.5 py-1 bg-green-50 text-green-700 text-[10px] font-bold rounded-full uppercase tracking-wider border border-green-100">● Active</span>
-                  </div>
-                  <h3 class="font-extrabold text-slate-800 text-base leading-snug mb-1">Web Development Intern</h3>
-                  <div class="flex items-center gap-2 text-xs text-slate-500 font-medium mb-4">
-                    <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">schedule</span> 3 Months</span>
-                    <span class="text-slate-300">•</span>
-                    <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">laptop_mac</span> Remote</span>
-                  </div>
-                  <div class="flex flex-wrap gap-1.5 mb-5">
-                    <span class="px-2 py-0.5 bg-blue-50 text-blue-700 text-[11px] font-semibold rounded-lg">React.js</span>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">HTML/CSS</span>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">Tailwind</span>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">JavaScript</span>
-                  </div>
-                </div>
-                <div class="flex items-center justify-between pt-4 border-t border-slate-50">
-                  <span class="text-[11px] font-bold text-slate-400">Recently Posted</span>
-                  <a href="internship_application_form.php?internship_id=0&name=Web+Development+Intern" class="px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-1">
-                    <span class="material-symbols-outlined text-[14px]">bolt</span> Easy Apply
-                  </a>
-                </div>
+                <?php endforeach; ?>
               </div>
-
-              <!-- Static Card: Frontend Engineer Intern -->
-              <div class="internship-card bg-white rounded-2xl border border-slate-100 p-6 flex flex-col justify-between shadow-sm"
-                   data-title="frontend engineer intern" data-duration="2 months" data-mode="hybrid"
-                   data-skills="vue.js javascript css figma" data-vertical="development">
-                <div>
-                  <div class="flex items-start justify-between mb-4">
-                    <div class="w-11 h-11 bg-indigo-100 rounded-xl flex items-center justify-center">
-                      <span class="material-symbols-outlined text-indigo-600">layers</span>
-                    </div>
-                    <span class="px-2.5 py-1 bg-green-50 text-green-700 text-[10px] font-bold rounded-full uppercase tracking-wider border border-green-100">● Active</span>
-                  </div>
-                  <h3 class="font-extrabold text-slate-800 text-base leading-snug mb-1">Frontend Engineer Intern</h3>
-                  <div class="flex items-center gap-2 text-xs text-slate-500 font-medium mb-4">
-                    <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">schedule</span> 2 Months</span>
-                    <span class="text-slate-300">•</span>
-                    <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">apartment</span> Hybrid</span>
-                  </div>
-                  <div class="flex flex-wrap gap-1.5 mb-5">
-                    <span class="px-2 py-0.5 bg-indigo-50 text-indigo-700 text-[11px] font-semibold rounded-lg">Vue.js</span>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">JavaScript</span>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">CSS</span>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">Figma</span>
-                  </div>
-                </div>
-                <div class="flex items-center justify-between pt-4 border-t border-slate-50">
-                  <span class="text-[11px] font-bold text-slate-400">Recently Posted</span>
-                  <a href="internship_application_form.php?internship_id=0&name=Frontend+Engineer+Intern" class="px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-1">
-                    <span class="material-symbols-outlined text-[14px]">bolt</span> Easy Apply
-                  </a>
-                </div>
-              </div>
-
-              <!-- DB-driven cards for Web Development -->
-              <?php foreach ($db_internships as $row):
-                $title_lower = strtolower($row['title']);
-                if (strpos($title_lower, 'web') !== false || strpos($title_lower, 'frontend') !== false || strpos($title_lower, 'front-end') !== false):
-                  $skills = explode(',', $row['skills']);
-              ?>
-              <div class="internship-card bg-white rounded-2xl border border-slate-100 p-6 flex flex-col justify-between shadow-sm"
-                   data-title="<?php echo htmlspecialchars(strtolower($row['title'])); ?>"
-                   data-duration="<?php echo htmlspecialchars(strtolower($row['duration'])); ?>"
-                   data-mode="<?php echo htmlspecialchars(strtolower($row['mode'])); ?>"
-                   data-skills="<?php echo htmlspecialchars(strtolower($row['skills'])); ?>"
-                   data-vertical="development">
-                <div>
-                  <div class="flex items-start justify-between mb-4">
-                    <div class="w-11 h-11 bg-blue-100 rounded-xl flex items-center justify-center font-bold text-blue-600 text-lg"><?php echo strtoupper(substr($row['title'],0,1)); ?></div>
-                    <span class="px-2.5 py-1 bg-green-50 text-green-700 text-[10px] font-bold rounded-full uppercase tracking-wider border border-green-100">● Active</span>
-                  </div>
-                  <h3 class="font-extrabold text-slate-800 text-base leading-snug mb-1"><?php echo htmlspecialchars($row['title']); ?></h3>
-                  <div class="flex items-center gap-2 text-xs text-slate-500 font-medium mb-4">
-                    <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">schedule</span> <?php echo htmlspecialchars($row['duration']); ?></span>
-                    <span class="text-slate-300">•</span>
-                    <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">laptop_mac</span> <?php echo htmlspecialchars($row['mode']); ?></span>
-                  </div>
-                  <div class="flex flex-wrap gap-1.5 mb-5">
-                    <?php foreach ($skills as $skill): ?>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg"><?php echo htmlspecialchars(trim($skill)); ?></span>
-                    <?php endforeach; ?>
-                  </div>
-                </div>
-                <div class="flex items-center justify-between pt-4 border-t border-slate-50">
-                  <span class="text-[11px] font-bold text-slate-400">Recently Posted</span>
-                  <a href="internship_application_form.php?internship_id=<?php echo $row['id']; ?>&name=<?php echo urlencode($row['title']); ?>" class="px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-1">
-                    <span class="material-symbols-outlined text-[14px]">bolt</span> Easy Apply
-                  </a>
-                </div>
-              </div>
-              <?php endif; endforeach; ?>
+            </section>
+        <?php endforeach; ?>
+        
+        <?php if (!$has_any_internship_overall): ?>
+            <div class="col-span-full py-16 text-center text-slate-400 border border-dashed border-slate-200 rounded-2xl bg-slate-50/50">
+                <p class="text-sm font-semibold">No active internship openings available currently.</p>
             </div>
-          </div>
-
-          <!-- Sub-section: Mobile Apps -->
-          <div class="mb-8">
-            <div class="flex items-center gap-2 mb-4">
-              <span class="material-symbols-outlined text-blue-400 text-[18px]">smartphone</span>
-              <h3 class="text-sm font-bold text-slate-600 uppercase tracking-wider">Mobile Apps</h3>
-              <div class="flex-1 h-px bg-slate-100 ml-2"></div>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-
-              <div class="internship-card bg-white rounded-2xl border border-slate-100 p-6 flex flex-col justify-between shadow-sm"
-                   data-title="mobile app developer intern" data-duration="3 months" data-mode="remote"
-                   data-skills="flutter dart firebase android" data-vertical="development">
-                <div>
-                  <div class="flex items-start justify-between mb-4">
-                    <div class="w-11 h-11 bg-cyan-100 rounded-xl flex items-center justify-center">
-                      <span class="material-symbols-outlined text-cyan-600">smartphone</span>
-                    </div>
-                    <span class="px-2.5 py-1 bg-green-50 text-green-700 text-[10px] font-bold rounded-full uppercase tracking-wider border border-green-100">● Active</span>
-                  </div>
-                  <h3 class="font-extrabold text-slate-800 text-base leading-snug mb-1">Mobile App Developer Intern</h3>
-                  <div class="flex items-center gap-2 text-xs text-slate-500 font-medium mb-4">
-                    <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">schedule</span> 3 Months</span>
-                    <span class="text-slate-300">•</span>
-                    <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">laptop_mac</span> Remote</span>
-                  </div>
-                  <div class="flex flex-wrap gap-1.5 mb-5">
-                    <span class="px-2 py-0.5 bg-cyan-50 text-cyan-700 text-[11px] font-semibold rounded-lg">Flutter</span>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">Dart</span>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">Firebase</span>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">Android</span>
-                  </div>
-                </div>
-                <div class="flex items-center justify-between pt-4 border-t border-slate-50">
-                  <span class="text-[11px] font-bold text-slate-400">Recently Posted</span>
-                  <a href="internship_application_form.php?internship_id=0&name=Mobile+App+Developer+Intern" class="px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-1">
-                    <span class="material-symbols-outlined text-[14px]">bolt</span> Easy Apply
-                  </a>
-                </div>
-              </div>
-
-              <div class="internship-card bg-white rounded-2xl border border-slate-100 p-6 flex flex-col justify-between shadow-sm"
-                   data-title="react native intern" data-duration="2 months" data-mode="hybrid"
-                   data-skills="react native javascript expo ios android" data-vertical="development">
-                <div>
-                  <div class="flex items-start justify-between mb-4">
-                    <div class="w-11 h-11 bg-sky-100 rounded-xl flex items-center justify-center">
-                      <span class="material-symbols-outlined text-sky-600">phone_iphone</span>
-                    </div>
-                    <span class="px-2.5 py-1 bg-green-50 text-green-700 text-[10px] font-bold rounded-full uppercase tracking-wider border border-green-100">● Active</span>
-                  </div>
-                  <h3 class="font-extrabold text-slate-800 text-base leading-snug mb-1">React Native Intern</h3>
-                  <div class="flex items-center gap-2 text-xs text-slate-500 font-medium mb-4">
-                    <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">schedule</span> 2 Months</span>
-                    <span class="text-slate-300">•</span>
-                    <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">apartment</span> Hybrid</span>
-                  </div>
-                  <div class="flex flex-wrap gap-1.5 mb-5">
-                    <span class="px-2 py-0.5 bg-sky-50 text-sky-700 text-[11px] font-semibold rounded-lg">React Native</span>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">JavaScript</span>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">Expo</span>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">iOS/Android</span>
-                  </div>
-                </div>
-                <div class="flex items-center justify-between pt-4 border-t border-slate-50">
-                  <span class="text-[11px] font-bold text-slate-400">Recently Posted</span>
-                  <a href="internship_application_form.php?internship_id=0&name=React+Native+Intern" class="px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-1">
-                    <span class="material-symbols-outlined text-[14px]">bolt</span> Easy Apply
-                  </a>
-                </div>
-              </div>
-
-              <!-- DB mobile cards -->
-              <?php foreach ($db_internships as $row):
-                $title_lower = strtolower($row['title']);
-                if (strpos($title_lower, 'mobile') !== false || strpos($title_lower, 'flutter') !== false || strpos($title_lower, 'android') !== false || strpos($title_lower, 'ios') !== false):
-                  $skills = explode(',', $row['skills']);
-              ?>
-              <div class="internship-card bg-white rounded-2xl border border-slate-100 p-6 flex flex-col justify-between shadow-sm"
-                   data-title="<?php echo htmlspecialchars(strtolower($row['title'])); ?>"
-                   data-duration="<?php echo htmlspecialchars(strtolower($row['duration'])); ?>"
-                   data-mode="<?php echo htmlspecialchars(strtolower($row['mode'])); ?>"
-                   data-skills="<?php echo htmlspecialchars(strtolower($row['skills'])); ?>"
-                   data-vertical="development">
-                <div>
-                  <div class="flex items-start justify-between mb-4">
-                    <div class="w-11 h-11 bg-cyan-100 rounded-xl flex items-center justify-center font-bold text-cyan-600 text-lg"><?php echo strtoupper(substr($row['title'],0,1)); ?></div>
-                    <span class="px-2.5 py-1 bg-green-50 text-green-700 text-[10px] font-bold rounded-full uppercase tracking-wider border border-green-100">● Active</span>
-                  </div>
-                  <h3 class="font-extrabold text-slate-800 text-base leading-snug mb-1"><?php echo htmlspecialchars($row['title']); ?></h3>
-                  <div class="flex items-center gap-2 text-xs text-slate-500 font-medium mb-4">
-                    <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">schedule</span> <?php echo htmlspecialchars($row['duration']); ?></span>
-                    <span class="text-slate-300">•</span>
-                    <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">laptop_mac</span> <?php echo htmlspecialchars($row['mode']); ?></span>
-                  </div>
-                  <div class="flex flex-wrap gap-1.5 mb-5">
-                    <?php foreach ($skills as $skill): ?>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg"><?php echo htmlspecialchars(trim($skill)); ?></span>
-                    <?php endforeach; ?>
-                  </div>
-                </div>
-                <div class="flex items-center justify-between pt-4 border-t border-slate-50">
-                  <span class="text-[11px] font-bold text-slate-400">Recently Posted</span>
-                  <a href="internship_application_form.php?internship_id=<?php echo $row['id']; ?>&name=<?php echo urlencode($row['title']); ?>" class="px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-1">
-                    <span class="material-symbols-outlined text-[14px]">bolt</span> Easy Apply
-                  </a>
-                </div>
-              </div>
-              <?php endif; endforeach; ?>
-            </div>
-          </div>
-
-          <!-- Sub-section: Backend Systems -->
-          <div>
-            <div class="flex items-center gap-2 mb-4">
-              <span class="material-symbols-outlined text-blue-400 text-[18px]">dns</span>
-              <h3 class="text-sm font-bold text-slate-600 uppercase tracking-wider">Backend Systems</h3>
-              <div class="flex-1 h-px bg-slate-100 ml-2"></div>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-
-              <div class="internship-card bg-white rounded-2xl border border-slate-100 p-6 flex flex-col justify-between shadow-sm"
-                   data-title="backend developer intern" data-duration="3 months" data-mode="remote"
-                   data-skills="node.js python sql mongodb rest api" data-vertical="development">
-                <div>
-                  <div class="flex items-start justify-between mb-4">
-                    <div class="w-11 h-11 bg-emerald-100 rounded-xl flex items-center justify-center">
-                      <span class="material-symbols-outlined text-emerald-600">dns</span>
-                    </div>
-                    <span class="px-2.5 py-1 bg-green-50 text-green-700 text-[10px] font-bold rounded-full uppercase tracking-wider border border-green-100">● Active</span>
-                  </div>
-                  <h3 class="font-extrabold text-slate-800 text-base leading-snug mb-1">Backend Developer Intern</h3>
-                  <div class="flex items-center gap-2 text-xs text-slate-500 font-medium mb-4">
-                    <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">schedule</span> 3 Months</span>
-                    <span class="text-slate-300">•</span>
-                    <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">laptop_mac</span> Remote</span>
-                  </div>
-                  <div class="flex flex-wrap gap-1.5 mb-5">
-                    <span class="px-2 py-0.5 bg-emerald-50 text-emerald-700 text-[11px] font-semibold rounded-lg">Node.js</span>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">Python</span>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">SQL</span>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">REST API</span>
-                  </div>
-                </div>
-                <div class="flex items-center justify-between pt-4 border-t border-slate-50">
-                  <span class="text-[11px] font-bold text-slate-400">Recently Posted</span>
-                  <a href="internship_application_form.php?internship_id=0&name=Backend+Developer+Intern" class="px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-1">
-                    <span class="material-symbols-outlined text-[14px]">bolt</span> Easy Apply
-                  </a>
-                </div>
-              </div>
-
-              <div class="internship-card bg-white rounded-2xl border border-slate-100 p-6 flex flex-col justify-between shadow-sm"
-                   data-title="database & api intern" data-duration="2 months" data-mode="online"
-                   data-skills="python sql postgresql django rest api" data-vertical="development">
-                <div>
-                  <div class="flex items-start justify-between mb-4">
-                    <div class="w-11 h-11 bg-teal-100 rounded-xl flex items-center justify-center">
-                      <span class="material-symbols-outlined text-teal-600">storage</span>
-                    </div>
-                    <span class="px-2.5 py-1 bg-green-50 text-green-700 text-[10px] font-bold rounded-full uppercase tracking-wider border border-green-100">● Active</span>
-                  </div>
-                  <h3 class="font-extrabold text-slate-800 text-base leading-snug mb-1">Database & API Intern</h3>
-                  <div class="flex items-center gap-2 text-xs text-slate-500 font-medium mb-4">
-                    <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">schedule</span> 2 Months</span>
-                    <span class="text-slate-300">•</span>
-                    <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">public</span> Online</span>
-                  </div>
-                  <div class="flex flex-wrap gap-1.5 mb-5">
-                    <span class="px-2 py-0.5 bg-teal-50 text-teal-700 text-[11px] font-semibold rounded-lg">Python</span>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">SQL</span>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">PostgreSQL</span>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">Django</span>
-                  </div>
-                </div>
-                <div class="flex items-center justify-between pt-4 border-t border-slate-50">
-                  <span class="text-[11px] font-bold text-slate-400">Recently Posted</span>
-                  <a href="internship_application_form.php?internship_id=0&name=Database+%26+API+Intern" class="px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-1">
-                    <span class="material-symbols-outlined text-[14px]">bolt</span> Easy Apply
-                  </a>
-                </div>
-              </div>
-
-              <!-- DB backend cards -->
-              <?php foreach ($db_internships as $row):
-                $title_lower = strtolower($row['title']);
-                if (strpos($title_lower, 'backend') !== false || strpos($title_lower, 'back-end') !== false || strpos($title_lower, 'api') !== false || strpos($title_lower, 'database') !== false):
-                  $skills = explode(',', $row['skills']);
-              ?>
-              <div class="internship-card bg-white rounded-2xl border border-slate-100 p-6 flex flex-col justify-between shadow-sm"
-                   data-title="<?php echo htmlspecialchars(strtolower($row['title'])); ?>"
-                   data-duration="<?php echo htmlspecialchars(strtolower($row['duration'])); ?>"
-                   data-mode="<?php echo htmlspecialchars(strtolower($row['mode'])); ?>"
-                   data-skills="<?php echo htmlspecialchars(strtolower($row['skills'])); ?>"
-                   data-vertical="development">
-                <div>
-                  <div class="flex items-start justify-between mb-4">
-                    <div class="w-11 h-11 bg-emerald-100 rounded-xl flex items-center justify-center font-bold text-emerald-600 text-lg"><?php echo strtoupper(substr($row['title'],0,1)); ?></div>
-                    <span class="px-2.5 py-1 bg-green-50 text-green-700 text-[10px] font-bold rounded-full uppercase tracking-wider border border-green-100">● Active</span>
-                  </div>
-                  <h3 class="font-extrabold text-slate-800 text-base leading-snug mb-1"><?php echo htmlspecialchars($row['title']); ?></h3>
-                  <div class="flex items-center gap-2 text-xs text-slate-500 font-medium mb-4">
-                    <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">schedule</span> <?php echo htmlspecialchars($row['duration']); ?></span>
-                    <span class="text-slate-300">•</span>
-                    <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">laptop_mac</span> <?php echo htmlspecialchars($row['mode']); ?></span>
-                  </div>
-                  <div class="flex flex-wrap gap-1.5 mb-5">
-                    <?php foreach ($skills as $skill): ?>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg"><?php echo htmlspecialchars(trim($skill)); ?></span>
-                    <?php endforeach; ?>
-                  </div>
-                </div>
-                <div class="flex items-center justify-between pt-4 border-t border-slate-50">
-                  <span class="text-[11px] font-bold text-slate-400">Recently Posted</span>
-                  <a href="internship_application_form.php?internship_id=<?php echo $row['id']; ?>&name=<?php echo urlencode($row['title']); ?>" class="px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-1">
-                    <span class="material-symbols-outlined text-[14px]">bolt</span> Easy Apply
-                  </a>
-                </div>
-              </div>
-              <?php endif; endforeach; ?>
-            </div>
-          </div>
-        </section>
-        <!-- END Development Section -->
-
-        <!-- ── DESIGN PROJECTS ── -->
-        <section class="vertical-section" data-vertical="design">
-          <div class="flex items-center gap-4 mb-6">
-            <div class="section-header-bar border-purple-500 pl-4 flex items-center gap-3">
-              <div class="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
-                <span class="material-symbols-outlined text-purple-600">palette</span>
-              </div>
-              <div>
-                <h2 class="text-xl font-black text-slate-800">Design Projects</h2>
-                <p class="text-xs text-slate-500 font-medium">UI/UX, Graphic & Product design roles</p>
-              </div>
-            </div>
-            <div class="ml-auto">
-              <span class="px-3 py-1 bg-purple-50 text-purple-700 text-xs font-bold rounded-full border border-purple-100">3 Openings</span>
-            </div>
-          </div>
-
-          <!-- Sub-section: UI/UX Design -->
-          <div class="mb-8">
-            <div class="flex items-center gap-2 mb-4">
-              <span class="material-symbols-outlined text-purple-400 text-[18px]">design_services</span>
-              <h3 class="text-sm font-bold text-slate-600 uppercase tracking-wider">UI/UX Design</h3>
-              <div class="flex-1 h-px bg-slate-100 ml-2"></div>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-
-              <div class="internship-card bg-white rounded-2xl border border-slate-100 p-6 flex flex-col justify-between shadow-sm"
-                   data-title="ui/ux design intern" data-duration="3 months" data-mode="remote"
-                   data-skills="figma adobe xd prototyping user research wireframing" data-vertical="design">
-                <div>
-                  <div class="flex items-start justify-between mb-4">
-                    <div class="w-11 h-11 bg-purple-100 rounded-xl flex items-center justify-center">
-                      <span class="material-symbols-outlined text-purple-600">design_services</span>
-                    </div>
-                    <span class="px-2.5 py-1 bg-green-50 text-green-700 text-[10px] font-bold rounded-full uppercase tracking-wider border border-green-100">● Active</span>
-                  </div>
-                  <h3 class="font-extrabold text-slate-800 text-base leading-snug mb-1">UI/UX Design Intern</h3>
-                  <div class="flex items-center gap-2 text-xs text-slate-500 font-medium mb-4">
-                    <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">schedule</span> 3 Months</span>
-                    <span class="text-slate-300">•</span>
-                    <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">laptop_mac</span> Remote</span>
-                  </div>
-                  <div class="flex flex-wrap gap-1.5 mb-5">
-                    <span class="px-2 py-0.5 bg-purple-50 text-purple-700 text-[11px] font-semibold rounded-lg">Figma</span>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">Adobe XD</span>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">Prototyping</span>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">User Research</span>
-                  </div>
-                </div>
-                <div class="flex items-center justify-between pt-4 border-t border-slate-50">
-                  <span class="text-[11px] font-bold text-slate-400">Recently Posted</span>
-                  <a href="internship_application_form.php?internship_id=0&name=UI%2FUX+Design+Intern" class="px-4 py-2 bg-purple-600 text-white text-xs font-bold rounded-xl hover:bg-purple-700 transition-colors shadow-sm flex items-center gap-1">
-                    <span class="material-symbols-outlined text-[14px]">bolt</span> Easy Apply
-                  </a>
-                </div>
-              </div>
-
-              <div class="internship-card bg-white rounded-2xl border border-slate-100 p-6 flex flex-col justify-between shadow-sm"
-                   data-title="product designer intern" data-duration="2 months" data-mode="hybrid"
-                   data-skills="figma sketch user testing design systems accessibility" data-vertical="design">
-                <div>
-                  <div class="flex items-start justify-between mb-4">
-                    <div class="w-11 h-11 bg-violet-100 rounded-xl flex items-center justify-center">
-                      <span class="material-symbols-outlined text-violet-600">widgets</span>
-                    </div>
-                    <span class="px-2.5 py-1 bg-green-50 text-green-700 text-[10px] font-bold rounded-full uppercase tracking-wider border border-green-100">● Active</span>
-                  </div>
-                  <h3 class="font-extrabold text-slate-800 text-base leading-snug mb-1">Product Designer Intern</h3>
-                  <div class="flex items-center gap-2 text-xs text-slate-500 font-medium mb-4">
-                    <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">schedule</span> 2 Months</span>
-                    <span class="text-slate-300">•</span>
-                    <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">apartment</span> Hybrid</span>
-                  </div>
-                  <div class="flex flex-wrap gap-1.5 mb-5">
-                    <span class="px-2 py-0.5 bg-violet-50 text-violet-700 text-[11px] font-semibold rounded-lg">Figma</span>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">Sketch</span>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">Design Systems</span>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">User Testing</span>
-                  </div>
-                </div>
-                <div class="flex items-center justify-between pt-4 border-t border-slate-50">
-                  <span class="text-[11px] font-bold text-slate-400">Recently Posted</span>
-                  <a href="internship_application_form.php?internship_id=0&name=Product+Designer+Intern" class="px-4 py-2 bg-purple-600 text-white text-xs font-bold rounded-xl hover:bg-purple-700 transition-colors shadow-sm flex items-center gap-1">
-                    <span class="material-symbols-outlined text-[14px]">bolt</span> Easy Apply
-                  </a>
-                </div>
-              </div>
-
-              <!-- DB UI/UX cards -->
-              <?php foreach ($db_internships as $row):
-                $title_lower = strtolower($row['title']);
-                if (strpos($title_lower, 'ui') !== false || strpos($title_lower, 'ux') !== false || strpos($title_lower, 'design') !== false):
-                  $skills = explode(',', $row['skills']);
-              ?>
-              <div class="internship-card bg-white rounded-2xl border border-slate-100 p-6 flex flex-col justify-between shadow-sm"
-                   data-title="<?php echo htmlspecialchars(strtolower($row['title'])); ?>"
-                   data-duration="<?php echo htmlspecialchars(strtolower($row['duration'])); ?>"
-                   data-mode="<?php echo htmlspecialchars(strtolower($row['mode'])); ?>"
-                   data-skills="<?php echo htmlspecialchars(strtolower($row['skills'])); ?>"
-                   data-vertical="design">
-                <div>
-                  <div class="flex items-start justify-between mb-4">
-                    <div class="w-11 h-11 bg-purple-100 rounded-xl flex items-center justify-center font-bold text-purple-600 text-lg"><?php echo strtoupper(substr($row['title'],0,1)); ?></div>
-                    <span class="px-2.5 py-1 bg-green-50 text-green-700 text-[10px] font-bold rounded-full uppercase tracking-wider border border-green-100">● Active</span>
-                  </div>
-                  <h3 class="font-extrabold text-slate-800 text-base leading-snug mb-1"><?php echo htmlspecialchars($row['title']); ?></h3>
-                  <div class="flex items-center gap-2 text-xs text-slate-500 font-medium mb-4">
-                    <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">schedule</span> <?php echo htmlspecialchars($row['duration']); ?></span>
-                    <span class="text-slate-300">•</span>
-                    <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">laptop_mac</span> <?php echo htmlspecialchars($row['mode']); ?></span>
-                  </div>
-                  <div class="flex flex-wrap gap-1.5 mb-5">
-                    <?php foreach ($skills as $skill): ?>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg"><?php echo htmlspecialchars(trim($skill)); ?></span>
-                    <?php endforeach; ?>
-                  </div>
-                </div>
-                <div class="flex items-center justify-between pt-4 border-t border-slate-50">
-                  <span class="text-[11px] font-bold text-slate-400">Recently Posted</span>
-                  <a href="internship_application_form.php?internship_id=<?php echo $row['id']; ?>&name=<?php echo urlencode($row['title']); ?>" class="px-4 py-2 bg-purple-600 text-white text-xs font-bold rounded-xl hover:bg-purple-700 transition-colors shadow-sm flex items-center gap-1">
-                    <span class="material-symbols-outlined text-[14px]">bolt</span> Easy Apply
-                  </a>
-                </div>
-              </div>
-              <?php endif; endforeach; ?>
-            </div>
-          </div>
-
-          <!-- Sub-section: Graphic Design -->
-          <div class="mb-8">
-            <div class="flex items-center gap-2 mb-4">
-              <span class="material-symbols-outlined text-purple-400 text-[18px]">brush</span>
-              <h3 class="text-sm font-bold text-slate-600 uppercase tracking-wider">Graphic Design</h3>
-              <div class="flex-1 h-px bg-slate-100 ml-2"></div>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-
-              <div class="internship-card bg-white rounded-2xl border border-slate-100 p-6 flex flex-col justify-between shadow-sm"
-                   data-title="graphic design intern" data-duration="2 months" data-mode="remote"
-                   data-skills="photoshop illustrator indesign canva branding" data-vertical="design">
-                <div>
-                  <div class="flex items-start justify-between mb-4">
-                    <div class="w-11 h-11 bg-fuchsia-100 rounded-xl flex items-center justify-center">
-                      <span class="material-symbols-outlined text-fuchsia-600">brush</span>
-                    </div>
-                    <span class="px-2.5 py-1 bg-green-50 text-green-700 text-[10px] font-bold rounded-full uppercase tracking-wider border border-green-100">● Active</span>
-                  </div>
-                  <h3 class="font-extrabold text-slate-800 text-base leading-snug mb-1">Graphic Design Intern</h3>
-                  <div class="flex items-center gap-2 text-xs text-slate-500 font-medium mb-4">
-                    <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">schedule</span> 2 Months</span>
-                    <span class="text-slate-300">•</span>
-                    <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">laptop_mac</span> Remote</span>
-                  </div>
-                  <div class="flex flex-wrap gap-1.5 mb-5">
-                    <span class="px-2 py-0.5 bg-fuchsia-50 text-fuchsia-700 text-[11px] font-semibold rounded-lg">Photoshop</span>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">Illustrator</span>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">InDesign</span>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">Canva</span>
-                  </div>
-                </div>
-                <div class="flex items-center justify-between pt-4 border-t border-slate-50">
-                  <span class="text-[11px] font-bold text-slate-400">Recently Posted</span>
-                  <a href="internship_application_form.php?internship_id=0&name=Graphic+Design+Intern" class="px-4 py-2 bg-purple-600 text-white text-xs font-bold rounded-xl hover:bg-purple-700 transition-colors shadow-sm flex items-center gap-1">
-                    <span class="material-symbols-outlined text-[14px]">bolt</span> Easy Apply
-                  </a>
-                </div>
-              </div>
-
-              <div class="internship-card bg-white rounded-2xl border border-slate-100 p-6 flex flex-col justify-between shadow-sm"
-                   data-title="visual branding intern" data-duration="3 months" data-mode="hybrid"
-                   data-skills="illustrator canva brand identity typography motion graphics" data-vertical="design">
-                <div>
-                  <div class="flex items-start justify-between mb-4">
-                    <div class="w-11 h-11 bg-pink-100 rounded-xl flex items-center justify-center">
-                      <span class="material-symbols-outlined text-pink-600">auto_awesome</span>
-                    </div>
-                    <span class="px-2.5 py-1 bg-green-50 text-green-700 text-[10px] font-bold rounded-full uppercase tracking-wider border border-green-100">● Active</span>
-                  </div>
-                  <h3 class="font-extrabold text-slate-800 text-base leading-snug mb-1">Visual Branding Intern</h3>
-                  <div class="flex items-center gap-2 text-xs text-slate-500 font-medium mb-4">
-                    <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">schedule</span> 3 Months</span>
-                    <span class="text-slate-300">•</span>
-                    <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">apartment</span> Hybrid</span>
-                  </div>
-                  <div class="flex flex-wrap gap-1.5 mb-5">
-                    <span class="px-2 py-0.5 bg-pink-50 text-pink-700 text-[11px] font-semibold rounded-lg">Illustrator</span>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">Canva</span>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">Typography</span>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">Motion Graphics</span>
-                  </div>
-                </div>
-                <div class="flex items-center justify-between pt-4 border-t border-slate-50">
-                  <span class="text-[11px] font-bold text-slate-400">Recently Posted</span>
-                  <a href="internship_application_form.php?internship_id=0&name=Visual+Branding+Intern" class="px-4 py-2 bg-purple-600 text-white text-xs font-bold rounded-xl hover:bg-purple-700 transition-colors shadow-sm flex items-center gap-1">
-                    <span class="material-symbols-outlined text-[14px]">bolt</span> Easy Apply
-                  </a>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Sub-section: Product Design -->
-          <div>
-            <div class="flex items-center gap-2 mb-4">
-              <span class="material-symbols-outlined text-purple-400 text-[18px]">category</span>
-              <h3 class="text-sm font-bold text-slate-600 uppercase tracking-wider">Product Design</h3>
-              <div class="flex-1 h-px bg-slate-100 ml-2"></div>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-
-              <div class="internship-card bg-white rounded-2xl border border-slate-100 p-6 flex flex-col justify-between shadow-sm"
-                   data-title="product design intern" data-duration="3 months" data-mode="remote"
-                   data-skills="figma user research design thinking prototyping usability testing" data-vertical="design">
-                <div>
-                  <div class="flex items-start justify-between mb-4">
-                    <div class="w-11 h-11 bg-indigo-100 rounded-xl flex items-center justify-center">
-                      <span class="material-symbols-outlined text-indigo-600">category</span>
-                    </div>
-                    <span class="px-2.5 py-1 bg-green-50 text-green-700 text-[10px] font-bold rounded-full uppercase tracking-wider border border-green-100">● Active</span>
-                  </div>
-                  <h3 class="font-extrabold text-slate-800 text-base leading-snug mb-1">Product Design Intern</h3>
-                  <div class="flex items-center gap-2 text-xs text-slate-500 font-medium mb-4">
-                    <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">schedule</span> 3 Months</span>
-                    <span class="text-slate-300">•</span>
-                    <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">laptop_mac</span> Remote</span>
-                  </div>
-                  <div class="flex flex-wrap gap-1.5 mb-5">
-                    <span class="px-2 py-0.5 bg-indigo-50 text-indigo-700 text-[11px] font-semibold rounded-lg">Figma</span>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">User Research</span>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">Design Thinking</span>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">Prototyping</span>
-                  </div>
-                </div>
-                <div class="flex items-center justify-between pt-4 border-t border-slate-50">
-                  <span class="text-[11px] font-bold text-slate-400">Recently Posted</span>
-                  <a href="internship_application_form.php?internship_id=0&name=Product+Design+Intern" class="px-4 py-2 bg-purple-600 text-white text-xs font-bold rounded-xl hover:bg-purple-700 transition-colors shadow-sm flex items-center gap-1">
-                    <span class="material-symbols-outlined text-[14px]">bolt</span> Easy Apply
-                  </a>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-        <!-- END Design Section -->
-
-        <!-- ── MARKETING PROJECTS ── -->
-        <section class="vertical-section" data-vertical="marketing">
-          <div class="flex items-center gap-4 mb-6">
-            <div class="section-header-bar border-orange-500 pl-4 flex items-center gap-3">
-              <div class="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
-                <span class="material-symbols-outlined text-orange-600">campaign</span>
-              </div>
-              <div>
-                <h2 class="text-xl font-black text-slate-800">Marketing Projects</h2>
-                <p class="text-xs text-slate-500 font-medium">SEO, Social Media & Content strategy roles</p>
-              </div>
-            </div>
-            <div class="ml-auto">
-              <span class="px-3 py-1 bg-orange-50 text-orange-700 text-xs font-bold rounded-full border border-orange-100">3 Openings</span>
-            </div>
-          </div>
-
-          <!-- Sub-section: SEO Campaigns -->
-          <div class="mb-8">
-            <div class="flex items-center gap-2 mb-4">
-              <span class="material-symbols-outlined text-orange-400 text-[18px]">travel_explore</span>
-              <h3 class="text-sm font-bold text-slate-600 uppercase tracking-wider">SEO Campaigns</h3>
-              <div class="flex-1 h-px bg-slate-100 ml-2"></div>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-
-              <div class="internship-card bg-white rounded-2xl border border-slate-100 p-6 flex flex-col justify-between shadow-sm"
-                   data-title="seo analyst intern" data-duration="3 months" data-mode="remote"
-                   data-skills="seo google analytics keyword research ahrefs on-page seo" data-vertical="marketing">
-                <div>
-                  <div class="flex items-start justify-between mb-4">
-                    <div class="w-11 h-11 bg-orange-100 rounded-xl flex items-center justify-center">
-                      <span class="material-symbols-outlined text-orange-600">travel_explore</span>
-                    </div>
-                    <span class="px-2.5 py-1 bg-green-50 text-green-700 text-[10px] font-bold rounded-full uppercase tracking-wider border border-green-100">● Active</span>
-                  </div>
-                  <h3 class="font-extrabold text-slate-800 text-base leading-snug mb-1">SEO Analyst Intern</h3>
-                  <div class="flex items-center gap-2 text-xs text-slate-500 font-medium mb-4">
-                    <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">schedule</span> 3 Months</span>
-                    <span class="text-slate-300">•</span>
-                    <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">laptop_mac</span> Remote</span>
-                  </div>
-                  <div class="flex flex-wrap gap-1.5 mb-5">
-                    <span class="px-2 py-0.5 bg-orange-50 text-orange-700 text-[11px] font-semibold rounded-lg">SEO</span>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">Google Analytics</span>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">Ahrefs</span>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">Keyword Research</span>
-                  </div>
-                </div>
-                <div class="flex items-center justify-between pt-4 border-t border-slate-50">
-                  <span class="text-[11px] font-bold text-slate-400">Recently Posted</span>
-                  <a href="internship_application_form.php?internship_id=0&name=SEO+Analyst+Intern" class="px-4 py-2 bg-orange-500 text-white text-xs font-bold rounded-xl hover:bg-orange-600 transition-colors shadow-sm flex items-center gap-1">
-                    <span class="material-symbols-outlined text-[14px]">bolt</span> Easy Apply
-                  </a>
-                </div>
-              </div>
-
-              <div class="internship-card bg-white rounded-2xl border border-slate-100 p-6 flex flex-col justify-between shadow-sm"
-                   data-title="digital marketing intern" data-duration="2 months" data-mode="hybrid"
-                   data-skills="seo sem google ads ppc analytics email marketing" data-vertical="marketing">
-                <div>
-                  <div class="flex items-start justify-between mb-4">
-                    <div class="w-11 h-11 bg-amber-100 rounded-xl flex items-center justify-center">
-                      <span class="material-symbols-outlined text-amber-600">ads_click</span>
-                    </div>
-                    <span class="px-2.5 py-1 bg-green-50 text-green-700 text-[10px] font-bold rounded-full uppercase tracking-wider border border-green-100">● Active</span>
-                  </div>
-                  <h3 class="font-extrabold text-slate-800 text-base leading-snug mb-1">Digital Marketing Intern</h3>
-                  <div class="flex items-center gap-2 text-xs text-slate-500 font-medium mb-4">
-                    <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">schedule</span> 2 Months</span>
-                    <span class="text-slate-300">•</span>
-                    <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">apartment</span> Hybrid</span>
-                  </div>
-                  <div class="flex flex-wrap gap-1.5 mb-5">
-                    <span class="px-2 py-0.5 bg-amber-50 text-amber-700 text-[11px] font-semibold rounded-lg">SEO/SEM</span>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">Google Ads</span>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">PPC</span>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">Analytics</span>
-                  </div>
-                </div>
-                <div class="flex items-center justify-between pt-4 border-t border-slate-50">
-                  <span class="text-[11px] font-bold text-slate-400">Recently Posted</span>
-                  <a href="internship_application_form.php?internship_id=0&name=Digital+Marketing+Intern" class="px-4 py-2 bg-orange-500 text-white text-xs font-bold rounded-xl hover:bg-orange-600 transition-colors shadow-sm flex items-center gap-1">
-                    <span class="material-symbols-outlined text-[14px]">bolt</span> Easy Apply
-                  </a>
-                </div>
-              </div>
-
-              <!-- DB SEO/marketing cards -->
-              <?php foreach ($db_internships as $row):
-                $title_lower = strtolower($row['title']);
-                if (strpos($title_lower, 'seo') !== false || strpos($title_lower, 'marketing') !== false || strpos($title_lower, 'digital') !== false):
-                  $skills = explode(',', $row['skills']);
-              ?>
-              <div class="internship-card bg-white rounded-2xl border border-slate-100 p-6 flex flex-col justify-between shadow-sm"
-                   data-title="<?php echo htmlspecialchars(strtolower($row['title'])); ?>"
-                   data-duration="<?php echo htmlspecialchars(strtolower($row['duration'])); ?>"
-                   data-mode="<?php echo htmlspecialchars(strtolower($row['mode'])); ?>"
-                   data-skills="<?php echo htmlspecialchars(strtolower($row['skills'])); ?>"
-                   data-vertical="marketing">
-                <div>
-                  <div class="flex items-start justify-between mb-4">
-                    <div class="w-11 h-11 bg-orange-100 rounded-xl flex items-center justify-center font-bold text-orange-600 text-lg"><?php echo strtoupper(substr($row['title'],0,1)); ?></div>
-                    <span class="px-2.5 py-1 bg-green-50 text-green-700 text-[10px] font-bold rounded-full uppercase tracking-wider border border-green-100">● Active</span>
-                  </div>
-                  <h3 class="font-extrabold text-slate-800 text-base leading-snug mb-1"><?php echo htmlspecialchars($row['title']); ?></h3>
-                  <div class="flex items-center gap-2 text-xs text-slate-500 font-medium mb-4">
-                    <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">schedule</span> <?php echo htmlspecialchars($row['duration']); ?></span>
-                    <span class="text-slate-300">•</span>
-                    <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">laptop_mac</span> <?php echo htmlspecialchars($row['mode']); ?></span>
-                  </div>
-                  <div class="flex flex-wrap gap-1.5 mb-5">
-                    <?php foreach ($skills as $skill): ?>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg"><?php echo htmlspecialchars(trim($skill)); ?></span>
-                    <?php endforeach; ?>
-                  </div>
-                </div>
-                <div class="flex items-center justify-between pt-4 border-t border-slate-50">
-                  <span class="text-[11px] font-bold text-slate-400">Recently Posted</span>
-                  <a href="internship_application_form.php?internship_id=<?php echo $row['id']; ?>&name=<?php echo urlencode($row['title']); ?>" class="px-4 py-2 bg-orange-500 text-white text-xs font-bold rounded-xl hover:bg-orange-600 transition-colors shadow-sm flex items-center gap-1">
-                    <span class="material-symbols-outlined text-[14px]">bolt</span> Easy Apply
-                  </a>
-                </div>
-              </div>
-              <?php endif; endforeach; ?>
-            </div>
-          </div>
-
-          <!-- Sub-section: Social Media Strategy -->
-          <div class="mb-8">
-            <div class="flex items-center gap-2 mb-4">
-              <span class="material-symbols-outlined text-orange-400 text-[18px]">share</span>
-              <h3 class="text-sm font-bold text-slate-600 uppercase tracking-wider">Social Media Strategy</h3>
-              <div class="flex-1 h-px bg-slate-100 ml-2"></div>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-
-              <div class="internship-card bg-white rounded-2xl border border-slate-100 p-6 flex flex-col justify-between shadow-sm"
-                   data-title="social media intern" data-duration="2 months" data-mode="remote"
-                   data-skills="instagram linkedin meta ads content creation canva analytics" data-vertical="marketing">
-                <div>
-                  <div class="flex items-start justify-between mb-4">
-                    <div class="w-11 h-11 bg-rose-100 rounded-xl flex items-center justify-center">
-                      <span class="material-symbols-outlined text-rose-600">share</span>
-                    </div>
-                    <span class="px-2.5 py-1 bg-green-50 text-green-700 text-[10px] font-bold rounded-full uppercase tracking-wider border border-green-100">● Active</span>
-                  </div>
-                  <h3 class="font-extrabold text-slate-800 text-base leading-snug mb-1">Social Media Intern</h3>
-                  <div class="flex items-center gap-2 text-xs text-slate-500 font-medium mb-4">
-                    <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">schedule</span> 2 Months</span>
-                    <span class="text-slate-300">•</span>
-                    <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">laptop_mac</span> Remote</span>
-                  </div>
-                  <div class="flex flex-wrap gap-1.5 mb-5">
-                    <span class="px-2 py-0.5 bg-rose-50 text-rose-700 text-[11px] font-semibold rounded-lg">Instagram</span>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">Meta Ads</span>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">Canva</span>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">Analytics</span>
-                  </div>
-                </div>
-                <div class="flex items-center justify-between pt-4 border-t border-slate-50">
-                  <span class="text-[11px] font-bold text-slate-400">Recently Posted</span>
-                  <a href="internship_application_form.php?internship_id=0&name=Social+Media+Intern" class="px-4 py-2 bg-orange-500 text-white text-xs font-bold rounded-xl hover:bg-orange-600 transition-colors shadow-sm flex items-center gap-1">
-                    <span class="material-symbols-outlined text-[14px]">bolt</span> Easy Apply
-                  </a>
-                </div>
-              </div>
-
-              <div class="internship-card bg-white rounded-2xl border border-slate-100 p-6 flex flex-col justify-between shadow-sm"
-                   data-title="social media strategist intern" data-duration="3 months" data-mode="hybrid"
-                   data-skills="social media strategy content calendar community management hootsuite" data-vertical="marketing">
-                <div>
-                  <div class="flex items-start justify-between mb-4">
-                    <div class="w-11 h-11 bg-red-100 rounded-xl flex items-center justify-center">
-                      <span class="material-symbols-outlined text-red-600">trending_up</span>
-                    </div>
-                    <span class="px-2.5 py-1 bg-green-50 text-green-700 text-[10px] font-bold rounded-full uppercase tracking-wider border border-green-100">● Active</span>
-                  </div>
-                  <h3 class="font-extrabold text-slate-800 text-base leading-snug mb-1">Social Media Strategist Intern</h3>
-                  <div class="flex items-center gap-2 text-xs text-slate-500 font-medium mb-4">
-                    <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">schedule</span> 3 Months</span>
-                    <span class="text-slate-300">•</span>
-                    <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">apartment</span> Hybrid</span>
-                  </div>
-                  <div class="flex flex-wrap gap-1.5 mb-5">
-                    <span class="px-2 py-0.5 bg-red-50 text-red-700 text-[11px] font-semibold rounded-lg">Strategy</span>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">Content Calendar</span>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">Hootsuite</span>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">Community Mgmt</span>
-                  </div>
-                </div>
-                <div class="flex items-center justify-between pt-4 border-t border-slate-50">
-                  <span class="text-[11px] font-bold text-slate-400">Recently Posted</span>
-                  <a href="internship_application_form.php?internship_id=0&name=Social+Media+Strategist+Intern" class="px-4 py-2 bg-orange-500 text-white text-xs font-bold rounded-xl hover:bg-orange-600 transition-colors shadow-sm flex items-center gap-1">
-                    <span class="material-symbols-outlined text-[14px]">bolt</span> Easy Apply
-                  </a>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Sub-section: Content Marketing -->
-          <div>
-            <div class="flex items-center gap-2 mb-4">
-              <span class="material-symbols-outlined text-orange-400 text-[18px]">article</span>
-              <h3 class="text-sm font-bold text-slate-600 uppercase tracking-wider">Content Marketing</h3>
-              <div class="flex-1 h-px bg-slate-100 ml-2"></div>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-
-              <div class="internship-card bg-white rounded-2xl border border-slate-100 p-6 flex flex-col justify-between shadow-sm"
-                   data-title="content marketing intern" data-duration="2 months" data-mode="remote"
-                   data-skills="copywriting blog writing content strategy wordpress seo writing" data-vertical="marketing">
-                <div>
-                  <div class="flex items-start justify-between mb-4">
-                    <div class="w-11 h-11 bg-yellow-100 rounded-xl flex items-center justify-center">
-                      <span class="material-symbols-outlined text-yellow-600">article</span>
-                    </div>
-                    <span class="px-2.5 py-1 bg-green-50 text-green-700 text-[10px] font-bold rounded-full uppercase tracking-wider border border-green-100">● Active</span>
-                  </div>
-                  <h3 class="font-extrabold text-slate-800 text-base leading-snug mb-1">Content Marketing Intern</h3>
-                  <div class="flex items-center gap-2 text-xs text-slate-500 font-medium mb-4">
-                    <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">schedule</span> 2 Months</span>
-                    <span class="text-slate-300">•</span>
-                    <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">laptop_mac</span> Remote</span>
-                  </div>
-                  <div class="flex flex-wrap gap-1.5 mb-5">
-                    <span class="px-2 py-0.5 bg-yellow-50 text-yellow-700 text-[11px] font-semibold rounded-lg">Copywriting</span>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">Blog Writing</span>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">WordPress</span>
-                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">SEO Writing</span>
-                  </div>
-                </div>
-                <div class="flex items-center justify-between pt-4 border-t border-slate-50">
-                  <span class="text-[11px] font-bold text-slate-400">Recently Posted</span>
-                  <a href="internship_application_form.php?internship_id=0&name=Content+Marketing+Intern" class="px-4 py-2 bg-orange-500 text-white text-xs font-bold rounded-xl hover:bg-orange-600 transition-colors shadow-sm flex items-center gap-1">
-                    <span class="material-symbols-outlined text-[14px]">bolt</span> Easy Apply
-                  </a>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-        <!-- END Marketing Section -->
-
-        <!-- No Results Message -->
-        <div id="no-results-msg" class="hidden py-20 text-center bg-white border border-slate-100 rounded-2xl shadow-sm">
-          <div class="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
-            <span class="material-symbols-outlined text-slate-300 text-3xl">search_off</span>
-          </div>
-          <h3 class="font-bold text-slate-700 mb-1">No Internships Found</h3>
-          <p class="text-slate-500 text-sm">Try adjusting your filters or search query.</p>
-          <button onclick="document.getElementById('btn-clear-filters').click()" class="mt-4 px-5 py-2 bg-blue-50 text-blue-700 text-sm font-bold rounded-xl hover:bg-blue-100 transition-colors">Clear All Filters</button>
-        </div>
-
+        <?php endif; ?>
       </div>
-      <!-- END all-sections -->
+
+      <!-- No Results Message -->
+      <div id="no-results-msg" class="hidden py-20 text-center bg-white border border-slate-100 rounded-2xl shadow-sm">
+        <div class="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
+          <span class="material-symbols-outlined text-slate-300 text-3xl">search_off</span>
+        </div>
+        <h3 class="font-bold text-slate-700 mb-1">No Internships Found</h3>
+        <p class="text-slate-500 text-sm">Try adjusting your filters or search query.</p>
+        <button onclick="document.getElementById('btn-clear-filters').click()" class="mt-4 px-5 py-2 bg-blue-50 text-blue-700 text-sm font-bold rounded-xl hover:bg-blue-100 transition-colors">Clear All Filters</button>
+      </div>
 
     </main>
   </div>
@@ -1209,11 +531,19 @@ document.addEventListener('DOMContentLoaded', () => {
       let sectionHasVisible = false;
       section.querySelectorAll('.internship-card').forEach(card => {
         const title    = card.dataset.title    || '';
+        const pType    = card.dataset.type     || '';
+        const pSubtype = card.dataset.subtype  || '';
         const cardDur  = card.dataset.duration || '';
         const cardMode = card.dataset.mode     || '';
         const skills   = card.dataset.skills   || '';
 
-        const matchQuery    = !query    || title.includes(query) || skills.includes(query) || cardDur.includes(query) || cardMode.includes(query);
+        const matchQuery    = !query    
+          || title.includes(query) 
+          || pType.includes(query) 
+          || pSubtype.includes(query) 
+          || skills.includes(query) 
+          || cardDur.includes(query) 
+          || cardMode.includes(query);
         const matchDuration = !duration || cardDur.includes(duration);
         const matchMode     = !mode     || cardMode.includes(mode);
         const matchSkill    = !skill    || skills.includes(skill);
@@ -1279,6 +609,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const duration = card.dataset.duration || '';
     const mode     = card.dataset.mode     || '';
     const skills   = card.dataset.skills   || '';
+    const type     = card.dataset.type     || '';
+    const subtype  = card.dataset.subtype  || '';
 
     // Capitalise title for display
     const displayTitle = title.replace(/\b\w/g, c => c.toUpperCase());
@@ -1288,7 +620,9 @@ document.addEventListener('DOMContentLoaded', () => {
       + '&name='     + encodeURIComponent(displayTitle)
       + '&duration=' + encodeURIComponent(duration)
       + '&mode='     + encodeURIComponent(mode)
-      + '&skills='   + encodeURIComponent(skills);
+      + '&skills='   + encodeURIComponent(skills)
+      + '&project_type=' + encodeURIComponent(type)
+      + '&project_subtype=' + encodeURIComponent(subtype);
 
     window.location.href = url;
   });

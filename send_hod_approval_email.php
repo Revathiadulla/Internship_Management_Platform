@@ -42,25 +42,29 @@ if (empty($hod_email)) {
     exit();
 }
 
+require_once __DIR__ . '/includes/hod_helpers.php';
+
 // Generate a secure random token
 $token = bin2hex(random_bytes(32));
 $expires_at = date('Y-m-d H:i:s', strtotime('+7 days'));
 
 // Store token in the application row
+$status = 'Pending';
 $update = $conn->prepare('UPDATE internship_applications SET hod_token = ?, hod_approval_status = ?, hod_approved_at = NULL WHERE id = ?');
-$update->bind_param('ssi', $token, $app['hod_approval_status'], $app_id);
+$update->bind_param('ssi', $token, $status, $app_id);
 $update->execute();
 $update->close();
 
 // Prepare email
-$approval_link = "https://{$_SERVER['HTTP_HOST']}/hod_approval.php?token=$token";
+$approve_link = hod_approval_url($app_id, $token, 'approve');
+$reject_link = hod_approval_url($app_id, $token, 'reject');
 $subject = "HOD Approval Required for Internship Application #$app_id";
 $message = "<html><body>
     <p>Dear HOD,</p>
     <p>The student <strong>{$app['full_name']}</strong> (<a href='mailto:{$app['student_email']}'>{$app['student_email']}</a>) has completed the test for the internship <strong>{$app['internship_title']}</strong>.
     Test Score: {$app['test_score']} (Result: {$app['test_result']}).</p>
-    <p>Please review and approve or reject the application using the link below:</p>
-    <p><a href='$approval_link'>Approve / Reject Application</a></p>
+    <p>Please review and decide:</p>
+    <p><a href='$approve_link'>Approve Application</a> | <a href='$reject_link'>Reject Application</a></p>
     <p>This link will expire in 7 days.</p>
     <p>Best regards,<br/>Internship Management System</p>
 </body></html>";

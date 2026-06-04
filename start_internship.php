@@ -65,7 +65,7 @@ if (mysqli_query($conn, $update_sql)) {
     // Send email notification for starting internship
     $start_subject = "Welcome Aboard! Internship Started: " . $app['title'];
     $start_message = "Dear $student_name,\n\nCongratulations! You have officially started your internship: \"" . $app['title'] . "\".\n\nWe are excited to have you on board! To ensure a successful internship experience, please log your daily tasks and hours using the Activity Tracker on your student dashboard regularly.\n\nGood luck, and make the most of this opportunity!";
-    sendEmailNotification($user_id, $start_subject, $start_message, [
+    sendStudentNotification($user_id, $student_name, $start_subject, $start_message, [
         'event' => 'Internship Confirmed',
         'internship_position' => $app['title'],
         'started_date' => date('Y-m-d H:i:s'),

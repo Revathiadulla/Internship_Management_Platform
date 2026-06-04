@@ -5,14 +5,30 @@ if (!isset($_SESSION['user_id']) || strtolower($_SESSION['role']) !== 'coordinat
     exit();
 }
 include "db.php";
+$notif_unread_res = mysqli_query($conn, "SELECT COUNT(*) as count FROM notifications WHERE user_id = " . intval($_SESSION['user_id']) . " AND role = 'coordinator' AND is_read = 0");
+$notif_unread_row = mysqli_fetch_assoc($notif_unread_res);
+$unread_count = $notif_unread_row['count'] ?? 0;
+
+$coord_id = intval($_SESSION['user_id']);
 
 // Fetch total students
-$total_students_res = mysqli_query($conn, "SELECT COUNT(*) as cnt FROM users WHERE role='student'");
+$total_students_res = mysqli_query($conn, "
+    SELECT COUNT(DISTINCT a.user_id) as cnt 
+    FROM internship_applications a
+    JOIN internships i ON a.internship_id = i.id
+    WHERE a.status IN ('Started', 'Internship Started', 'Active Intern', 'Selected')
+      AND i.coordinator_id = $coord_id
+");
 $total_students_row = mysqli_fetch_assoc($total_students_res);
 $total_students = intval($total_students_row['cnt'] ?? 0);
 
 // Fetch daily logs stats
-$logs_stats_res = mysqli_query($conn, "SELECT COUNT(*) as total_logs, COALESCE(SUM(time_spent), 0) as total_hours, COALESCE(AVG(time_spent), 0) as avg_hours FROM daily_logs");
+$logs_stats_res = mysqli_query($conn, "
+    SELECT COUNT(d.id) as total_logs, COALESCE(SUM(d.time_spent), 0) as total_hours, COALESCE(AVG(d.time_spent), 0) as avg_hours 
+    FROM daily_logs d
+    JOIN internships i ON d.internship_id = i.id
+    WHERE i.coordinator_id = $coord_id
+");
 $logs_stats = mysqli_fetch_assoc($logs_stats_res);
 $total_logs = intval($logs_stats['total_logs'] ?? 0);
 $total_hours = floatval($logs_stats['total_hours'] ?? 0);
@@ -22,7 +38,13 @@ $avg_hours = floatval($logs_stats['avg_hours'] ?? 0);
 $avg_hours_per_student = $total_students > 0 ? ($total_hours / $total_students) : 0;
 
 // Fetch application status distribution
-$app_dist_res = mysqli_query($conn, "SELECT status, COUNT(*) as cnt FROM internship_applications GROUP BY status");
+$app_dist_res = mysqli_query($conn, "
+    SELECT a.status, COUNT(*) as cnt 
+    FROM internship_applications a
+    JOIN internships i ON a.internship_id = i.id
+    WHERE i.coordinator_id = $coord_id
+    GROUP BY a.status
+");
 $app_status_dist = [];
 $total_applications = 0;
 while ($row = mysqli_fetch_assoc($app_dist_res)) {
@@ -40,22 +62,36 @@ foreach ($standard_statuses as $st) {
 }
 
 // Fetch active students (logged in last 7 days)
-$active_res = mysqli_query($conn, "SELECT COUNT(DISTINCT user_id) as cnt FROM daily_logs WHERE log_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)");
+$active_res = mysqli_query($conn, "
+    SELECT COUNT(DISTINCT d.user_id) as cnt 
+    FROM daily_logs d
+    JOIN internships i ON d.internship_id = i.id
+    WHERE d.log_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+      AND i.coordinator_id = $coord_id
+");
 $active_students = intval(mysqli_fetch_assoc($active_res)['cnt'] ?? 0);
-$inactive_students = $total_students - $active_students;
+$inactive_students = max(0, $total_students - $active_students);
 
 // Fetch today's log stats
-$today_logs_res = mysqli_query($conn, "SELECT COUNT(DISTINCT user_id) as cnt FROM daily_logs WHERE log_date = CURDATE()");
+$today_logs_res = mysqli_query($conn, "
+    SELECT COUNT(DISTINCT d.user_id) as cnt 
+    FROM daily_logs d
+    JOIN internships i ON d.internship_id = i.id
+    WHERE d.log_date = CURDATE()
+      AND i.coordinator_id = $coord_id
+");
 $today_logged = intval(mysqli_fetch_assoc($today_logs_res)['cnt'] ?? 0);
-$pending_today = $total_students - $today_logged;
+$pending_today = max(0, $total_students - $today_logged);
 
 // Fetch recent 7 days log submissions trend
 $daily_trend_res = mysqli_query($conn, "
-    SELECT log_date, COUNT(*) as cnt 
-    FROM daily_logs 
-    WHERE log_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY) 
-    GROUP BY log_date 
-    ORDER BY log_date ASC
+    SELECT d.log_date, COUNT(d.id) as cnt 
+    FROM daily_logs d
+    JOIN internships i ON d.internship_id = i.id
+    WHERE d.log_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
+      AND i.coordinator_id = $coord_id
+    GROUP BY d.log_date 
+    ORDER BY d.log_date ASC
 ");
 $daily_trend = [];
 while ($row = mysqli_fetch_assoc($daily_trend_res)) {
@@ -82,8 +118,10 @@ $student_sql = "
         COALESCE(SUM(d.time_spent), 0) as student_hours,
         MAX(d.log_date) as last_log_date
     FROM users u
-    LEFT JOIN daily_logs d ON u.id = d.user_id
-    WHERE u.role = 'student'
+    JOIN internship_applications a ON u.id = a.user_id
+    JOIN internships i ON a.internship_id = i.id
+    LEFT JOIN daily_logs d ON u.id = d.user_id AND d.internship_id = i.id
+    WHERE u.role = 'student' AND i.coordinator_id = $coord_id
 ";
 
 if (!empty($search)) {
@@ -155,73 +193,62 @@ mysqli_stmt_close($student_stmt);
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800">
-        <!-- SideNavBar -->
-        <aside class="fixed left-0 top-0 h-screen w-60 z-50 bg-gray-50 border-r border-gray-200 flex flex-col py-6 font-sans text-sm font-medium no-print">
-            <div class="px-6 mb-8">
-                <a href="index.html" class="flex items-center gap-2 hover:opacity-95 transition-opacity">
-                    <svg class="w-8 h-8 text-blue-600 shrink-0" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <rect width="32" height="32" rx="8" fill="currentColor"/>
-                        <circle cx="16" cy="16" r="3" fill="white"/>
-                        <line x1="16" y1="13" x2="16" y2="9" stroke="white" stroke-width="1.5"/>
-                        <circle cx="16" cy="8" r="1.5" fill="white"/>
-                        <line x1="18.5" y1="15.1" x2="22.5" y2="13.8" stroke="white" stroke-width="1.5"/>
-                        <circle cx="23.5" cy="13.5" r="1.5" fill="white"/>
-                        <line x1="17.8" y1="18.4" x2="20.0" y2="21.5" stroke="white" stroke-width="1.5"/>
-                        <circle cx="20.7" cy="22.5" r="1.5" fill="white"/>
-                        <line x1="14.2" y1="18.4" x2="12.0" y2="21.5" stroke="white" stroke-width="1.5"/>
-                        <circle cx="11.3" cy="22.5" r="1.5" fill="white"/>
-                        <line x1="13.5" y1="15.1" x2="9.5" y2="13.8" stroke="white" stroke-width="1.5"/>
-                        <circle cx="8.5" cy="13.5" r="1.5" fill="white"/>
-                    </svg>
-                    <span class="text-xl font-bold text-blue-600 tracking-tight">IMP</span>
-                </a>
-                <p class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-2 ml-1">Coordinator Portal</p>
-            </div>
-            <nav class="flex-1 space-y-1">
-                <a class="flex items-center gap-3 text-gray-600 px-4 py-3 hover:bg-gray-100 duration-200 ease-in-out"
-                    href="coordinator_dashboard.php">
-                    <span class="material-symbols-outlined">dashboard</span>
-                    <span>Dashboard</span>
-                </a>
-                <a class="flex items-center gap-3 text-gray-600 px-4 py-3 hover:bg-gray-100 duration-200 ease-in-out"
-                    href="coordinator_internships.php">
-                    <span class="material-symbols-outlined">work</span>
-                    <span>Postings</span>
-                </a>
-                <a class="flex items-center gap-3 text-gray-600 px-4 py-3 hover:bg-gray-100 duration-200 ease-in-out"
-                    href="coordinator_candidates.php">
-                    <span class="material-symbols-outlined">group</span>
-                    <span>Candidates</span>
-                </a>
-
-                <a class="flex items-center gap-3 text-gray-600 px-4 py-3 hover:bg-gray-100 duration-200 ease-in-out"
-                    href="coordinator_daily_logs.php">
-                    <span class="material-symbols-outlined">monitoring</span>
-                    <span>Daily Logs Monitoring</span>
-                </a>
-                <a class="flex items-center gap-3 bg-blue-50 text-blue-700 border-l-4 border-blue-600 px-4 py-3 duration-200 ease-in-out"
-                    href="coordinator_reports.php">
-                    <span class="material-symbols-outlined">analytics</span>
-                    <span>Reports</span>
-                </a>
-                <a class="flex items-center gap-3 text-gray-600 px-4 py-3 hover:bg-gray-100 duration-200 ease-in-out"
-                    href="coordinator_teams.php">
-                    <span class="material-symbols-outlined">manage_accounts</span>
-                    <span>Team Management</span>
-                </a>
-            </nav>
-            <div class="mt-auto border-t border-gray-200 pt-4 font-medium">
-                <a class="flex items-center gap-3 text-gray-600 px-4 py-3 hover:bg-gray-100 duration-200 ease-in-out"
-                    href="coordinator_help_center.php">
-                    <span class="material-symbols-outlined">help</span>
-                    <span>Help Center</span>
-                </a>
-                <a class="flex items-center gap-3 text-gray-600 px-4 py-3 hover:bg-gray-100 duration-200 ease-in-out"
-                    href="logout.php">
-                    <span class="material-symbols-outlined">logout</span>
-                    <span>Logout</span>
-                </a>
-            </div>
+        <!-- ════════════════ SIDEBAR ════════════════ -->
+        <aside class="fixed left-0 top-0 h-screen w-60 z-50 bg-white border-r border-gray-200 flex flex-col py-6 no-print">
+                <div class="px-6 mb-8">
+                        <a href="index.html" class="flex items-center gap-2">
+                                <svg class="w-8 h-8 text-blue-600 shrink-0" viewBox="0 0 32 32" fill="none">
+                                        <rect width="32" height="32" rx="8" fill="currentColor"/>
+                                        <circle cx="16" cy="16" r="3" fill="white"/>
+                                        <line x1="16" y1="13" x2="16" y2="9" stroke="white" stroke-width="1.5"/>
+                                        <circle cx="16" cy="8" r="1.5" fill="white"/>
+                                        <line x1="18.5" y1="15.1" x2="22.5" y2="13.8" stroke="white" stroke-width="1.5"/>
+                                        <circle cx="23.5" cy="13.5" r="1.5" fill="white"/>
+                                        <line x1="17.8" y1="18.4" x2="20" y2="21.5" stroke="white" stroke-width="1.5"/>
+                                        <circle cx="20.7" cy="22.5" r="1.5" fill="white"/>
+                                        <line x1="14.2" y1="18.4" x2="12" y2="21.5" stroke="white" stroke-width="1.5"/>
+                                        <circle cx="11.3" cy="22.5" r="1.5" fill="white"/>
+                                        <line x1="13.5" y1="15.1" x2="9.5" y2="13.8" stroke="white" stroke-width="1.5"/>
+                                        <circle cx="8.5" cy="13.5" r="1.5" fill="white"/>
+                                </svg>
+                                <span class="text-xl font-bold text-blue-600 tracking-tight">IMP</span>
+                        </a>
+                        <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-2 ml-0.5">Coordinator Portal</p>
+                </div>
+                <nav class="flex-1 space-y-0.5 px-3">
+                        <a href="coordinator_dashboard.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
+                                <span class="material-symbols-outlined text-[20px]">dashboard</span> Dashboard
+                        </a>
+                        <a href="coordinator_internships.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
+                                <span class="material-symbols-outlined text-[20px]">work</span> Postings
+                        </a>
+                        <a href="coordinator_candidates.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
+                                <span class="material-symbols-outlined text-[20px]">group</span> Candidates
+                        </a>
+                        <a href="coordinator_generate_test.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
+                                <span class="material-symbols-outlined text-[20px]">quiz</span> Generate Test
+                        </a>
+                        <a href="coordinator_daily_logs.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
+                                <span class="material-symbols-outlined text-[20px]">monitoring</span> Daily Logs
+                        </a>
+                        <a href="coordinator_reports.php" class="flex items-center gap-3 bg-blue-50 text-blue-700 border-l-4 border-blue-600 px-3 py-2.5 rounded-r-lg text-sm font-semibold">
+                                <span class="material-symbols-outlined text-[20px]">analytics</span> Reports
+                        </a>
+                        <a href="coordinator_teams.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
+                                <span class="material-symbols-outlined text-[20px]">manage_accounts</span> Teams
+                        </a>
+                </nav>
+                <div class="border-t border-gray-200 pt-3 px-3 space-y-0.5">
+                        <a href="coordinator_profile.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
+                                <span class="material-symbols-outlined text-[20px]">account_circle</span> My Profile
+                        </a>
+                        <a href="coordinator_help_center.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
+                                <span class="material-symbols-outlined text-[20px]">help</span> Help Center
+                        </a>
+                        <a href="logout.php" class="flex items-center gap-3 text-red-650 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-red-50 transition-colors">
+                                <span class="material-symbols-outlined text-[20px] text-red-400">logout</span> Logout
+                        </a>
+                </div>
         </aside>
 
         <!-- Main Content Area -->
@@ -242,36 +269,46 @@ mysqli_stmt_close($student_stmt);
                                 <h2 class="text-lg font-bold text-gray-800">Reports</h2>
                         </div>
                         
-                        <!-- Profile Dropdown Section -->
-                        <div class="relative" id="profile-container">
-                                <button id="profile-menu-button" class="flex items-center gap-2 focus:outline-none cursor-pointer group">
-                                        <span class="text-sm font-semibold text-gray-700 group-hover:text-blue-600 transition-colors hidden sm:inline-block">
-                                                <?php echo htmlspecialchars($header_name); ?>
-                                        </span>
-                                        <div class="w-8 h-8 rounded-full overflow-hidden border border-gray-200 shadow-sm group-hover:border-blue-500 transition-colors">
-                                                <?php if (!empty($header_photo) && file_exists($header_photo)): ?>
-                                                        <img src="<?php echo htmlspecialchars($header_photo); ?>" alt="Profile" class="w-full h-full object-cover">
-                                                <?php else: ?>
-                                                        <img src="https://ui-avatars.com/api/?name=<?php echo urlencode($header_name); ?>&background=0D8ABC&color=fff" alt="Profile" class="w-full h-full object-cover">
-                                                <?php endif; ?>
+                        <div class="flex items-center gap-6">
+                                <!-- Notifications Bell -->
+                                <a href="coordinator_notifications.php" class="p-2 text-gray-500 hover:bg-gray-50 transition-colors rounded-full relative">
+                                        <span class="material-symbols-outlined">notifications</span>
+                                        <?php if ($unread_count > 0): ?>
+                                                <span class="absolute top-1.5 right-1.5 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center text-[9px] font-bold"><?php echo $unread_count; ?></span>
+                                        <?php endif; ?>
+                                </a>
+
+                                <!-- Profile Dropdown Section -->
+                                <div class="relative" id="profile-container">
+                                        <button id="profile-menu-button" class="flex items-center gap-2 focus:outline-none cursor-pointer group">
+                                                <span class="text-sm font-semibold text-gray-700 group-hover:text-blue-600 transition-colors hidden sm:inline-block">
+                                                        <?php echo htmlspecialchars($header_name); ?>
+                                                </span>
+                                                <div class="w-8 h-8 rounded-full overflow-hidden border border-gray-200 shadow-sm group-hover:border-blue-500 transition-colors">
+                                                        <?php if (!empty($header_photo) && file_exists($header_photo)): ?>
+                                                                <img src="<?php echo htmlspecialchars($header_photo); ?>" alt="Profile" class="w-full h-full object-cover">
+                                                        <?php else: ?>
+                                                                <img src="https://ui-avatars.com/api/?name=<?php echo urlencode($header_name); ?>&background=0D8ABC&color=fff" alt="Profile" class="w-full h-full object-cover">
+                                                        <?php endif; ?>
+                                                </div>
+                                                <span class="material-symbols-outlined text-gray-500 text-[18px] group-hover:text-blue-600 transition-colors">arrow_drop_down</span>
+                                        </button>
+                                        
+                                        <div id="profile-dropdown" class="hidden absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-xl shadow-lg py-2 z-50">
+                                                <a href="coordinator_profile.php" class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-blue-600 transition-colors">
+                                                        <span class="material-symbols-outlined text-gray-400 text-[20px]">account_circle</span>
+                                                        <span>My Profile</span>
+                                                </a>
+                                                <a href="coordinator_profile.php?section=settings" class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-blue-600 transition-colors">
+                                                        <span class="material-symbols-outlined text-gray-400 text-[20px]">settings</span>
+                                                        <span>Settings</span>
+                                                </a>
+                                                <hr class="my-1 border-gray-100">
+                                                <a href="logout.php" class="flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors">
+                                                        <span class="material-symbols-outlined text-red-400 text-[20px]">logout</span>
+                                                        <span>Logout</span>
+                                                </a>
                                         </div>
-                                        <span class="material-symbols-outlined text-gray-500 text-[18px] group-hover:text-blue-600 transition-colors">arrow_drop_down</span>
-                                </button>
-                                
-                                <div id="profile-dropdown" class="hidden absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-xl shadow-lg py-2 z-50">
-                                        <a href="coordinator_profile.php" class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-blue-600 transition-colors">
-                                                <span class="material-symbols-outlined text-gray-400 text-[20px]">account_circle</span>
-                                                <span>My Profile</span>
-                                        </a>
-                                        <a href="coordinator_profile.php?section=settings" class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-blue-600 transition-colors">
-                                                <span class="material-symbols-outlined text-gray-400 text-[20px]">settings</span>
-                                                <span>Settings</span>
-                                        </a>
-                                        <hr class="my-1 border-gray-100">
-                                        <a href="logout.php" class="flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors">
-                                                <span class="material-symbols-outlined text-red-400 text-[20px]">logout</span>
-                                                <span>Logout</span>
-                                        </a>
                                 </div>
                         </div>
                 </header>

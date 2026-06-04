@@ -212,82 +212,11 @@ if (!class_exists('SimpleSMTP')) {
 }
 
 if (!function_exists('sendEmail')) {
-    /**
-     * Reusable email sending function using PHPMailer SMTP.
-     *
-     * @param string $toEmail
-     * @param string $toName
-     * @param string $subject
-     * @param string $body
-     * @return bool True on success, false on failure
-     */
-    function sendEmail($toEmail, $toName, $subject, $body) {
-        $mail = new PHPMailer(true);
-        $debugOutput = '';
-        
-            // Load SMTP configuration from environment variables
-            $smtpHost = getenv('MAIL_HOST');
-            $smtpPort = getenv('MAIL_PORT');
-            $smtpUser = getenv('MAIL_USERNAME');
-            $smtpPass = getenv('MAIL_PASSWORD');
-            $fromEmail = getenv('MAIL_FROM_EMAIL') ?: $smtpUser;
-            $fromName = getenv('MAIL_FROM_NAME') ?: 'Internship Management Platform';
+    require_once __DIR__ . '/../email_helper.php';
+}
 
-            // Validate required SMTP settings
-            if (empty($smtpHost) || empty($smtpPort) || empty($smtpUser) || empty($smtpPass) || empty($fromEmail)) {
-                $errorMsg = "Missing SMTP configuration: " .
-                    (empty($smtpHost) ? 'MAIL_HOST ' : '') .
-                    (empty($smtpPort) ? 'MAIL_PORT ' : '') .
-                    (empty($smtpUser) ? 'MAIL_USERNAME ' : '') .
-                    (empty($smtpPass) ? 'MAIL_PASSWORD ' : '') .
-                    (empty($fromEmail) ? 'MAIL_FROM_EMAIL ' : '');
-                $logPath = __DIR__ . '/../email_notifications.log';
-                $logEntry = "[" . date('Y-m-d H:i:s') . "] SMTP configuration error: $errorMsg\n";
-                @file_put_contents($logPath, $logEntry, FILE_APPEND);
-                return false;
-            }
-        try {
-            $mail->SMTPDebug  = 3; // Enable detailed debug output
-            $mail->Debugoutput = function($str, $level) use (&$debugOutput) {
-                $debugOutput .= "[$level] " . trim($str) . "\n";
-            };
-
-            $mail->isSMTP();
-                        // Apply SMTP settings
-            $mail->Host       = $smtpHost;
-            $mail->SMTPAuth   = true;
-            $mail->Username   = $smtpUser;
-            $mail->Password   = $smtpPass;
-            $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-            $mail->Port       = (int)$smtpPort;
-
-            // Set From address using configured email
-            $mail->setFrom($fromEmail, $fromName);
-
-            // Timeout and connection settings to prevent blocking
-            $mail->Timeout       = 10;
-            $mail->SMTPKeepAlive = false;
-
-            $mail->CharSet = 'UTF-8';
-
-            $mail->setFrom($smtpUser, $fromName);
-            $mail->addAddress($toEmail, $toName);
-
-            $mail->isHTML(true);
-            $mail->Subject = $subject;
-            $mail->Body    = $body;
-
-            $mail->send();
-            return true;
-        } catch (\Throwable $e) {
-            // Log the PHPMailer error and return false; no fallback to PHP mail()
-            $logPath = __DIR__ . '/../email_notifications.log';
-            $errorMessage = "[" . date('Y-m-d H:i:s') . "] PHPMailer sending failed to $toEmail. Error: " . $e->getMessage() . " (" . $mail->ErrorInfo . ")\n" .
-                "SMTP Debug Logs:\n" . $debugOutput . "\n";
-            @file_put_contents($logPath, $errorMessage, FILE_APPEND);
-            return false;
-        }
-    }
+if (isset($conn) && $conn instanceof mysqli) {
+    @include_once __DIR__ . '/../ensure_extended_schema.php';
 }
 
 if (!function_exists('sendEmailNotification')) {
@@ -527,13 +456,34 @@ if (!function_exists('sendEmailNotification')) {
             $htmlBody .= '
             <div class="details-card">
                 <h3>Transaction Details</h3>
-                <table class="details-table">
+                <table class="details-table">';
+
+            // If sender metadata exists, show it prominently
+            if (!empty($metadata['sender_name']) || !empty($metadata['sender_role'])) {
+                $senderDisplay = '';
+                if (!empty($metadata['sender_name'])) {
+                    $senderDisplay = htmlspecialchars($metadata['sender_name']);
+                }
+                if (!empty($metadata['sender_role'])) {
+                    $senderDisplay .= ($senderDisplay !== '' ? ' — ' : '') . htmlspecialchars(ucfirst($metadata['sender_role']));
+                }
+                if ($senderDisplay !== '') {
+                    $htmlBody .= '
+                    <tr>
+                        <td class="label">Sent By</td>
+                        <td class="value">' . $senderDisplay . '</td>
+                    </tr>';
+                }
+            }
+
+            $htmlBody .= '
                     <tr>
                         <td class="label">Event</td>
                         <td class="value">' . htmlspecialchars($event_name) . '</td>
                     </tr>';
+
             foreach ($metadata as $key => $val) {
-                if (in_array($key, ['event', 'action_url', 'action_label'])) {
+                if (in_array($key, ['event', 'action_url', 'action_label', 'sender_name', 'sender_role'])) {
                     continue;
                 }
                 $htmlBody .= '
@@ -575,10 +525,86 @@ if (!function_exists('sendEmailNotification')) {
         $esc_html = mysqli_real_escape_string($conn, $htmlBody);
         $esc_status = mysqli_real_escape_string($conn, $final_status);
 
-        $log_sql = "INSERT INTO email_notifications_log 
-                    (user_id, recipient_email, recipient_name, subject, message_text, html_body, status) 
-                    VALUES ($esc_user_id, '$esc_email', '$esc_name', '$esc_subject', '$esc_msg', '$esc_html', '$esc_status')";
+        $sender_id_val = 'NULL';
+        $sender_role_val = 'NULL';
+        if (session_status() === PHP_SESSION_NONE) {@session_start();}
+        if (!empty($_SESSION['user_id'])) { $sender_id_val = intval($_SESSION['user_id']); }
+        if (!empty($_SESSION['role'])) { $sender_role_val = "'" . mysqli_real_escape_string($conn, $_SESSION['role']) . "'"; }
+
+        $email_notifications_has_user_col = false;
+        $email_notifications_has_sender_cols = false;
+        $log_columns = '(recipient_email, recipient_name, subject, message_text, html_body, status';
+        $log_values = "('$esc_email', '$esc_name', '$esc_subject', '$esc_msg', '$esc_html', '$esc_status'";
+        $notification_user_check = mysqli_query($conn, "SHOW COLUMNS FROM email_notifications_log LIKE 'user_id'");
+        if ($notification_user_check && mysqli_num_rows($notification_user_check) > 0) {
+            $email_notifications_has_user_col = true;
+            $log_columns .= ', user_id';
+            $log_values .= ", $esc_user_id";
+        }
+        $notification_check = mysqli_query($conn, "SHOW COLUMNS FROM email_notifications_log LIKE 'sender_id'");
+        if ($notification_check && mysqli_num_rows($notification_check) > 0) {
+            $notification_check2 = mysqli_query($conn, "SHOW COLUMNS FROM email_notifications_log LIKE 'sender_role'");
+            if ($notification_check2 && mysqli_num_rows($notification_check2) > 0) {
+                $email_notifications_has_sender_cols = true;
+            }
+        }
+        if ($email_notifications_has_sender_cols) {
+            $log_columns .= ', sender_id, sender_role';
+            $log_values .= ", $sender_id_val, $sender_role_val";
+        }
+        $log_columns .= ')';
+        $log_values .= ')';
+        $log_sql = "INSERT INTO email_notifications_log $log_columns VALUES $log_values";
         mysqli_query($conn, $log_sql);
+
+        // Also log to email_logs table when available
+        $recipient_role = isset($metadata['recipient_role']) ? mysqli_real_escape_string($conn, $metadata['recipient_role']) : null;
+        if (empty($recipient_role) && is_numeric($recipient)) {
+            $role_query = mysqli_query($conn, "SELECT role FROM users WHERE id = " . intval($recipient) . " LIMIT 1");
+            if ($role_query && $row = mysqli_fetch_assoc($role_query)) {
+                $recipient_role = mysqli_real_escape_string($conn, $row['role']);
+            }
+        }
+        $recipient_role_sql = $recipient_role ? "'" . mysqli_real_escape_string($conn, $recipient_role) . "'" : 'NULL';
+        $err_msg_safe = $sent ? 'NULL' : "'" . mysqli_real_escape_string($conn, $smtp_logs) . "'";
+        // Capture sender details when available in session
+        $sender_id_sql = 'NULL';
+        $sender_role_sql = 'NULL';
+        if (session_status() === PHP_SESSION_NONE) {
+            @session_start();
+        }
+        if (!empty($_SESSION['user_id'])) {
+            $sender_id_sql = intval($_SESSION['user_id']);
+        }
+        if (!empty($_SESSION['role'])) {
+            $sender_role_sql = "'" . mysqli_real_escape_string($conn, $_SESSION['role']) . "'";
+        }
+
+        $email_logs_has_user_col = false;
+        $email_logs_has_sender_cols = false;
+        $log_cols = '(recipient_email, recipient_role, subject, status, error_message';
+        $log_vals = "('$esc_email', $recipient_role_sql, '$esc_subject', '$esc_status', $err_msg_safe";
+        $email_log_user_check = mysqli_query($conn, "SHOW COLUMNS FROM email_logs LIKE 'user_id'");
+        if ($email_log_user_check && mysqli_num_rows($email_log_user_check) > 0) {
+            $email_logs_has_user_col = true;
+            $log_cols .= ', user_id';
+            $log_vals .= ", $esc_user_id";
+        }
+        $email_log_check = mysqli_query($conn, "SHOW COLUMNS FROM email_logs LIKE 'sender_id'");
+        if ($email_log_check && mysqli_num_rows($email_log_check) > 0) {
+            $email_log_check2 = mysqli_query($conn, "SHOW COLUMNS FROM email_logs LIKE 'sender_role'");
+            if ($email_log_check2 && mysqli_num_rows($email_log_check2) > 0) {
+                $email_logs_has_sender_cols = true;
+            }
+        }
+        if ($email_logs_has_sender_cols) {
+            $log_cols .= ', sender_id, sender_role';
+            $log_vals .= ", $sender_id_sql, $sender_role_sql";
+        }
+        $log_cols .= ')';
+        $log_vals .= ')';
+        $email_log_sql = "INSERT INTO email_logs $log_cols VALUES $log_vals";
+        @mysqli_query($conn, $email_log_sql);
 
         // 4. Log to File System for easy sandbox verification only on failure
         if (!$sent) {
@@ -599,5 +625,175 @@ if (!function_exists('sendEmailNotification')) {
         }
 
         return $sent;
+    }
+}
+
+if (!function_exists('sendStudentNotification')) {
+    /**
+     * Sends a student-facing email notification using the centralized email helper.
+     *
+     * @param mixed  $recipient      User ID or email address
+     * @param string $recipientName  Student's display name
+     * @param string $subject        Email subject
+     * @param string $messageText    Plain text email body
+     * @param array  $metadata       Optional metadata for the email summary card
+     * @return bool
+     */
+    function sendStudentNotification($recipient, $recipientName, $subject, $messageText, $metadata = []) {
+        if (!empty($recipientName)) {
+            $metadata['recipient_name'] = trim($recipientName);
+        }
+        $metadata['event'] = $metadata['event'] ?? 'Student Notification';
+        return sendEmailNotification($recipient, $subject, $messageText, $metadata);
+    }
+}
+
+if (!function_exists('createNotification')) {
+    /**
+     * Create a dashboard notification record for the given user/role.
+     */
+    function createNotification($userId, $role, $title, $message, $notification_type = 'info') {
+        global $conn;
+        $userId = intval($userId);
+        $role = strtolower(trim((string) $role));
+        $notifType = mysqli_real_escape_string($conn, trim($notification_type ?: 'info'));
+        $titleEsc = mysqli_real_escape_string($conn, trim((string) $title));
+        $messageEsc = mysqli_real_escape_string($conn, trim((string) $message));
+        $roleEsc = mysqli_real_escape_string($conn, $role);
+
+        // Only insert into the unified notifications table.
+        $tableCheck = mysqli_query($conn, "SHOW TABLES LIKE 'notifications'");
+        if ($tableCheck && mysqli_num_rows($tableCheck) > 0) {
+            mysqli_query($conn, "INSERT INTO notifications (user_id, role, title, message, notification_type, is_read, created_at) VALUES ($userId, '$roleEsc', '$titleEsc', '$messageEsc', '$notifType', 0, NOW())");
+        }
+
+        return true;
+    }
+}
+
+if (!function_exists('notifyUser')) {
+    /**
+     * Create both dashboard and email notification for a user.
+     */
+    function notifyUser($userId, $role, $email, $title, $message, $metadata = [], $notification_type = 'info') {
+        global $conn;
+        if (empty($email) && is_numeric($userId)) {
+            $userQuery = mysqli_query($conn, "SELECT email FROM users WHERE id = " . intval($userId) . " LIMIT 1");
+            if ($userQuery && $userRow = mysqli_fetch_assoc($userQuery)) {
+                $email = trim($userRow['email']);
+            }
+        }
+
+        createNotification($userId, $role, $title, $message, $notification_type);
+        if (!empty($email) && filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            if (empty($metadata['recipient_name']) && is_numeric($userId)) {
+                $nameQuery = mysqli_query($conn, "SELECT full_name FROM users WHERE id = " . intval($userId) . " LIMIT 1");
+                if ($nameQuery && $nameRow = mysqli_fetch_assoc($nameQuery)) {
+                    $metadata['recipient_name'] = trim($nameRow['full_name']);
+                }
+            }
+            $metadata['recipient_role'] = $role;
+            return sendEmailNotification($email, $title, $message, $metadata);
+        }
+        return false;
+    }
+}
+
+if (!function_exists('sendManualMessage')) {
+    /**
+     * Send a manual message from one user to another with optional dashboard notification and email.
+     *
+     * @param int    $senderId       Sender user ID
+     * @param string $senderRole     Sender role
+     * @param int    $recipientId    Recipient user ID
+     * @param string $recipientRole  Recipient role
+     * @param string $subject        Subject of the message
+     * @param string $message        Message body
+     * @param bool   $sendNotification Whether to create a dashboard notification
+     * @param bool   $sendEmail      Whether to send the message by email
+     * @return array Status details for the manual message delivery
+     */
+    function sendManualMessage($senderId, $senderRole, $recipientId, $recipientRole, $subject, $message, $sendNotification = true, $sendEmail = true) {
+        global $conn;
+
+        $senderId = intval($senderId);
+        $recipientId = intval($recipientId);
+        $senderRole = strtolower(trim((string) $senderRole));
+        $recipientRole = strtolower(trim((string) $recipientRole));
+        $subject = trim((string) $subject);
+        $message = trim((string) $message);
+        $sendNotification = $sendNotification ? 1 : 0;
+        $sendEmail = $sendEmail ? 1 : 0;
+
+        $emailStatus = 'not_selected';
+        $emailError = null;
+
+        if ($sendNotification) {
+            createNotification($recipientId, $recipientRole, $subject, $message, 'info');
+        }
+
+        if ($sendEmail) {
+            $recipientEmail = null;
+            $metadata = [
+                'recipient_role' => $recipientRole,
+            ];
+
+            $recipientQuery = mysqli_query($conn, "SELECT email, full_name FROM users WHERE id = $recipientId LIMIT 1");
+            if ($recipientQuery && $recipientRow = mysqli_fetch_assoc($recipientQuery)) {
+                $recipientEmail = trim($recipientRow['email']);
+                if (!empty($recipientRow['full_name'])) {
+                    $metadata['recipient_name'] = trim($recipientRow['full_name']);
+                }
+            }
+
+            if (!empty($recipientEmail) && filter_var($recipientEmail, FILTER_VALIDATE_EMAIL)) {
+                // Resolve sender details to set Reply-To and display name in email
+                $senderQuery = mysqli_query($conn, "SELECT email, full_name, role FROM users WHERE id = " . intval($senderId) . " LIMIT 1");
+                $senderName = '';
+                $senderEmail = null;
+                if ($senderQuery && $srow = mysqli_fetch_assoc($senderQuery)) {
+                    $senderName = trim($srow['full_name'] ?: '');
+                    $senderEmail = trim($srow['email'] ?: null);
+                }
+                // Include sender metadata in the email body
+                if (!empty($senderName)) {
+                    $metadata['sender_name'] = $senderName;
+                }
+                $metadata['sender_role'] = $senderRole;
+
+                // Provide Reply-To and display From name via global mail options consumed by sendEmail()
+                $fromName = trim(($senderName ? $senderName : ucfirst($senderRole)) . ' / ' . ucfirst($senderRole));
+                $GLOBALS['mail_options'] = [
+                    'reply_to' => $senderEmail,
+                    'reply_to_name' => $senderName,
+                    'from_name' => $fromName,
+                ];
+
+                $sent = sendEmailNotification($recipientEmail, $subject, $message, $metadata);
+                $emailStatus = $sent ? 'sent' : 'failed';
+                if (!$sent) {
+                    $emailError = 'Email delivery failed. Review SMTP logs.';
+                }
+            } else {
+                $emailStatus = 'failed';
+                $emailError = 'Recipient does not have a valid email address.';
+            }
+        }
+
+        $stmt = mysqli_prepare($conn, "INSERT INTO manual_messages (sender_id, sender_role, recipient_id, recipient_role, subject, message, send_notification, send_email, email_status, email_error, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())");
+        if ($stmt) {
+            $stmt->bind_param('isisssiiss', $senderId, $senderRole, $recipientId, $recipientRole, $subject, $message, $sendNotification, $sendEmail, $emailStatus, $emailError);
+            $stmt->execute();
+            $stmt->close();
+        }
+
+        return [
+            'recipient_id' => $recipientId,
+            'recipient_role' => $recipientRole,
+            'send_notification' => (bool) $sendNotification,
+            'send_email' => (bool) $sendEmail,
+            'email_status' => $emailStatus,
+            'email_error' => $emailError,
+        ];
     }
 }

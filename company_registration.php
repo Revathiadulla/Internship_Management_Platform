@@ -17,7 +17,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $company_size = trim($_POST['company_size'] ?? '');
     $password = $_POST['password'] ?? '';
     $confirm_password = $_POST['confirm_password'] ?? '';
-    $plan_selected = null;
+    $plan_selected = 'Free';
 
     if (empty($company_name) || empty($recruiter_name) || empty($email) || empty($phone) || empty($password)) {
         $error = 'Please fill out all required fields.';

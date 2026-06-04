@@ -131,7 +131,7 @@ page_shell_start('candidates', 'Candidates', 'Central applicant database with re
                 </td>
                 <td class="px-6 py-4"><?php echo status_badge($row['current_status'] ?: 'Applied'); ?></td>
                 <td class="px-6 py-4 text-right">
-                    <a class="inline-flex items-center gap-1 font-semibold text-blue-700 hover:text-blue-900 transition-colors hover:underline" href="candidate_profile.php?id=<?php echo (int) $row['id']; ?>">
+                    <a class="inline-flex items-center gap-1 font-semibold text-blue-700 hover:text-blue-900 transition-colors hover:underline" href="hr_applicant_detail.php?app_id=<?php echo (int) $row['latest_application_id']; ?>">
                         <span class="material-symbols-outlined text-[16px]">visibility</span> View
                     </a>
                 </td>

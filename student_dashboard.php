@@ -7,15 +7,80 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
-$user_id = $_SESSION['user_id'];
+$user_id = intval($_SESSION['user_id']);
 
-$sql = "SELECT * FROM student_profiles WHERE user_id = '$user_id' LIMIT 1";
-$result = mysqli_query($conn, $sql);
-$profile = mysqli_fetch_assoc($result);
+$stmt = $conn->prepare("SELECT * FROM student_profiles WHERE user_id = ? LIMIT 1");
+$stmt->bind_param("i", $user_id);
+$stmt->execute();
+$result = $stmt->get_result();
+$profile = $result->fetch_assoc();
+$stmt->close();
 
 if (!$profile) {
     header("Location: student_profile_form.php");
     exit();
+}
+
+$assigned_project = null;
+$assigned_team = null;
+$has_assigned_project = false;
+$has_confirmed_team = false;
+
+$team_assign_sql = "SELECT t.id AS team_id,
+                           t.team_name,
+                           t.internship_id,
+                           t.status AS team_status,
+                           t.mentor_id,
+                           COALESCE(NULLIF(i.title, ''), NULLIF(i.project_title, ''), NULL) AS internship_title,
+                           COALESCE(NULLIF(i.project_type, ''), NULL) AS project_type,
+                           COALESCE(NULLIF(i.project_subtype, ''), NULL) AS project_subtype,
+                           COALESCE(NULLIF(i.description, ''), NULL) AS internship_description,
+                           COALESCE(NULLIF(i.skills, ''), NULLIF(i.technology_stack, ''), '') AS internship_skills,
+                           i.duration AS internship_duration,
+                           i.technology_stack AS internship_technology_stack,
+                           i.start_date AS internship_start_date,
+                           i.end_date AS internship_end_date,
+                           u.full_name AS mentor_name,
+                           u.email AS mentor_email
+                    FROM project_team_members ptm
+                    JOIN project_teams t ON ptm.project_team_id = t.id
+                    LEFT JOIN internships i ON t.internship_id = i.id
+                    LEFT JOIN users u ON t.mentor_id = u.id
+                    WHERE ptm.student_id = $user_id
+                    ORDER BY t.id DESC
+                    LIMIT 1";
+$team_assign_res = mysqli_query($conn, $team_assign_sql);
+if ($team_assign_res && ($team_assign_row = mysqli_fetch_assoc($team_assign_res))) {
+    $has_confirmed_team = true;
+    $assigned_team = [
+        'id' => intval($team_assign_row['team_id']),
+        'team_name' => $team_assign_row['team_name'],
+        'team_status' => $team_assign_row['team_status'],
+        'mentor_id' => intval($team_assign_row['mentor_id']),
+        'mentor_name' => $team_assign_row['mentor_name'],
+        'mentor_email' => $team_assign_row['mentor_email'],
+    ];
+
+    if (!empty($team_assign_row['internship_id'])) {
+        $has_assigned_project = true;
+        $assigned_project = [
+            'internship_id' => intval($team_assign_row['internship_id']),
+            'team_id' => intval($team_assign_row['team_id']),
+            'team_name' => $team_assign_row['team_name'],
+            'team_status' => $team_assign_row['team_status'],
+            'mentor_name' => $team_assign_row['mentor_name'],
+            'mentor_email' => $team_assign_row['mentor_email'],
+            'title' => $team_assign_row['internship_title'] ?: 'Assigned Project',
+            'project_type' => $team_assign_row['project_type'],
+            'project_subtype' => $team_assign_row['project_subtype'],
+            'description' => $team_assign_row['internship_description'],
+            'skills' => !empty($team_assign_row['internship_skills']) ? $team_assign_row['internship_skills'] : $team_assign_row['internship_technology_stack'],
+            'duration' => $team_assign_row['internship_duration'],
+            'technology_stack' => $team_assign_row['internship_technology_stack'],
+            'start_date' => $team_assign_row['internship_start_date'],
+            'end_date' => $team_assign_row['internship_end_date'],
+        ];
+    }
 }
 
 // Fetch student applications
@@ -27,14 +92,17 @@ $app_sql = "SELECT a.id as app_id,
                    a.status, a.applied_date, a.test_status, a.test_score,
                    a.test_answers, a.education_status, a.preferred_duration,
                    a.team_name, a.mentor_id, a.team_status,
+                   a.internship_status,
                    m.full_name as mentor_name, m.email as mentor_email,
                    i.description as project_desc,
                    i.project_type,
                    i.project_subtype,
+                   i.skills,
                    i.technology_stack,
                    i.difficulty_level,
                    i.start_date,
-                   i.end_date
+                   i.end_date,
+                   a.confirmation_letter_path
             FROM internship_applications a
             LEFT JOIN internships i ON a.internship_id = i.id AND a.internship_id > 0
             LEFT JOIN users m ON a.mentor_id = m.id
@@ -59,6 +127,7 @@ if ($app_result) {
             $active_intern = [
                 'app_id' => $row['app_id'],
                 'internship_id' => $row['internship_id'] ?: 0,
+                'internship_status' => $row['internship_status'] ?? null,
                 'title' => $row['title'],
                 'duration' => $row['duration'],
                 'mode' => $row['mode'],
@@ -73,83 +142,123 @@ if ($app_result) {
                 'project_desc' => $row['project_desc'] ?? null,
                 'project_type' => $row['project_type'] ?? null,
                 'project_subtype' => $row['project_subtype'] ?? null,
+                'skills' => $row['skills'] ?? null,
                 'technology_stack' => $row['technology_stack'] ?? null,
                 'difficulty_level' => $row['difficulty_level'] ?? null,
                 'start_date' => $row['start_date'] ?? null,
-                'end_date' => $row['end_date'] ?? null
+                'end_date' => $row['end_date'] ?? null,
+                'confirmation_letter_path' => $row['confirmation_letter_path'] ?? null
             ];
         }
     }
     $app_count = count($app_rows);
 }
 
+// Detect if the student is Selected but waiting for coordinator project assignment
+$is_selected = false;
+$selected_app = null;
+foreach ($app_rows as $ar) {
+    if ($ar['status'] === 'Selected') {
+        $is_selected = true;
+        $selected_app = $ar;
+        break;
+    }
+}
+
+if (!$has_active && $has_assigned_project) {
+    $has_active = true;
+    $active_intern = [
+        'app_id' => null,
+        'internship_id' => $assigned_project['internship_id'],
+        'internship_status' => 'Assigned',
+        'title' => $assigned_project['title'],
+        'duration' => $assigned_project['duration'],
+        'mode' => '',
+        'status' => 'Assigned',
+        'applied_date' => null,
+        'test_score' => null,
+        'education_status' => null,
+        'team_name' => $assigned_project['team_name'],
+        'mentor_name' => $assigned_project['mentor_name'],
+        'mentor_email' => $assigned_project['mentor_email'],
+        'team_status' => $assigned_project['team_status'] ?? 'Active',
+        'project_desc' => $assigned_project['description'],
+        'project_type' => $assigned_project['project_type'],
+        'project_subtype' => $assigned_project['project_subtype'],
+        'skills' => $assigned_project['skills'],
+        'technology_stack' => $assigned_project['technology_stack'],
+        'difficulty_level' => null,
+        'start_date' => $assigned_project['start_date'],
+        'end_date' => $assigned_project['end_date']
+    ];
+}
+
 $total_logs = 0;
 
 // Derive company name and domain dynamically if active
 if ($has_active) {
-    $active_title = strtolower($active_intern['title']);
-
-    $active_domain = !empty($active_intern['project_type']) ? $active_intern['project_type'] : "";
-    $project_name  = !empty($active_intern['title']) ? $active_intern['title'] : "General Aptitude Research Project";
-    $project_desc  = !empty($active_intern['project_desc']) ? $active_intern['project_desc'] : "";
-    $project_stack = [];
-    if (!empty($active_intern['technology_stack'])) {
-        $project_stack = array_map('trim', explode(',', $active_intern['technology_stack']));
-    }
-
-    if (empty($project_desc)) {
-        $project_desc  = "Research and document key concepts relevant to your internship domain. Prepare a structured report and present findings to your mentor.";
-        $project_stack = ["Research", "Documentation", "Presentation"];
-
-        if (strpos($active_title, 'mobile') !== false || strpos($active_title, 'android') !== false || strpos($active_title, 'ios') !== false || strpos($active_title, 'flutter') !== false || strpos($active_title, 'app developer') !== false) {
-            if (empty($active_domain)) $active_domain = "Mobile App Development";
-            $project_name  = "Mobile App Development Project";
-            $project_desc  = "Design and build a cross-platform mobile application. Implement UI screens, navigation, API integration, and local storage. Deliver a fully functional app with documentation.";
-            $project_stack = ["Flutter", "Dart", "Firebase", "REST API", "Android Studio"];
-        } elseif (strpos($active_title, 'frontend') !== false || strpos($active_title, 'react') !== false || strpos($active_title, 'web') !== false) {
-            if (empty($active_domain)) $active_domain = "Frontend Development";
-            $project_name  = "Responsive Web Application";
-            $project_desc  = "Design and build a fully responsive web application using React.js. Implement reusable components, state management, and integrate a REST API for dynamic data.";
-            $project_stack = ["React.js", "HTML5", "CSS3", "JavaScript", "REST API"];
-        } elseif (strpos($active_title, 'data') !== false || strpos($active_title, 'python') !== false || strpos($active_title, 'sql') !== false || strpos($active_title, 'science') !== false) {
-            if (empty($active_domain)) $active_domain = "Data Science";
-            $project_name  = "Sales Data Analysis Dashboard";
-            $project_desc  = "Build an end-to-end data pipeline — clean raw transaction records, perform exploratory analysis using Pandas, and construct an interactive visual dashboard for executive review.";
-            $project_stack = ["Python", "SQL", "Pandas", "Matplotlib", "Tableau"];
-        } elseif (strpos($active_title, 'ui') !== false || strpos($active_title, 'ux') !== false || strpos($active_title, 'design') !== false) {
-            if (empty($active_domain)) $active_domain = "UI/UX Design";
-            $project_name  = "Mobile App UI Redesign";
-            $project_desc  = "Conduct user research, create wireframes and high-fidelity prototypes for a mobile application redesign. Deliver a complete design system with components and interaction flows.";
-            $project_stack = ["Figma", "User Research", "Wireframing", "Prototyping", "Design Systems"];
-        } elseif (strpos($active_title, 'backend') !== false || strpos($active_title, 'node') !== false || strpos($active_title, 'php') !== false || strpos($active_title, 'database') !== false) {
-            if (empty($active_domain)) $active_domain = "Backend Development";
-            $project_name  = "RESTful API Service";
-            $project_desc  = "Design and implement a secure RESTful API with authentication, database integration, and comprehensive documentation. Include unit tests and deploy to a staging environment.";
-            $project_stack = ["Node.js", "PHP", "MySQL", "REST API", "JWT Auth"];
+        if (!$has_assigned_project && $has_confirmed_team) {
+            // Student belongs to a confirmed team but no internship is linked yet.
+            $active_intern = [
+                'app_id' => $active_intern['app_id'] ?? null,
+                'internship_id' => $active_intern['internship_id'] ?? 0,
+                'internship_status' => $active_intern['internship_status'] ?? null,
+                'title' => $active_intern['title'] ?? 'Project Not Assigned Yet',
+                'duration' => $active_intern['duration'] ?? '',
+                'mode' => $active_intern['mode'] ?? '',
+                'status' => $active_intern['status'] ?? 'Assigned',
+                'applied_date' => $active_intern['applied_date'] ?? null,
+                'test_score' => $active_intern['test_score'] ?? null,
+                'education_status' => $active_intern['education_status'] ?? null,
+                'team_name' => $active_intern['team_name'] ?? null,
+                'mentor_name' => $active_intern['mentor_name'] ?? null,
+                'mentor_email' => $active_intern['mentor_email'] ?? null,
+                'team_status' => $active_intern['team_status'] ?? 'Active',
+                'project_desc' => $active_intern['project_desc'] ?? 'Project Not Assigned Yet',
+                'project_type' => $active_intern['project_type'] ?? null,
+                'project_subtype' => $active_intern['project_subtype'] ?? null,
+                'skills' => $active_intern['skills'] ?? null,
+                'technology_stack' => $active_intern['technology_stack'] ?? null,
+                'difficulty_level' => $active_intern['difficulty_level'] ?? null,
+                'start_date' => $active_intern['start_date'] ?? null,
+                'end_date' => $active_intern['end_date'] ?? null
+            ];
         }
+
+        $project_title = !empty($active_intern['title']) ? $active_intern['title'] : 'Assigned Project';
+        $project_desc = !empty($active_intern['project_desc']) ? $active_intern['project_desc'] : 'Description not available yet.';
+        $project_stack_source = !empty($active_intern['skills']) ? $active_intern['skills'] : ($active_intern['technology_stack'] ?? '');
+        $project_stack = [];
+        if (!empty($project_stack_source)) {
+            $project_stack = array_map('trim', explode(',', $project_stack_source));
+        }
+
+        $active_domain = !empty($active_intern['project_type']) ? $active_intern['project_type'] : 'General';
+        $active_intern['domain'] = $active_domain;
+        $active_intern['project_name'] = $project_title;
+        $active_intern['project_desc'] = $project_desc;
+        $active_intern['project_stack'] = $project_stack;
+        $active_intern['company_name'] = 'IMP Technologies';
     }
-
-    if (empty($active_domain)) {
-        $active_domain = "General";
-    }
-
-    $active_intern['domain']        = $active_domain;
-    $active_intern['project_name']  = $project_name;
-    $active_intern['project_desc']  = $project_desc;
-    $active_intern['project_stack'] = $project_stack;
-    $active_intern['company_name']  = "IMP Technologies";
-
-    $total_logs_res = mysqli_query($conn, "SELECT COUNT(*) as cnt FROM daily_logs WHERE user_id='$user_id'");
-    $total_logs_row = mysqli_fetch_assoc($total_logs_res);
+    $stmt_logs = $conn->prepare("SELECT COUNT(*) as cnt FROM daily_logs WHERE user_id = ?");
+    $stmt_logs->bind_param("i", $user_id);
+    $stmt_logs->execute();
+    $total_logs_res = $stmt_logs->get_result();
+    $total_logs_row = $total_logs_res->fetch_assoc();
     $total_logs     = intval($total_logs_row['cnt'] ?? 0);
+    $stmt_logs->close();
 
     // Query phases from database
-    $db_phases_res = mysqli_query($conn, "SELECT * FROM internship_phases WHERE internship_id = '{$active_intern['internship_id']}' ORDER BY phase_number ASC");
+    $stmt_phases = $conn->prepare("SELECT * FROM internship_phases WHERE internship_id = ? ORDER BY phase_number ASC");
+    $stmt_phases->bind_param("i", $active_intern['internship_id']);
+    $stmt_phases->execute();
+    $db_phases_res = $stmt_phases->get_result();
     $db_phases = [];
-    while ($db_row = mysqli_fetch_assoc($db_phases_res)) {
+    while ($db_row = $db_phases_res->fetch_assoc()) {
         $db_phases[$db_row['phase_number']] = $db_row;
     }
     $db_phases_exist = !empty($db_phases);
+    $stmt_phases->close();
 
     $base_phases = [
         1 => ['label' => 'P1 Learning Phase',           'short' => 'Learning',      'icon' => 'school'],
@@ -201,7 +310,6 @@ if ($has_active) {
     $active_intern['current_phase_num']   = $current_phase_num;
     $active_intern['phases']              = $phases;
     $active_intern['current_phase_label'] = $phases[$current_phase_num]['label'];
-}
 
 
 
@@ -214,7 +322,7 @@ if ($has_active) {
     $hours_row    = mysqli_fetch_assoc($hours_result);
     $weekly_hours = isset($hours_row['total']) ? floatval($hours_row['total']) : 0.0;
 
-    $logs_sql    = "SELECT * FROM daily_logs WHERE user_id = '$user_id' AND internship_id = '{$active_intern['internship_id']}' ORDER BY log_date DESC LIMIT 3";
+    $logs_sql    = "SELECT * FROM daily_logs WHERE user_id = '$user_id' AND internship_id = '{$active_intern['internship_id']}' ORDER BY log_date DESC, id DESC LIMIT 3";
     $logs_result = mysqli_query($conn, $logs_sql);
     while ($log_row = mysqli_fetch_assoc($logs_result)) {
         $recent_logs[] = $log_row;
@@ -232,7 +340,13 @@ if ($has_active) {
 
 
 // Fetch unread notifications count
-$unread_sql   = "SELECT COUNT(*) as count FROM student_notifications WHERE user_id = '$user_id' AND is_read = 0";
+$unread_sql   = "
+    SELECT COUNT(*) as count FROM (
+        SELECT id, is_read FROM student_notifications WHERE user_id = '$user_id'
+        UNION ALL
+        SELECT id, is_read FROM notifications WHERE user_id = '$user_id'
+    ) combined WHERE is_read = 0
+";
 $unread_res   = mysqli_query($conn, $unread_sql);
 $unread_row   = mysqli_fetch_assoc($unread_res);
 $unread_count = isset($unread_row['count']) ? intval($unread_row['count']) : 0;
@@ -240,7 +354,7 @@ $unread_count = isset($unread_row['count']) ? intval($unread_row['count']) : 0;
 // ── Extra queries required by new dashboard ──────────────────────────────────
 
 // Fetch ALL logs for this user
-$all_logs_sql    = "SELECT * FROM daily_logs WHERE user_id = '$user_id' ORDER BY log_date DESC";
+$all_logs_sql    = "SELECT * FROM daily_logs WHERE user_id = '$user_id' ORDER BY log_date DESC, id DESC";
 $all_logs_result = mysqli_query($conn, $all_logs_sql);
 
 // Fetch application status history for timeline
@@ -268,7 +382,17 @@ $feedback_result = mysqli_query($conn, $feedback_sql);
 $feedback_count  = mysqli_num_rows($feedback_result);
 
 // Fetch ALL notifications
-$all_notif_sql    = "SELECT * FROM student_notifications WHERE user_id = '$user_id' ORDER BY created_at DESC";
+$all_notif_sql    = "
+    SELECT id, user_id, type, message, is_read, created_at, NULL AS title, NULL AS sender_name
+    FROM student_notifications
+    WHERE user_id = '$user_id'
+    UNION ALL
+    SELECT n.id, n.user_id, n.type, n.message, n.is_read, n.created_at, n.title, u.full_name AS sender_name
+    FROM notifications n
+    LEFT JOIN users u ON u.id = n.sender_id
+    WHERE n.user_id = '$user_id'
+    ORDER BY created_at DESC
+";
 $all_notif_result = mysqli_query($conn, $all_notif_sql);
 
 // Pre-compute values used in multiple sections
@@ -311,6 +435,16 @@ if ($has_active) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Student Dashboard — IMP</title>
   <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class'
+    };
+    if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  </script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
   <style>
@@ -344,12 +478,28 @@ if ($has_active) {
     ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
   </style>
 </head>
-<body class="bg-slate-50 text-slate-800 antialiased">
+<body class="bg-slate-50 text-slate-800 antialiased dark:bg-slate-950 dark:text-slate-100 transition-colors duration-200">
 
-<?php if (isset($_GET['msg'])): ?>
+<?php
+$success_message = '';
+if (isset($_GET['msg'])) {
+    $success_message = $_GET['msg'];
+} elseif (isset($_GET['success'])) {
+    $success_message = 'Daily log submitted successfully.';
+} elseif (isset($_GET['deleted'])) {
+    $success_message = 'Today’s daily log deleted successfully.';
+} elseif (isset($_GET['edited'])) {
+    $success_message = 'Daily log updated successfully.';
+}
+$error_message = '';
+if (isset($_GET['error'])) {
+    $error_message = $_GET['error'] === '1' ? 'Unable to process daily log.' : $_GET['error'];
+}
+?>
+<?php if ($success_message): ?>
 <div id="success-toast" class="fixed top-6 right-6 z-50 bg-green-600 text-white rounded-2xl shadow-xl px-5 py-4 flex items-center gap-3 transform translate-x-[420px] transition-transform duration-500 ease-out">
   <span class="material-symbols-outlined">check_circle</span>
-  <span class="text-sm font-semibold"><?php echo htmlspecialchars($_GET['msg']); ?></span>
+  <span class="text-sm font-semibold"><?php echo htmlspecialchars($success_message); ?></span>
   <button onclick="this.parentElement.remove()" class="ml-3 hover:opacity-70"><span class="material-symbols-outlined text-[18px]">close</span></button>
 </div>
 <script>
@@ -362,7 +512,7 @@ if ($has_active) {
 </script>
 <?php endif; ?>
 
-<?php if (isset($_GET['error'])): ?>
+<?php if ($error_message): ?>
 <div id="error-toast" class="fixed top-6 right-6 z-50 bg-red-600 text-white rounded-2xl shadow-xl px-5 py-4 flex items-center gap-3 transform translate-x-[420px] transition-transform duration-500 ease-out">
   <span class="material-symbols-outlined">warning</span>
   <span class="text-sm font-semibold"><?php echo htmlspecialchars($_GET['error']); ?></span>
@@ -469,6 +619,11 @@ if ($has_active) {
         <?php if ($unread_count > 0): ?>
         <span class="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
         <?php endif; ?>
+      </button>
+
+      <!-- Theme Switcher -->
+      <button id="theme-toggle" class="p-2 rounded-full text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors flex items-center justify-center cursor-pointer">
+        <span class="material-symbols-outlined text-[20px]" id="theme-toggle-icon">dark_mode</span>
       </button>
 
       <div class="h-7 w-px bg-gray-200"></div>
@@ -882,6 +1037,112 @@ if ($has_active) {
         </div><!-- /right col -->
       </div><!-- /row 3 -->
 
+      <?php elseif ($is_selected && !$has_assigned_project): ?>
+      <!-- ══ SELECTED — WAITING FOR COORDINATOR ASSIGNMENT ══ -->
+
+      <!-- Congratulations Banner -->
+      <div class="bg-gradient-to-r from-emerald-600 via-emerald-700 to-teal-700 rounded-2xl p-6 mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-lg">
+        <div>
+          <p class="text-emerald-200 text-[10px] font-bold uppercase tracking-widest mb-1">Congratulations!</p>
+          <h1 class="text-2xl font-extrabold text-white tracking-tight">You have been selected! 🎉</h1>
+          <p class="text-emerald-200 text-sm mt-1">Project assignment is pending from the coordinator. You will be notified once a project is assigned.</p>
+        </div>
+        <div class="shrink-0">
+          <span class="flex items-center gap-2 bg-white/20 border border-white/30 px-4 py-2.5 rounded-xl text-white text-sm font-bold">
+            <span class="material-symbols-outlined text-[18px]">check_circle</span>
+            Status: Selected
+          </span>
+        </div>
+      </div>
+
+      <!-- Stats Row -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 flex items-center gap-3">
+          <div class="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-[20px]">check_circle</span></div>
+          <div><p class="text-[10px] text-slate-400 font-bold uppercase tracking-wide">Status</p><p class="text-sm font-extrabold text-emerald-600">Selected</p></div>
+        </div>
+        <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 flex items-center gap-3">
+          <div class="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-[20px]">assignment</span></div>
+          <div><p class="text-[10px] text-slate-400 font-bold uppercase tracking-wide">Applications</p><p class="text-sm font-extrabold text-slate-800"><?php echo $app_count; ?></p></div>
+        </div>
+        <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 flex items-center gap-3">
+          <div class="w-10 h-10 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-[20px]">hourglass_top</span></div>
+          <div><p class="text-[10px] text-slate-400 font-bold uppercase tracking-wide">Project</p><p class="text-sm font-extrabold text-amber-600">Pending</p></div>
+        </div>
+        <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 flex items-center gap-3">
+          <div class="w-10 h-10 bg-red-50 text-red-500 rounded-xl flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-[20px]">notifications</span></div>
+          <div><p class="text-[10px] text-slate-400 font-bold uppercase tracking-wide">Alerts</p><p class="text-sm font-extrabold text-slate-800"><?php echo $unread_count; ?></p></div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <!-- Waiting for Coordinator Card -->
+        <div class="bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl p-6 text-white flex flex-col gap-4 shadow-lg">
+          <div class="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center"><span class="material-symbols-outlined text-[26px]">pending_actions</span></div>
+          <div>
+            <h3 class="text-lg font-extrabold">Waiting for Project Assignment</h3>
+            <p class="text-amber-100 text-sm mt-1 leading-relaxed">You are selected. Project assignment is pending from coordinator. You'll be notified once assigned.</p>
+          </div>
+          <a href="student_applications.php" class="inline-flex items-center gap-2 bg-white text-amber-700 font-bold text-sm px-4 py-2.5 rounded-xl hover:bg-amber-50 transition-colors shadow-sm w-fit">
+            <span class="material-symbols-outlined text-[18px]">assignment</span> View Application Status
+          </a>
+        </div>
+
+        <!-- Recent Applications -->
+        <div class="lg:col-span-2 bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="font-bold text-slate-800 text-sm">Recent Applications</h3>
+            <a href="student_applications.php" class="text-blue-600 text-xs font-bold hover:underline">View All →</a>
+          </div>
+          <?php if(count($app_rows)===0): ?>
+          <div class="text-center py-8 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+            <span class="material-symbols-outlined text-[32px] text-slate-300 block mb-2">assignment_late</span>
+            <p class="text-slate-400 text-sm">No applications yet.</p>
+          </div>
+          <?php else: ?>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead><tr class="border-b border-slate-100">
+                <th class="text-left py-2 px-3 text-xs font-semibold text-slate-400 uppercase tracking-wide">Title</th>
+                <th class="text-left py-2 px-3 text-xs font-semibold text-slate-400 uppercase tracking-wide">Status</th>
+                <th class="text-left py-2 px-3 text-xs font-semibold text-slate-400 uppercase tracking-wide">Date</th>
+              </tr></thead>
+              <tbody class="divide-y divide-slate-50">
+                <?php foreach(array_slice($app_rows,0,5) as $app):
+                  $st=$app['status'];
+                  $bg=match(true){
+                    in_array($st,['Started','Active Intern','Internship Started','Selected'])=>'bg-emerald-100 text-emerald-700',
+                    in_array($st,['Approved','Accepted','Shortlisted','HOD Approved'])=>'bg-blue-100 text-blue-700',
+                    in_array($st,['Rejected','Declined'])=>'bg-red-100 text-red-600',
+                    in_array($st,['HR Round','Test Completed','HR Screening'])=>'bg-indigo-100 text-indigo-700',
+                    default=>'bg-slate-100 text-slate-600',
+                  };
+                ?>
+                <tr class="hover:bg-slate-50 transition-colors">
+                  <?php
+                    $is_selected_or_approved = in_array($app['status'], ['Selected', 'Started', 'Internship Started', 'Active Intern']);
+                    $display_title = $is_selected_or_approved 
+                        ? $app['title'] 
+                        : (!empty($app['project_type']) && !empty($app['project_subtype']) 
+                            ? $app['project_type'] . ' - ' . $app['project_subtype'] 
+                            : (!empty($app['project_subtype']) 
+                                ? $app['project_subtype'] 
+                                : (!empty($app['project_type']) 
+                                    ? $app['project_type'] 
+                                    : $app['title'])));
+                  ?>
+                  <td class="py-3 px-3 font-medium text-slate-800 max-w-[180px] truncate"><?php echo htmlspecialchars($display_title); ?></td>
+                  <td class="py-3 px-3"><span class="px-2.5 py-1 rounded-full text-[11px] font-bold <?php echo $bg; ?>"><?php echo htmlspecialchars($st); ?></span></td>
+                  <td class="py-3 px-3 text-slate-400 text-xs"><?php echo date('M d, Y',strtotime($app['applied_date'])); ?></td>
+                </tr>
+                <?php endforeach; ?>
+              </tbody>
+            </table>
+          </div>
+          <?php endif; ?>
+        </div>
+      </div>
+
       <?php else: ?>
       <!-- ══ NO ACTIVE INTERNSHIP ══ -->
       <div class="mb-6">
@@ -919,7 +1180,6 @@ if ($has_active) {
             <h3 class="font-bold text-slate-800 text-sm">Recent Applications</h3>
             <a href="student_applications.php" class="text-blue-600 text-xs font-bold hover:underline">View All →</a>
           </div>
-          <?php // $app_rows is already populated at the top of the file ?>
           <?php if(count($app_rows)===0): ?>
           <div class="text-center py-8 bg-slate-50 rounded-xl border border-dashed border-slate-200">
             <span class="material-symbols-outlined text-[32px] text-slate-300 block mb-2">assignment_late</span>
@@ -945,7 +1205,19 @@ if ($has_active) {
                   };
                 ?>
                 <tr class="hover:bg-slate-50 transition-colors">
-                  <td class="py-3 px-3 font-medium text-slate-800 max-w-[180px] truncate"><?php echo htmlspecialchars($app['title']); ?></td>
+                  <?php
+                    $is_selected_or_approved = in_array($app['status'], ['Selected', 'Started', 'Internship Started', 'Active Intern']);
+                    $display_title = $is_selected_or_approved 
+                        ? $app['title'] 
+                        : (!empty($app['project_type']) && !empty($app['project_subtype']) 
+                            ? $app['project_type'] . ' - ' . $app['project_subtype'] 
+                            : (!empty($app['project_subtype']) 
+                                ? $app['project_subtype'] 
+                                : (!empty($app['project_type']) 
+                                    ? $app['project_type'] 
+                                    : $app['title'])));
+                  ?>
+                  <td class="py-3 px-3 font-medium text-slate-800 max-w-[180px] truncate"><?php echo htmlspecialchars($display_title); ?></td>
                   <td class="py-3 px-3"><span class="px-2.5 py-1 rounded-full text-[11px] font-bold <?php echo $bg; ?>"><?php echo htmlspecialchars($st); ?></span></td>
                   <td class="py-3 px-3 text-slate-400 text-xs"><?php echo date('M d, Y',strtotime($app['applied_date'])); ?></td>
                 </tr>
@@ -970,20 +1242,52 @@ if ($has_active) {
         <span class="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-xs font-bold uppercase tracking-wide">
           <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping inline-block"></span> Active Intern
         </span>
+        <?php elseif ($is_selected && !$has_assigned_project): ?>
+        <span class="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-xs font-bold uppercase tracking-wide">
+          <span class="material-symbols-outlined text-[14px]">check_circle</span> Selected
+        </span>
         <?php endif; ?>
       </div>
 
-      <?php if (!$has_active): ?>
-      <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-16 text-center max-w-md mx-auto">
-        <div class="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-5">
-          <span class="material-symbols-outlined text-[40px] text-slate-300">badge</span>
+      <?php if ($is_selected && !$has_active && !$has_assigned_project): ?>
+        <!-- Selected but waiting for coordinator -->
+        <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-16 text-center max-w-lg mx-auto">
+          <div class="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-5">
+            <span class="material-symbols-outlined text-[40px] text-emerald-500">check_circle</span>
+          </div>
+          <h3 class="text-lg font-bold text-slate-700 mb-2">You are selected! 🎉</h3>
+          <p class="text-slate-500 text-sm mb-2">Project assignment is pending from coordinator.</p>
+          <p class="text-slate-400 text-xs mb-6">Once the coordinator assigns a project, your internship details, mentor, team, and phases will appear here.</p>
+          <div class="flex flex-col sm:flex-row gap-3 justify-center">
+            <a href="student_applications.php" class="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl transition-colors shadow-sm">
+              <span class="material-symbols-outlined text-[18px]">assignment</span> View Application Status
+            </a>
+          </div>
         </div>
-        <h3 class="text-lg font-bold text-slate-600 mb-2">No Active Internship</h3>
-        <p class="text-slate-400 text-sm mb-6">Apply for an internship to get started on your journey.</p>
-        <a href="student_browse_internships.php" class="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl transition-colors shadow-sm">
-          <span class="material-symbols-outlined text-[18px]">search</span> Browse Internships
-        </a>
-      </div>
+      <?php elseif (!$has_active && !$has_assigned_project): ?>
+        <?php if ($app_count > 0 || $has_confirmed_team): ?>
+          <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-16 text-center max-w-md mx-auto">
+            <div class="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-5">
+              <span class="material-symbols-outlined text-[40px] text-slate-300">hourglass_empty</span>
+            </div>
+            <h3 class="text-lg font-bold text-slate-600 mb-2">Project Not Assigned Yet</h3>
+            <p class="text-slate-400 text-sm mb-6">Your application is in progress, but a confirmed team has not yet been linked to a project. Once the coordinator assigns the project, it will appear here.</p>
+            <a href="student_applications.php" class="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl transition-colors shadow-sm">
+              <span class="material-symbols-outlined text-[18px]">assignment</span> View Application Status
+            </a>
+          </div>
+        <?php else: ?>
+          <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-16 text-center max-w-md mx-auto">
+            <div class="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-5">
+              <span class="material-symbols-outlined text-[40px] text-slate-300">badge</span>
+            </div>
+            <h3 class="text-lg font-bold text-slate-600 mb-2">No Active Internship</h3>
+            <p class="text-slate-400 text-sm mb-6">Apply for an internship to get started on your journey.</p>
+            <a href="student_browse_internships.php" class="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl transition-colors shadow-sm">
+              <span class="material-symbols-outlined text-[18px]">search</span> Browse Internships
+            </a>
+          </div>
+        <?php endif; ?>
       <?php else:
         $intern_end = clone $end_date;
       ?>
@@ -1074,7 +1378,7 @@ if ($has_active) {
         <!-- A) Submit New Log Form -->
         <div class="lg:col-span-2 bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
           <h3 class="text-sm font-bold text-slate-700 uppercase tracking-wide mb-5">Submit Today's Log</h3>
-          <form id="log-form" method="POST" action="student_daily_log_submit.php" class="space-y-4">
+          <form id="log-form" method="POST" action="submit_daily_log.php" class="space-y-4">
             <input type="hidden" name="log_date" value="<?php echo date('Y-m-d'); ?>">
             <input type="hidden" name="internship_id" value="<?php echo $has_active ? intval($active_intern['internship_id']) : 0; ?>">
 
@@ -1142,6 +1446,9 @@ if ($has_active) {
                   <th class="text-left py-2 px-3 text-xs font-semibold text-slate-400 uppercase tracking-wide">Tasks</th>
                   <th class="text-left py-2 px-3 text-xs font-semibold text-slate-400 uppercase tracking-wide">Hours</th>
                   <th class="text-left py-2 px-3 text-xs font-semibold text-slate-400 uppercase tracking-wide">Focus</th>
+                  <th class="text-left py-2 px-3 text-xs font-semibold text-slate-400 uppercase tracking-wide">Issues Faced</th>
+                  <th class="text-left py-2 px-3 text-xs font-semibold text-slate-400 uppercase tracking-wide">Next Day Plan</th>
+                  <th class="text-left py-2 px-3 text-xs font-semibold text-slate-400 uppercase tracking-wide">Actions</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-50">
@@ -1163,6 +1470,27 @@ if ($has_active) {
                   </td>
                   <td class="py-3 px-3 font-semibold text-slate-700"><?php echo number_format($lr['time_spent'], 1); ?>h</td>
                   <td class="py-3 px-3"><span class="px-2 py-0.5 rounded-full text-[11px] font-bold <?php echo $focus_cls; ?>"><?php echo htmlspecialchars($lr['focus_level']); ?></span></td>
+                  <td class="py-3 px-3 text-slate-700 max-w-xs">
+                    <span title="<?php echo htmlspecialchars($lr['issues_faced'] ?? ''); ?>">
+                      <?php echo htmlspecialchars(mb_strimwidth($lr['issues_faced'] ?? '', 0, 60, '…')); ?>
+                    </span>
+                  </td>
+                  <td class="py-3 px-3 text-slate-700 max-w-xs">
+                    <span title="<?php echo htmlspecialchars($lr['next_plan'] ?? ''); ?>">
+                      <?php echo htmlspecialchars(mb_strimwidth($lr['next_plan'] ?? '', 0, 60, '…')); ?>
+                    </span>
+                  </td>
+                  <td class="py-3 px-3">
+                    <?php if ($lr['log_date'] === date('Y-m-d')): ?>
+                    <a href="edit_daily_log.php?id=<?php echo intval($lr['id']); ?>" class="text-xs font-bold text-blue-600 hover:text-blue-800 mr-3">Edit</a>
+                    <form method="POST" action="delete_daily_log.php" class="inline">
+                      <input type="hidden" name="log_id" value="<?php echo intval($lr['id']); ?>">
+                      <button type="submit" class="text-xs font-bold text-red-600 hover:text-red-800">Delete</button>
+                    </form>
+                    <?php else: ?>
+                      <span class="text-xs text-slate-500">View Only</span>
+                    <?php endif; ?>
+                  </td>
                 </tr>
                 <?php endforeach; ?>
               </tbody>
@@ -1179,10 +1507,21 @@ if ($has_active) {
     <section id="sec-project" class="dashboard-section">
       <h2 class="text-xl font-bold text-slate-800 mb-6">My Project</h2>
 
-      <?php if (!$has_active): ?>
+      <?php if (!$has_active && !$has_assigned_project): ?>
       <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-12 text-center">
-        <span class="material-symbols-outlined text-[48px] text-slate-300 mb-4 block">terminal</span>
-        <p class="text-slate-500 font-medium">No active internship — no project assigned yet.</p>
+        <?php if ($is_selected): ?>
+          <div class="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span class="material-symbols-outlined text-[36px] text-emerald-500">check_circle</span>
+          </div>
+          <p class="text-slate-700 font-bold text-base mb-1">You are selected!</p>
+          <p class="text-slate-400 text-sm">Project assignment is pending from coordinator. Once assigned, your project details will appear here.</p>
+        <?php elseif ($has_confirmed_team): ?>
+          <span class="material-symbols-outlined text-[48px] text-slate-300 mb-4 block">terminal</span>
+          <p class="text-slate-500 font-medium">Project Not Assigned Yet</p>
+        <?php else: ?>
+          <span class="material-symbols-outlined text-[48px] text-slate-300 mb-4 block">terminal</span>
+          <p class="text-slate-500 font-medium">No active internship — no project assigned yet.</p>
+        <?php endif; ?>
       </div>
       <?php else: ?>
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1214,13 +1553,29 @@ if ($has_active) {
           <!-- Meta -->
           <div class="grid grid-cols-3 gap-4 pt-4 border-t border-slate-50 text-sm">
             <div>
-              <p class="text-slate-400 text-xs font-medium">Difficulty</p>
-              <p class="font-semibold text-amber-600 mt-0.5"><?php echo htmlspecialchars($active_intern['difficulty_level'] ?: 'Medium'); ?></p>
+              <p class="text-slate-400 text-xs font-medium">Project Type</p>
+              <p class="font-semibold text-slate-700 mt-0.5"><?php echo htmlspecialchars($active_intern['project_type'] ?: 'General'); ?></p>
+            </div>
+            <div>
+              <p class="text-slate-400 text-xs font-medium">Project Subtype</p>
+              <p class="font-semibold text-slate-700 mt-0.5"><?php echo htmlspecialchars($active_intern['project_subtype'] ?: 'General'); ?></p>
             </div>
             <div>
               <p class="text-slate-400 text-xs font-medium">Duration</p>
-              <p class="font-semibold text-slate-700 mt-0.5"><?php echo htmlspecialchars($active_intern['duration'] ?: '3 Months'); ?></p>
+              <p class="font-semibold text-slate-700 mt-0.5"><?php echo htmlspecialchars($active_intern['duration'] ?: ($active_intern['internship_duration'] ?? 'N/A')); ?></p>
             </div>
+          </div>
+          <div class="grid grid-cols-2 gap-4 pt-4 border-t border-slate-50 text-sm">
+            <div>
+              <p class="text-slate-400 text-xs font-medium">Assigned Team</p>
+              <p class="font-semibold text-slate-700 mt-0.5"><?php echo htmlspecialchars($active_intern['team_name'] ?: 'Not Assigned'); ?></p>
+            </div>
+            <div>
+              <p class="text-slate-400 text-xs font-medium">Mentor</p>
+              <p class="font-semibold text-slate-700 mt-0.5"><?php echo htmlspecialchars($active_intern['mentor_name'] ?: 'Not Assigned'); ?></p>
+            </div>
+          </div>
+          <div class="grid grid-cols-1 gap-4 pt-4 border-t border-slate-50 text-sm">
             <div>
               <p class="text-slate-400 text-xs font-medium">Current Phase</p>
               <span class="inline-block mt-0.5 px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-bold rounded-full"><?php echo htmlspecialchars($phases[$current_phase_num]['short']); ?></span>
@@ -1616,6 +1971,7 @@ if ($has_active) {
           'info'        => ['icon'=>'info',              'icon_bg'=>'bg-blue-100',    'text'=>'text-blue-600',   'badge'=>'bg-blue-100 text-blue-700',      'dot'=>'bg-blue-500',    'label'=>'Application'],
           'log'         => ['icon'=>'edit_note',         'icon_bg'=>'bg-orange-100',  'text'=>'text-orange-600', 'badge'=>'bg-orange-100 text-orange-700',  'dot'=>'bg-orange-500',  'label'=>'Reminder'],
           'verification'=> ['icon'=>'verified_user',     'icon_bg'=>'bg-yellow-100',  'text'=>'text-yellow-700', 'badge'=>'bg-yellow-100 text-yellow-700',  'dot'=>'bg-yellow-500',  'label'=>'Verification'],
+          'mentor_message'=> ['icon'=>'chat',            'icon_bg'=>'bg-indigo-100',  'text'=>'text-indigo-600', 'badge'=>'bg-indigo-100 text-indigo-700',  'dot'=>'bg-indigo-500',  'label'=>'Mentor Message'],
           'default'     => ['icon'=>'notifications',     'icon_bg'=>'bg-blue-100',    'text'=>'text-blue-600',   'badge'=>'bg-blue-100 text-blue-700',      'dot'=>'bg-blue-500',    'label'=>'Application'],
         ];
       ?>
@@ -1695,7 +2051,13 @@ if ($has_active) {
                       </div>
                       <?php if ($unread): ?><div class="w-2.5 h-2.5 <?php echo $tc['dot']; ?> rounded-full shrink-0 mt-1 animate-pulse"></div><?php endif; ?>
                     </div>
-                    <p class="text-sm text-slate-700 <?php echo $unread ? 'font-semibold' : 'font-medium'; ?> leading-snug"><?php echo htmlspecialchars($nr['message']); ?></p>
+                    <?php if (!empty($nr['title'])): ?>
+                      <h4 class="text-sm font-bold text-slate-900 mb-0.5"><?php echo htmlspecialchars($nr['title']); ?></h4>
+                    <?php endif; ?>
+                    <p class="<?php echo !empty($nr['title']) ? 'text-xs text-slate-600' : 'text-sm text-slate-700 ' . ($unread ? 'font-semibold' : 'font-medium'); ?> leading-snug"><?php echo htmlspecialchars($nr['message']); ?></p>
+                    <?php if (!empty($nr['sender_name'])): ?>
+                      <p class="text-[11px] text-indigo-600 font-semibold mt-1.5">From: <?php echo htmlspecialchars($nr['sender_name']); ?></p>
+                    <?php endif; ?>
                     <div class="flex items-center justify-between mt-3 pt-2.5 border-t border-slate-100">
                       <div class="flex items-center gap-1.5 text-xs text-slate-400">
                         <span class="material-symbols-outlined text-[13px]">schedule</span>
@@ -2105,5 +2467,32 @@ if ($has_active) {
   updateStats();
 
 })();
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const themeToggle = document.getElementById('theme-toggle');
+    const themeToggleIcon = document.getElementById('theme-toggle-icon');
+    
+    if (themeToggle && themeToggleIcon) {
+        // Set initial icon
+        if (document.documentElement.classList.contains('dark')) {
+            themeToggleIcon.textContent = 'light_mode';
+        } else {
+            themeToggleIcon.textContent = 'dark_mode';
+        }
+        
+        themeToggle.addEventListener('click', () => {
+            if (document.documentElement.classList.contains('dark')) {
+                document.documentElement.classList.remove('dark');
+                localStorage.setItem('theme', 'light');
+                themeToggleIcon.textContent = 'dark_mode';
+            } else {
+                document.documentElement.classList.add('dark');
+                localStorage.setItem('theme', 'dark');
+                themeToggleIcon.textContent = 'light_mode';
+            }
+        });
+    }
+});
 </script>
 <?php print_resume_not_found_js(); ?>

@@ -108,7 +108,6 @@ if ($app_result) {
       <a href="hr_applications.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 hover:bg-gray-100 transition"> <span class="material-symbols-outlined">assignment</span> Applications</a>
       <a href="candidates.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 hover:bg-gray-100 transition"> <span class="material-symbols-outlined">group</span> Candidates</a>
       <a href="student_logs.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 hover:bg-gray-100 transition"> <span class="material-symbols-outlined">description</span> Student Logs</a>
-      <a href="workflows.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 hover:bg-gray-100 transition"> <span class="material-symbols-outlined">account_tree</span> Workflows</a>
       <a href="reports.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 hover:bg-gray-100 transition"> <span class="material-symbols-outlined">analytics</span> Reports</a>
       <a href="users.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 hover:bg-gray-100 transition"> <span class="material-symbols-outlined">manage_accounts</span> Users</a>
     </nav>

@@ -167,5 +167,25 @@ if (!function_exists('csrf_token_field')) {
     }
 }
 
+if (!function_exists('ensure_company_profile')) {
+    function ensure_company_profile(mysqli $conn, int $company_id, string $company_name = 'Recruiter Company'): array {
+        $q_prof = mysqli_query($conn, "SELECT company_name, plan_selected FROM company_profiles WHERE user_id = $company_id LIMIT 1");
+        if ($q_prof && $row = mysqli_fetch_assoc($q_prof)) {
+            if (empty($row['plan_selected'])) {
+                $row['plan_selected'] = 'Free';
+                mysqli_query($conn, "UPDATE company_profiles SET plan_selected = 'Free' WHERE user_id = $company_id");
+            }
+            return $row;
+        } else {
+            $stmt_ins = $conn->prepare("INSERT INTO company_profiles (user_id, company_name, plan_selected, industry_type) VALUES (?, ?, 'Free', 'Software & IT')");
+            $stmt_ins->bind_param("is", $company_id, $company_name);
+            $stmt_ins->execute();
+            $stmt_ins->close();
+            return ['company_name' => $company_name, 'plan_selected' => 'Free'];
+        }
+    }
+}
+
+
 
 

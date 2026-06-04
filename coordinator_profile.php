@@ -161,70 +161,59 @@ $profile_photo = $user_data['profile_photo'] ?? '';
 </head>
 <body class="bg-gray-100 text-gray-800">
         <!-- SideNavBar -->
-        <aside class="fixed left-0 top-0 h-screen w-60 z-50 bg-gray-50 border-r border-gray-200 flex flex-col py-6 font-sans text-sm font-medium">
+        <aside class="fixed left-0 top-0 h-screen w-60 z-50 bg-white border-r border-gray-200 flex flex-col py-6">
                 <div class="px-6 mb-8">
-                        <a href="index.html" class="flex items-center gap-2 hover:opacity-95 transition-opacity">
-                            <svg class="w-8 h-8 text-blue-600 shrink-0" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <rect width="32" height="32" rx="8" fill="currentColor"/>
-                                <circle cx="16" cy="16" r="3" fill="white"/>
-                                <line x1="16" y1="13" x2="16" y2="9" stroke="white" stroke-width="1.5"/>
-                                <circle cx="16" cy="8" r="1.5" fill="white"/>
-                                <line x1="18.5" y1="15.1" x2="22.5" y2="13.8" stroke="white" stroke-width="1.5"/>
-                                <circle cx="23.5" cy="13.5" r="1.5" fill="white"/>
-                                <line x1="17.8" y1="18.4" x2="20.0" y2="21.5" stroke="white" stroke-width="1.5"/>
-                                <circle cx="20.7" cy="22.5" r="1.5" fill="white"/>
-                                <line x1="14.2" y1="18.4" x2="12.0" y2="21.5" stroke="white" stroke-width="1.5"/>
-                                <circle cx="11.3" cy="22.5" r="1.5" fill="white"/>
-                                <line x1="13.5" y1="15.1" x2="9.5" y2="13.8" stroke="white" stroke-width="1.5"/>
-                                <circle cx="8.5" cy="13.5" r="1.5" fill="white"/>
-                            </svg>
-                            <span class="text-xl font-bold text-blue-600 tracking-tight">IMP</span>
+                        <a href="index.html" class="flex items-center gap-2">
+                                <svg class="w-8 h-8 text-blue-600 shrink-0" viewBox="0 0 32 32" fill="none">
+                                        <rect width="32" height="32" rx="8" fill="currentColor"/>
+                                        <circle cx="16" cy="16" r="3" fill="white"/>
+                                        <line x1="16" y1="13" x2="16" y2="9" stroke="white" stroke-width="1.5"/>
+                                        <circle cx="16" cy="8" r="1.5" fill="white"/>
+                                        <line x1="18.5" y1="15.1" x2="22.5" y2="13.8" stroke="white" stroke-width="1.5"/>
+                                        <circle cx="23.5" cy="13.5" r="1.5" fill="white"/>
+                                        <line x1="17.8" y1="18.4" x2="20" y2="21.5" stroke="white" stroke-width="1.5"/>
+                                        <circle cx="20.7" cy="22.5" r="1.5" fill="white"/>
+                                        <line x1="14.2" y1="18.4" x2="12" y2="21.5" stroke="white" stroke-width="1.5"/>
+                                        <circle cx="11.3" cy="22.5" r="1.5" fill="white"/>
+                                        <line x1="13.5" y1="15.1" x2="9.5" y2="13.8" stroke="white" stroke-width="1.5"/>
+                                        <circle cx="8.5" cy="13.5" r="1.5" fill="white"/>
+                                </svg>
+                                <span class="text-xl font-bold text-blue-600 tracking-tight">IMP</span>
                         </a>
-                        <p class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-2 ml-1">Coordinator Portal</p>
+                        <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-2 ml-0.5">Coordinator Portal</p>
                 </div>
-                <nav class="flex-1 space-y-1">
-                        <a class="flex items-center gap-3 text-gray-600 px-4 py-3 hover:bg-gray-100 duration-200 ease-in-out"
-                                href="coordinator_dashboard.php">
-                                <span class="material-symbols-outlined">dashboard</span>
-                                <span>Dashboard</span>
+                <nav class="flex-1 space-y-0.5 px-3">
+                        <a href="coordinator_dashboard.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
+                                <span class="material-symbols-outlined text-[20px]">dashboard</span> Dashboard
                         </a>
-                        <a class="flex items-center gap-3 text-gray-600 px-4 py-3 hover:bg-gray-100 duration-200 ease-in-out"
-                                href="coordinator_internships.php">
-                                <span class="material-symbols-outlined">work</span>
-                                <span>Postings</span>
+                        <a href="coordinator_internships.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
+                                <span class="material-symbols-outlined text-[20px]">work</span> Postings
                         </a>
-                        <a class="flex items-center gap-3 text-gray-600 px-4 py-3 hover:bg-gray-100 duration-200 ease-in-out"
-                                href="coordinator_candidates.php">
-                                <span class="material-symbols-outlined">group</span>
-                                <span>Candidates</span>
+                        <a href="coordinator_candidates.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
+                                <span class="material-symbols-outlined text-[20px]">group</span> Candidates
                         </a>
-
-                        <a class="flex items-center gap-3 text-gray-600 px-4 py-3 hover:bg-gray-100 duration-200 ease-in-out"
-                                href="coordinator_daily_logs.php">
-                                <span class="material-symbols-outlined">monitoring</span>
-                                <span>Daily Logs Monitoring</span>
+                        <a href="coordinator_generate_test.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
+                                <span class="material-symbols-outlined text-[20px]">quiz</span> Generate Test
                         </a>
-                        <a class="flex items-center gap-3 text-gray-600 px-4 py-3 hover:bg-gray-100 duration-200 ease-in-out"
-                                href="coordinator_reports.php">
-                                <span class="material-symbols-outlined">analytics</span>
-                                <span>Reports</span>
+                        <a href="coordinator_daily_logs.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
+                                <span class="material-symbols-outlined text-[20px]">monitoring</span> Daily Logs
                         </a>
-                        <a class="flex items-center gap-3 text-gray-600 px-4 py-3 hover:bg-gray-100 duration-200 ease-in-out"
-                                href="coordinator_teams.php">
-                                <span class="material-symbols-outlined">manage_accounts</span>
-                                <span>Team Management</span>
+                        <a href="coordinator_reports.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
+                                <span class="material-symbols-outlined text-[20px]">analytics</span> Reports
+                        </a>
+                        <a href="coordinator_teams.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
+                                <span class="material-symbols-outlined text-[20px]">manage_accounts</span> Teams
                         </a>
                 </nav>
-                <div class="mt-auto border-t border-gray-200 pt-4">
-                        <a class="flex items-center gap-3 text-gray-600 px-4 py-3 hover:bg-gray-100 duration-200 ease-in-out"
-                                href="coordinator_help_center.php">
-                                <span class="material-symbols-outlined">help</span>
-                                <span>Help Center</span>
+                <div class="border-t border-gray-200 pt-3 px-3 space-y-0.5">
+                        <a href="coordinator_profile.php" class="flex items-center gap-3 bg-blue-50 text-blue-700 border-l-4 border-blue-600 px-3 py-2.5 rounded-r-lg text-sm font-semibold">
+                                <span class="material-symbols-outlined text-[20px]">account_circle</span> My Profile
                         </a>
-                        <a class="flex items-center gap-3 text-gray-600 px-4 py-3 hover:bg-gray-100 duration-200 ease-in-out"
-                                href="logout.php">
-                                <span class="material-symbols-outlined">logout</span>
-                                <span>Logout</span>
+                        <a href="coordinator_help_center.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
+                                <span class="material-symbols-outlined text-[20px]">help</span> Help Center
+                        </a>
+                        <a href="logout.php" class="flex items-center gap-3 text-red-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-red-50 transition-colors">
+                                <span class="material-symbols-outlined text-[20px]">logout</span> Logout
                         </a>
                 </div>
         </aside>
@@ -284,14 +273,14 @@ $profile_photo = $user_data['profile_photo'] ?? '';
                 <!-- Profile Dashboard Content -->
                 <div class="flex-1 p-8 space-y-6 max-w-4xl mx-auto w-full">
                         <?php if ($success_msg): ?>
-                            <div class="p-4 mb-4 text-sm text-green-800 rounded-lg bg-green-50 border border-green-200 flex items-center gap-2">
+                            <div class="p-4 mb-4 text-sm text-green-800 rounded-lg bg-green-50 border border-green-200 flex items-center gap-2 alert-success">
                                 <span class="material-symbols-outlined text-green-500">check_circle</span>
                                 <span><?php echo $success_msg; ?></span>
                             </div>
                         <?php endif; ?>
 
                         <?php if ($error_msg): ?>
-                            <div class="p-4 mb-4 text-sm text-red-800 rounded-lg bg-red-50 border border-red-200 flex items-center gap-2">
+                            <div class="p-4 mb-4 text-sm text-red-800 rounded-lg bg-red-50 border border-red-200 flex items-center gap-2 alert-danger">
                                 <span class="material-symbols-outlined text-red-500">error</span>
                                 <span><?php echo $error_msg; ?></span>
                             </div>
@@ -488,5 +477,6 @@ $profile_photo = $user_data['profile_photo'] ?? '';
                 }
         });
         </script>
+<script src="js/alerts.js"></script>
 </body>
 </html>

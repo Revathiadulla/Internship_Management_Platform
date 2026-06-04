@@ -530,14 +530,14 @@ $step = $_SESSION['reset_step'];
 
                 <!-- Messages -->
                 <?php if ($error_msg): ?>
-                    <div class="flex items-center gap-3 p-3.5 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 font-medium mb-5 animate-shake">
+                    <div class="flex items-center gap-3 p-3.5 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 font-medium mb-5 animate-shake alert-danger">
                         <span class="material-symbols-outlined text-red-500 text-[20px] flex-shrink-0">error</span>
                         <span><?php echo $error_msg; ?></span>
                     </div>
                 <?php endif; ?>
 
                 <?php if ($info_msg): ?>
-                    <div class="flex items-center gap-3 p-3.5 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700 font-medium mb-5">
+                    <div class="flex items-center gap-3 p-3.5 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700 font-medium mb-5 alert-info">
                         <span class="material-symbols-outlined text-blue-500 text-[20px] flex-shrink-0">info</span>
                         <span><?php echo $info_msg; ?></span>
                     </div>
@@ -745,5 +745,6 @@ $step = $_SESSION['reset_step'];
         setupVisibilityToggle('new-password', 'toggle-pwd-1');
         setupVisibilityToggle('confirm-password', 'toggle-pwd-2');
     </script>
+<script src="js/alerts.js"></script>
 </body>
 </html>

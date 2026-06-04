@@ -4,15 +4,19 @@
 function getStatusBadgeClass($status) {
     $status_lower = strtolower($status);
     // Green statuses (positive/completed)
-    if (in_array($status_lower, ['selected', 'hod approved', 'offer sent', 'onboarding completed'])) {
+    if (in_array($status_lower, ['selected', 'hod approved', 'approved', 'offer sent', 'onboarding completed'])) {
         return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+    }
+    // Yellow statuses (pending/awaiting decision)
+    if (in_array($status_lower, ['pending', 'hod approval pending', 'approval pending', 'forwarded to hod'])) {
+        return 'bg-amber-50 text-amber-700 border-amber-200';
     }
     // Blue/Cyan statuses (in progress)
     if (in_array($status_lower, ['applied', 'test completed', 'interview scheduled', 'hr round'])) {
         return 'bg-blue-50 text-blue-700 border-blue-200';
     }
     // Red statuses (rejected)
-    if (in_array($status_lower, ['rejected'])) {
+    if (in_array($status_lower, ['rejected', 'hod rejected'])) {
         return 'bg-red-50 text-red-700 border-red-200';
     }
     // Default gray

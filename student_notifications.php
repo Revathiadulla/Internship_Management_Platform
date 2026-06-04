@@ -55,13 +55,29 @@ if ($count_row['count'] == 0) {
 }
 
 // Fetch unread notifications count for sidebar
-$unread_sql = "SELECT COUNT(*) as count FROM student_notifications WHERE user_id = '$user_id' AND is_read = 0";
+$unread_sql = "
+    SELECT COUNT(*) as count FROM (
+        SELECT id, is_read FROM student_notifications WHERE user_id = '$user_id'
+        UNION ALL
+        SELECT id, is_read FROM notifications WHERE user_id = '$user_id'
+    ) combined WHERE is_read = 0
+";
 $unread_res = mysqli_query($conn, $unread_sql);
 $unread_row = mysqli_fetch_assoc($unread_res);
-$unread_count = isset($unread_row['count']) ? $unread_row['count'] : 0;
+$unread_count = isset($unread_row['count']) ? intval($unread_row['count']) : 0;
 
 // Fetch all notifications for page display
-$notifications_sql = "SELECT * FROM student_notifications WHERE user_id = '$user_id' ORDER BY created_at DESC";
+$notifications_sql = "
+    SELECT id, user_id, type, message, is_read, created_at, NULL AS title, NULL AS sender_name, link, 'student' AS source_table
+    FROM student_notifications
+    WHERE user_id = '$user_id'
+    UNION ALL
+    SELECT n.id, n.user_id, n.type, n.message, n.is_read, n.created_at, n.title, u.full_name AS sender_name, n.link, 'global' AS source_table
+    FROM notifications n
+    LEFT JOIN users u ON u.id = n.sender_id
+    WHERE n.user_id = '$user_id'
+    ORDER BY created_at DESC
+";
 $notifications_result = mysqli_query($conn, $notifications_sql);
 $total_notifications = mysqli_num_rows($notifications_result);
 
@@ -286,6 +302,7 @@ $has_active = mysqli_num_rows($active_result) > 0;
           <button data-filter="assessment" class="filter-pill px-4 py-1.5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-bold rounded-full transition-all">Tests/Assessments</button>
           <button data-filter="verification" class="filter-pill px-4 py-1.5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-bold rounded-full transition-all">Verifications</button>
           <button data-filter="reminder" class="filter-pill px-4 py-1.5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-bold rounded-full transition-all">Reminders</button>
+          <button data-filter="mentor_message" class="filter-pill px-4 py-1.5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-bold rounded-full transition-all">Mentor Messages</button>
       </div>
 
       <!-- Notification List -->
@@ -295,67 +312,93 @@ $has_active = mysqli_num_rows($active_result) > 0;
                   $type = $row['type'];
                   $is_read = $row['is_read'];
                   
-                  // Style configurations based on type
-                  $icon = 'notifications';
-                  $bg_class = 'bg-blue-50 text-blue-600';
-                  if (strtolower($type) == 'application') {
-                      $icon = 'assignment';
-                      $bg_class = 'bg-blue-50 text-blue-600';
-                  } elseif (strtolower($type) == 'assessment') {
-                      $icon = 'quiz';
-                      $bg_class = 'bg-purple-50 text-purple-600';
-                  } elseif (strtolower($type) == 'verification') {
-                      $icon = 'verified_user';
-                      $bg_class = 'bg-green-50 text-green-600';
-                  } elseif (strtolower($type) == 'hr') {
-                      $icon = 'person';
-                      $bg_class = 'bg-orange-50 text-orange-600';
-                  } elseif (strtolower($type) == 'hod') {
-                      $icon = 'school';
-                      $bg_class = 'bg-indigo-50 text-indigo-600';
-                  } elseif (strtolower($type) == 'selection') {
-                      $icon = 'stars';
-                      $bg_class = 'bg-rose-50 text-rose-600';
-                  } elseif (strtolower($type) == 'reminder') {
-                      $icon = 'event_note';
-                      $bg_class = 'bg-amber-50 text-amber-600';
-                  } elseif (strtolower($type) == 'alert') {
-                      $icon = 'warning';
-                      $bg_class = 'bg-red-50 text-red-600';
-                  }
-              ?>
-                  <div class="notification-card bg-white rounded-2xl border <?php echo $is_read ? 'border-slate-100' : 'border-blue-100 shadow-sm'; ?> p-5 transition-all flex items-start gap-4"
-                       data-id="<?php echo $row['id']; ?>"
-                       data-type="<?php echo htmlspecialchars(strtolower($type)); ?>"
-                       data-read="<?php echo $is_read ? 'true' : 'false'; ?>">
-                      
-                      <!-- Icon -->
-                      <div class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 <?php echo $bg_class; ?>">
-                          <span class="material-symbols-outlined text-[20px]"><?php echo $icon; ?></span>
-                      </div>
-                      
-                      <!-- Main Details -->
-                      <div class="flex-grow min-w-0">
-                          <div class="flex items-start justify-between gap-2">
-                              <span class="text-[10px] font-extrabold uppercase tracking-wider text-slate-400"><?php echo htmlspecialchars($type); ?> Notification</span>
-                              <?php if (!$is_read): ?>
-                                  <span class="new-dot w-2 h-2 bg-blue-600 rounded-full shrink-0 mt-1 shadow-sm"></span>
-                              <?php endif; ?>
-                          </div>
-                          <p class="font-semibold text-slate-800 text-sm mt-1 leading-relaxed"><?php echo htmlspecialchars($row['message']); ?></p>
-                          <span class="text-[10px] text-slate-400 font-medium flex items-center gap-1 mt-3">
-                              <span class="material-symbols-outlined text-[12px]">schedule</span> 
-                              <?php echo date('M d, Y - h:i A', strtotime($row['created_at'])); ?>
-                          </span>
-                      </div>
+                   // Style configurations based on type
+                   $icon = 'notifications';
+                   $bg_class = 'bg-blue-50 text-blue-600';
+                   if (strtolower($type) == 'application') {
+                       $icon = 'assignment';
+                       $bg_class = 'bg-blue-50 text-blue-600';
+                   } elseif (strtolower($type) == 'assessment') {
+                       $icon = 'quiz';
+                       $bg_class = 'bg-purple-50 text-purple-600';
+                   } elseif (strtolower($type) == 'verification') {
+                       $icon = 'verified_user';
+                       $bg_class = 'bg-green-50 text-green-600';
+                   } elseif (strtolower($type) == 'hr') {
+                       $icon = 'person';
+                       $bg_class = 'bg-orange-50 text-orange-600';
+                   } elseif (strtolower($type) == 'hod') {
+                       $icon = 'school';
+                       $bg_class = 'bg-indigo-50 text-indigo-600';
+                   } elseif (strtolower($type) == 'selection') {
+                       $icon = 'stars';
+                       $bg_class = 'bg-rose-50 text-rose-600';
+                   } elseif (strtolower($type) == 'reminder') {
+                       $icon = 'event_note';
+                       $bg_class = 'bg-amber-50 text-amber-600';
+                   } elseif (strtolower($type) == 'alert') {
+                       $icon = 'warning';
+                       $bg_class = 'bg-red-50 text-red-600';
+                   } elseif (strtolower($type) == 'mentor_message') {
+                       $icon = 'chat';
+                       $bg_class = 'bg-indigo-50 text-indigo-600';
+                   }
 
-                      <!-- Action Button -->
-                      <?php if (!$is_read): ?>
-                          <button class="btn-mark-single-read self-center text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50/50 hover:bg-blue-50 border border-blue-100 rounded-lg px-3 py-1.5 transition-colors shrink-0">
-                              Mark Read
-                          </button>
-                      <?php endif; ?>
-                  </div>
+                   $display_type = $type;
+                   if (strtolower($type) == 'mentor_message') {
+                       $display_type = 'Mentor Message';
+                   }
+               ?>
+                   <?php if (!empty($row['link'])): ?>
+                   <a href="mark_notification_read.php?action=read_redirect&id=<?php echo $row['id']; ?>&source=<?php echo $row['source_table']; ?>&fallback=student_notifications.php" class="notification-card block bg-white rounded-2xl border <?php echo $is_read ? 'border-slate-100' : 'border-blue-100 shadow-sm'; ?> p-5 transition-all flex items-start gap-4 hover:border-blue-300"
+                        data-id="<?php echo $row['id']; ?>"
+                        data-type="<?php echo htmlspecialchars(strtolower($type)); ?>"
+                        data-source="<?php echo $row['source_table']; ?>"
+                        data-read="<?php echo $is_read ? 'true' : 'false'; ?>">
+                   <?php else: ?>
+                   <div class="notification-card bg-white rounded-2xl border <?php echo $is_read ? 'border-slate-100' : 'border-blue-100 shadow-sm'; ?> p-5 transition-all flex items-start gap-4"
+                        data-id="<?php echo $row['id']; ?>"
+                        data-type="<?php echo htmlspecialchars(strtolower($type)); ?>"
+                        data-source="<?php echo $row['source_table']; ?>"
+                        data-read="<?php echo $is_read ? 'true' : 'false'; ?>">
+                   <?php endif; ?>
+                       
+                       <!-- Icon -->
+                       <div class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 <?php echo $bg_class; ?>">
+                           <span class="material-symbols-outlined text-[20px]"><?php echo $icon; ?></span>
+                       </div>
+                       
+                       <!-- Main Details -->
+                       <div class="flex-grow min-w-0">
+                           <div class="flex items-start justify-between gap-2">
+                               <span class="text-[10px] font-extrabold uppercase tracking-wider text-slate-400"><?php echo htmlspecialchars($display_type); ?> Notification</span>
+                               <?php if (!$is_read): ?>
+                                   <span class="new-dot w-2 h-2 bg-blue-600 rounded-full shrink-0 mt-1 shadow-sm"></span>
+                               <?php endif; ?>
+                           </div>
+                           <?php if (!empty($row['title'])): ?>
+                               <h4 class="font-bold text-slate-900 text-sm mt-1"><?php echo htmlspecialchars($row['title']); ?></h4>
+                           <?php endif; ?>
+                           <p class="<?php echo !empty($row['title']) ? 'text-slate-600 text-xs mt-1' : 'font-semibold text-slate-800 text-sm mt-1'; ?> leading-relaxed"><?php echo htmlspecialchars($row['message']); ?></p>
+                           <?php if (!empty($row['sender_name'])): ?>
+                               <p class="text-[11px] text-indigo-600 font-semibold mt-1.5">From: <?php echo htmlspecialchars($row['sender_name']); ?></p>
+                           <?php endif; ?>
+                           <span class="text-[10px] text-slate-400 font-medium flex items-center gap-1 mt-3">
+                               <span class="material-symbols-outlined text-[12px]">schedule</span> 
+                               <?php echo date('M d, Y - h:i A', strtotime($row['created_at'])); ?>
+                           </span>
+                       </div>
+
+                       <?php if (!$is_read): ?>
+                           <button class="btn-mark-single-read self-center text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50/50 hover:bg-blue-50 border border-blue-100 rounded-lg px-3 py-1.5 transition-colors shrink-0 z-10 relative">
+                               Mark Read
+                           </button>
+                       <?php endif; ?>
+                   <?php if (!empty($row['link'])): ?>
+                   </a>
+                   <?php else: ?>
+                   </div>
+                   <?php endif; ?>
               <?php endwhile; ?>
           <?php else: ?>
               <div class="py-16 text-center bg-white border border-slate-100 rounded-2xl shadow-sm">
@@ -448,14 +491,18 @@ $has_active = mysqli_num_rows($active_result) > 0;
                 const card = btn.closest(".notification-card");
                 const notifId = card.getAttribute("data-id");
 
+                const source = card.getAttribute("data-source") || "student";
+
                 try {
-                    const response = await fetch(`mark_notification_read.php?id=${notifId}`);
+                    const response = await fetch(`mark_notification_read.php?id=${notifId}&source=${source}`);
                     const data = await response.json();
 
                     if (data.success) {
                         // Soft fade new visual indicators
                         card.setAttribute("data-read", "true");
-                        card.className = "notification-card bg-white rounded-2xl border border-slate-100 p-5 transition-all flex items-start gap-4";
+                        card.className = card.tagName.toLowerCase() === 'a' 
+                            ? "notification-card block bg-white rounded-2xl border border-slate-100 p-5 transition-all flex items-start gap-4 hover:border-blue-300"
+                            : "notification-card bg-white rounded-2xl border border-slate-100 p-5 transition-all flex items-start gap-4";
                         
                         const dot = card.querySelector(".new-dot");
                         if (dot) dot.remove();
@@ -483,7 +530,9 @@ $has_active = mysqli_num_rows($active_result) > 0;
                     if (data.success) {
                         cards.forEach(card => {
                             card.setAttribute("data-read", "true");
-                            card.className = "notification-card bg-white rounded-2xl border border-slate-100 p-5 transition-all flex items-start gap-4";
+                            card.className = card.tagName.toLowerCase() === 'a' 
+                                ? "notification-card block bg-white rounded-2xl border border-slate-100 p-5 transition-all flex items-start gap-4 hover:border-blue-300"
+                                : "notification-card bg-white rounded-2xl border border-slate-100 p-5 transition-all flex items-start gap-4";
                             const dot = card.querySelector(".new-dot");
                             if (dot) dot.remove();
                             const btn = card.querySelector(".btn-mark-single-read");

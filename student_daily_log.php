@@ -60,12 +60,18 @@ if ($has_active) {
 // Fetch dynamic mentor assigned
 $mentor_name = "Not Assigned Yet";
 $mentor_id = 0;
-$mentor_query = "SELECT u.id, u.full_name FROM mentor_assignments ma JOIN users u ON ma.mentor_id = u.id WHERE ma.student_id = '$user_id' AND ma.status = 'active' LIMIT 1";
+$team_name = "";
+$mentor_query = "SELECT t.mentor_id, t.team_name, u.full_name AS mentor_name 
+                 FROM project_team_members tm 
+                 JOIN project_teams t ON tm.project_team_id = t.id 
+                 LEFT JOIN users u ON t.mentor_id = u.id 
+                 WHERE tm.student_id = '$user_id' LIMIT 1";
 $mentor_res = mysqli_query($conn, $mentor_query);
 if ($mentor_res && mysqli_num_rows($mentor_res) > 0) {
     $mentor_row = mysqli_fetch_assoc($mentor_res);
-    $mentor_name = $mentor_row['full_name'];
-    $mentor_id = (int)$mentor_row['id'];
+    $mentor_name = $mentor_row['mentor_name'] ?? "Not Assigned Yet";
+    $mentor_id = (int)$mentor_row['mentor_id'];
+    $team_name = $mentor_row['team_name'] ?? "";
 }
 
 $success_msg = "";
@@ -120,25 +126,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 $insert_sql = "INSERT INTO daily_logs (user_id, internship_id, application_id, tasks_completed, time_spent, focus_level, issues_faced, next_plan, log_date, attachment_path, status) 
                                VALUES ('$user_id', '$intern_id', '$app_id', '$tasks', '$hours', '$focus', '$issues', '$next_plan', '$log_date', " . ($attachment_path ? "'$attachment_path'" : "NULL") . ", '$status_submitted')";
                 if (mysqli_query($conn, $insert_sql)) {
+                    $log_id = mysqli_insert_id($conn);
                     log_activity($conn, 'Daily Log Submitted', "Student submitted daily log for date $log_date (" . number_format($hours, 1) . " hrs).");
 
                     
                     // Notify Mentor if assigned
                     if ($mentor_id > 0) {
-                        $notif_title = "New Log Submitted";
-                        $notif_msg = ($profile['full_name'] ?? 'Student') . " has submitted a daily log for " . date('M d, Y', strtotime($log_date));
-                        $notif_stmt = $conn->prepare("INSERT INTO mentor_notifications (mentor_id, title, type, message) VALUES (?, ?, 'log_submission', ?)");
-                        $notif_stmt->bind_param('iss', $mentor_id, $notif_title, $notif_msg);
-                        $notif_stmt->execute();
+                        $notif_title = "New Daily Log Submitted";
+                        $notif_msg = ($profile['full_name'] ?? 'Student') . " submitted today's daily log for " . ($team_name ?: 'your team') . ".";
+                        $link = "mentor_daily_logs.php?log_id=" . $log_id;
+                        $notif_stmt = $conn->prepare("INSERT INTO notifications (user_id, role, title, message, type, link, related_id, related_type) VALUES (?, 'mentor', ?, ?, 'log_submission', ?, ?, 'daily_log')");
+                        if ($notif_stmt) {
+                            $notif_stmt->bind_param('isssi', $mentor_id, $notif_title, $notif_msg, $link, $log_id);
+                            $notif_stmt->execute();
+                            $notif_stmt->close();
+                        }
                     }
 
                     // Notify HR
                     $hr_notif_title = "New Daily Log Submitted";
                     $hr_notif_msg = "Student Name: " . ($profile['full_name'] ?? 'Student') . "\nSubmission Date: " . date('M d, Y', strtotime($log_date));
-                    $hr_notif_stmt = $conn->prepare("INSERT INTO hr_notifications (title, type, message) VALUES (?, 'log_submission', ?)");
-                    $hr_notif_stmt->bind_param('ss', $hr_notif_title, $hr_notif_msg);
+                    $hr_link = "hr_applicant_detail.php?application_id=" . intval($app_id);
+                    $hr_notif_stmt = $conn->prepare("INSERT INTO hr_notifications (title, type, message, link) VALUES (?, 'log_submission', ?, ?)");
+                    $hr_notif_stmt->bind_param('sss', $hr_notif_title, $hr_notif_msg, $hr_link);
                     $hr_notif_stmt->execute();
                     $hr_notif_stmt->close();
+
+                    // ── Notify coordinators ──
+                    $coord_res = mysqli_query($conn, "SELECT id FROM users WHERE LOWER(role) = 'coordinator'");
+                    if ($coord_res) {
+                        $c_title = 'Daily Log Submitted';
+                        $c_msg = "Student " . ($profile['full_name'] ?? 'Student') . " submitted daily log for date $log_date (" . number_format($hours, 1) . " hrs).";
+                        $c_type = 'info';
+                        $c_link = "coordinator_internships.php?view=" . intval($intern_id);
+                        $coord_stmt = $conn->prepare("INSERT INTO notifications (user_id, role, title, message, type, link) VALUES (?, 'coordinator', ?, ?, ?, ?)");
+                        if ($coord_stmt) {
+                            while ($c_row = mysqli_fetch_assoc($coord_res)) {
+                                $c_id = intval($c_row['id']);
+                                $coord_stmt->bind_param("issss", $c_id, $c_title, $c_msg, $c_type, $c_link);
+                                $coord_stmt->execute();
+                            }
+                            $coord_stmt->close();
+                        }
+                    }
 
                     // Send email notification for daily progress log
                     $log_subject = "IMP Daily Progress Log Submitted - " . date('M d, Y', strtotime($log_date));
@@ -224,20 +254,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
                 // Notify Mentor of resubmission
                 if ($mentor_id > 0) {
-                    $notif_title = "Log Resubmitted";
-                    $notif_msg = ($profile['full_name'] ?? 'Student') . " has updated and resubmitted their daily log for " . date('M d, Y', strtotime($log_row['log_date']));
-                    $notif_stmt = $conn->prepare("INSERT INTO mentor_notifications (mentor_id, title, type, message) VALUES (?, ?, 'log_resubmission', ?)");
-                    $notif_stmt->bind_param('iss', $mentor_id, $notif_title, $notif_msg);
-                    $notif_stmt->execute();
+                    $notif_title = "New Daily Log Submitted";
+                    $notif_msg = ($profile['full_name'] ?? 'Student') . " submitted today's daily log for " . ($team_name ?: 'your team') . ".";
+                    $link = "mentor_daily_logs.php?log_id=" . $log_id;
+                    $notif_stmt = $conn->prepare("INSERT INTO notifications (user_id, role, title, message, type, link, related_id, related_type) VALUES (?, 'mentor', ?, ?, 'log_resubmission', ?, ?, 'daily_log')");
+                    if ($notif_stmt) {
+                        $notif_stmt->bind_param('isssi', $mentor_id, $notif_title, $notif_msg, $link, $log_id);
+                        $notif_stmt->execute();
+                        $notif_stmt->close();
+                    }
                 }
 
                 // Notify HR of resubmission
                 $hr_notif_title = "Daily Log Updated";
                 $hr_notif_msg = "Student Name: " . ($profile['full_name'] ?? 'Student') . "\nSubmission Date: " . date('M d, Y', strtotime($log_row['log_date']));
-                $hr_notif_stmt = $conn->prepare("INSERT INTO hr_notifications (title, type, message) VALUES (?, 'log_resubmission', ?)");
-                $hr_notif_stmt->bind_param('ss', $hr_notif_title, $hr_notif_msg);
+                $hr_link = "hr_applicant_detail.php?application_id=" . intval($active_intern['app_id']);
+                $hr_notif_stmt = $conn->prepare("INSERT INTO hr_notifications (title, type, message, link) VALUES (?, 'log_resubmission', ?, ?)");
+                $hr_notif_stmt->bind_param('sss', $hr_notif_title, $hr_notif_msg, $hr_link);
                 $hr_notif_stmt->execute();
                 $hr_notif_stmt->close();
+
+                // ── Notify coordinators ──
+                $coord_res = mysqli_query($conn, "SELECT id FROM users WHERE LOWER(role) = 'coordinator'");
+                if ($coord_res) {
+                    $c_title = 'Daily Log Updated';
+                    $c_msg = "Student " . ($profile['full_name'] ?? 'Student') . " updated/resubmitted daily log for date " . $log_row['log_date'] . ".";
+                    $c_type = 'info';
+                    $c_link = "coordinator_internships.php?view=" . intval($active_intern['internship_id']);
+                    $coord_stmt = $conn->prepare("INSERT INTO notifications (user_id, role, title, message, type, link) VALUES (?, 'coordinator', ?, ?, ?, ?)");
+                    if ($coord_stmt) {
+                        while ($c_row = mysqli_fetch_assoc($coord_res)) {
+                            $c_id = intval($c_row['id']);
+                            $coord_stmt->bind_param("issss", $c_id, $c_title, $c_msg, $c_type, $c_link);
+                            $coord_stmt->execute();
+                        }
+                        $coord_stmt->close();
+                    }
+                }
                 
                 header("Location: student_daily_log.php?msg=" . urlencode("Log updated and resubmitted successfully!"));
                 exit();

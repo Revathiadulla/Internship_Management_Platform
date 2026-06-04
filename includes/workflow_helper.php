@@ -9,7 +9,7 @@ if (!defined('INCLUDE_CHECK')) {
     exit('Direct access not permitted');
 }
 
-require_once __DIR__ . '/db.php'; // $conn
+require_once __DIR__ . '/../db.php'; // $conn
 require_once __DIR__ . '/mail_helper.php'; // sendEmailNotification()
 
 /**
@@ -20,16 +20,28 @@ function generate_hod_token(int $length = 32): string {
     return bin2hex(random_bytes($length / 2));
 }
 
+// Define tables to clean up before test
+$tables = ['users', 'student_profiles', 'internship_applications', 'notifications', 'status_audit'];
+
 /**
  * Add a notification record.
  */
-function add_notification(int $user_id, string $role, string $title, string $message, string $type = 'info') {
+
+function add_notification(int $user_id, string $recipient_role, string $title, string $message, string $type = 'info') {
     global $conn;
-    $stmt = $conn->prepare('INSERT INTO notifications (user_id, role, title, message, type, is_read, created_at) VALUES (?,?,?,?,0,NOW())');
-    $stmt->bind_param('isss', $user_id, $role, $title, $message);
-    $stmt->execute();
+    // Insert notification with necessary fields, other columns set to NULL
+    $stmt = $conn->prepare('INSERT INTO notifications (user_id, type, title, message, is_read, created_at, receiver_role, notification_type) VALUES (?, ?, ?, ?, 0, NOW(), ?, ?)');
+    if (!$stmt) {
+        error_log('Notification prepare failed: ' . $conn->error);
+        return false;
+    }
+    // Bind parameters: user_id, type, title, message, recipient_role, type (as notification_type)
+    $stmt->bind_param('isssss', $user_id, $type, $title, $message, $recipient_role, $type);
+    $result = $stmt->execute();
     $stmt->close();
+    return $result;
 }
+
 
 /**
  * Log status changes to a simple audit table.

@@ -35,7 +35,9 @@ $recent_apps = mysqli_query($conn, "SELECT a.id, a.status, a.verification_status
         COALESCE(sp.full_name, u.full_name, a.full_name, 'Unknown Applicant') AS full_name,
         COALESCE(sp.college_name, a.college_name, 'Not added') AS college,
         COALESCE(sp.skills, a.skills, a.relevant_skills, '') AS skills,
-        COALESCE(jp.title, i.title, a.internship_name, 'Untitled Posting') AS posting_title
+        COALESCE(jp.title, i.title, a.internship_name, 'Untitled Posting') AS assigned_project_title,
+        COALESCE(NULLIF(i.project_subtype, ''), '') AS applied_subtype,
+        a.internship_name AS application_internship_name
     FROM internship_applications a
     LEFT JOIN job_postings jp ON a.job_posting_id = jp.id
     LEFT JOIN internships i ON a.internship_id = i.id AND a.internship_id > 0
@@ -44,6 +46,24 @@ $recent_apps = mysqli_query($conn, "SELECT a.id, a.status, a.verification_status
     WHERE a.is_deleted = 0
     ORDER BY a.applied_date DESC
     LIMIT 8");
+
+function get_recent_app_posting_title(array $app): string {
+    $selected_statuses = ['Selected', 'Active Intern', 'Internship Started'];
+    if (in_array($app['status'] ?? '', $selected_statuses, true)) {
+        return trim($app['assigned_project_title'] ?? '') ?: 'Untitled Posting';
+    }
+
+    $subtype = trim($app['applied_subtype'] ?? '');
+    if ($subtype === '') {
+        $subtype = trim(preg_replace('/(\s+Internship|\s+Intern)$/i', '', $app['application_internship_name'] ?? ''));
+    }
+
+    if ($subtype === '' || in_array(strtolower($subtype), ['internship management platform', 'imp'], true)) {
+        return 'Not Available';
+    }
+
+    return $subtype;
+}
 
 $recent_logs = mysqli_query($conn, "SELECT dl.*, u.full_name, COALESCE(i.title, CONCAT('Internship #', dl.internship_id)) as posting_title 
     FROM daily_logs dl 
@@ -83,6 +103,13 @@ if ($activity_res) {
 
 page_shell_start('dashboard', 'Dashboard', 'Live HR overview powered by current applications, postings, candidates, and users.');
 ?>
+<div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div class="space-y-1">
+        <p class="text-sm font-semibold text-slate-900">Quick actions</p>
+        <p class="text-sm text-slate-500">Start a manual message to staff or students.</p>
+    </div>
+    <a href="manual_message.php" class="inline-flex items-center justify-center rounded-full bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-blue-700">Send Message</a>
+</div>
 <div class="grid gap-5 lg:grid-cols-4">
     <div class="rounded-lg border border-slate-200 bg-white p-6">
         <p class="text-xs font-bold uppercase tracking-wide text-slate-500">Applications</p>
@@ -135,7 +162,7 @@ page_shell_start('dashboard', 'Dashboard', 'Live HR overview powered by current 
                         <div class="font-semibold text-slate-900"><?php echo e($app['full_name']); ?></div>
                         <div class="text-xs text-slate-500"><?php echo e($app['college']); ?><?php echo $app['skills'] ? ' · ' . e(substr($app['skills'], 0, 45)) : ''; ?></div>
                     </td>
-                    <td class="px-5 py-4 text-slate-600"><?php echo e($app['posting_title']); ?></td>
+                    <td class="px-5 py-4 text-slate-600"><?php echo e(get_recent_app_posting_title($app)); ?></td>
                     <td class="px-5 py-4"><?php echo status_badge($app['verification_status'] ?: 'Pending'); ?></td>
                     <td class="px-5 py-4"><?php echo status_badge($app['status'] ?: 'Applied'); ?></td>
                     <td class="px-5 py-4 text-right text-slate-500"><?php echo $app['applied_date'] ? e(date('M d, Y', strtotime($app['applied_date']))) : 'NA'; ?></td>

@@ -25,6 +25,8 @@ $app_sql = "SELECT a.id AS app_id,
                    a.verification_status,
                    a.applied_date,
                    a.education_status,
+                   i.project_type,
+                   i.project_subtype,
                    (SELECT CONCAT(new_status, ' — ', DATE_FORMAT(created_at, '%b %d, %Y'))
                     FROM application_status_history
                     WHERE application_id = a.id
@@ -140,7 +142,19 @@ function formatDate($value) {
             <article class="rounded-[2rem] bg-white border border-slate-200 p-6 shadow-sm">
               <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div class="space-y-3">
-                  <h2 class="text-2xl font-semibold text-slate-900"><?php echo htmlspecialchars($app['title'] ?: 'Untitled Internship'); ?></h2>
+                  <?php
+                    $is_selected_or_approved = in_array($app['status'], ['Selected', 'Started', 'Internship Started', 'Active Intern']);
+                    $display_title = $is_selected_or_approved 
+                        ? $app['title'] 
+                        : (!empty($app['project_type']) && !empty($app['project_subtype']) 
+                            ? $app['project_type'] . ' - ' . $app['project_subtype'] 
+                            : (!empty($app['project_subtype']) 
+                                ? $app['project_subtype'] 
+                                : (!empty($app['project_type']) 
+                                    ? $app['project_type'] 
+                                    : $app['title'])));
+                  ?>
+                  <h2 class="text-2xl font-semibold text-slate-900"><?php echo htmlspecialchars($display_title ?: 'Untitled Internship'); ?></h2>
                   <div class="flex flex-wrap items-center gap-2">
                     <span class="rounded-full border px-3 py-1 text-sm font-semibold <?php echo $badgeClass; ?>"><?php echo htmlspecialchars($app['status']); ?></span>
                     <span class="rounded-full border px-3 py-1 text-sm font-semibold <?php echo $verificationClass; ?>"><?php echo htmlspecialchars($app['verification_status']); ?></span>

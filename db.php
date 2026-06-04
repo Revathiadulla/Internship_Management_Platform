@@ -81,6 +81,12 @@ if ($_col_check && mysqli_num_rows($_col_check) === 0) {
 unset($_col_check);
 
 // Add approval columns to internships safely
+$_col_check = mysqli_query($conn, "SHOW COLUMNS FROM internships LIKE 'status'");
+if ($_col_check && mysqli_num_rows($_col_check) === 0) {
+    mysqli_query($conn, "ALTER TABLE internships ADD COLUMN status VARCHAR(50) DEFAULT 'Pending Approval'");
+}
+unset($_col_check);
+
 $_col_check = mysqli_query($conn, "SHOW COLUMNS FROM internships LIKE 'approval_status'");
 if ($_col_check && mysqli_num_rows($_col_check) === 0) {
     mysqli_query($conn, "ALTER TABLE internships ADD COLUMN approval_status VARCHAR(50) DEFAULT 'Pending Approval'");
@@ -95,7 +101,26 @@ unset($_col_check);
 
 $_col_check = mysqli_query($conn, "SHOW COLUMNS FROM internships LIKE 'approved_at'");
 if ($_col_check && mysqli_num_rows($_col_check) === 0) {
-    mysqli_query($conn, "ALTER TABLE internships ADD COLUMN approved_at TIMESTAMP NULL DEFAULT NULL");
+    mysqli_query($conn, "ALTER TABLE internships ADD COLUMN approved_at DATETIME NULL DEFAULT NULL");
+}
+unset($_col_check);
+
+$_col_check = mysqli_query($conn, "SHOW COLUMNS FROM internships LIKE 'admin_remarks'");
+if ($_col_check && mysqli_num_rows($_col_check) === 0) {
+    mysqli_query($conn, "ALTER TABLE internships ADD COLUMN admin_remarks TEXT NULL");
+}
+unset($_col_check);
+
+// Add issues_faced and next_plan columns to daily_logs safely
+$_col_check = mysqli_query($conn, "SHOW COLUMNS FROM daily_logs LIKE 'issues_faced'");
+if ($_col_check && mysqli_num_rows($_col_check) === 0) {
+    mysqli_query($conn, "ALTER TABLE daily_logs ADD COLUMN issues_faced TEXT NULL");
+}
+unset($_col_check);
+
+$_col_check = mysqli_query($conn, "SHOW COLUMNS FROM daily_logs LIKE 'next_plan'");
+if ($_col_check && mysqli_num_rows($_col_check) === 0) {
+    mysqli_query($conn, "ALTER TABLE daily_logs ADD COLUMN next_plan TEXT NULL");
 }
 unset($_col_check);
 
@@ -110,7 +135,13 @@ $app_new_cols = [
     'hod_remarks' => "TEXT DEFAULT NULL",
     'selected_by' => "INT DEFAULT NULL",
     'selected_at' => "TIMESTAMP NULL DEFAULT NULL",
-    'hod_token' => "VARCHAR(255) DEFAULT NULL"
+    'hr_status' => "VARCHAR(50) DEFAULT 'Pending'",
+    'hod_token' => "VARCHAR(255) DEFAULT NULL",
+    'assigned_project_id' => "INT DEFAULT NULL",
+    'team_id' => "INT DEFAULT NULL",
+    'mentor_id' => "INT DEFAULT NULL",
+    'confirmation_letter_path' => "VARCHAR(255) DEFAULT NULL",
+    'confirmation_letter_sent_at' => "TIMESTAMP NULL DEFAULT NULL"
 ];
 foreach ($app_new_cols as $_col => $_def) {
     $_col_check = mysqli_query($conn, "SHOW COLUMNS FROM internship_applications LIKE '$_col'");
@@ -120,15 +151,72 @@ foreach ($app_new_cols as $_col => $_def) {
     unset($_col_check);
 }
 
+// Ensure admin-managed category tables exist and migrate existing internship category data
+mysqli_query($conn, "CREATE TABLE IF NOT EXISTS project_types (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    type_name VARCHAR(100) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'Active',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_project_types_name (type_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
-function checkAndAddToTalentPool($conn, $app_id) {
+mysqli_query($conn, "CREATE TABLE IF NOT EXISTS project_subtypes (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    project_type_id INT NOT NULL,
+    subtype_name VARCHAR(100) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'Active',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_project_subtypes_name (project_type_id, subtype_name),
+    FOREIGN KEY (project_type_id) REFERENCES project_types(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+// Ensure skills, mode, and duration columns exist in project_subtypes
+foreach (['skills' => "TEXT NULL", 'mode' => "VARCHAR(50) NULL", 'duration' => "VARCHAR(50) NULL"] as $_col => $_def) {
+    $_col_check = mysqli_query($conn, "SHOW COLUMNS FROM project_subtypes LIKE '$_col'");
+    if ($_col_check && mysqli_num_rows($_col_check) === 0) {
+        mysqli_query($conn, "ALTER TABLE project_subtypes ADD COLUMN $_col $_def");
+    }
+    unset($_col_check);
+}
+
+$project_type_count = mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM project_types");
+if ($project_type_count) {
+    $count_row = mysqli_fetch_assoc($project_type_count);
+    if (intval($count_row['cnt']) === 0) {
+        mysqli_query($conn, "INSERT IGNORE INTO project_types (type_name, status) VALUES ('Development', 'Active'), ('Design', 'Active'), ('Marketing', 'Active')");
+    }
+}
+
+$type_rows = mysqli_query($conn, "SELECT DISTINCT TRIM(project_type) AS type_name FROM internships WHERE project_type IS NOT NULL AND TRIM(project_type) <> ''");
+while ($row = mysqli_fetch_assoc($type_rows)) {
+    $type_name = mysqli_real_escape_string($conn, $row['type_name']);
+    mysqli_query($conn, "INSERT IGNORE INTO project_types (type_name, status) VALUES ('$type_name', 'Active')");
+}
+
+$type_map = [];
+$type_res = mysqli_query($conn, "SELECT id, type_name FROM project_types");
+while ($row = mysqli_fetch_assoc($type_res)) {
+    $type_map[strtolower(trim($row['type_name']))] = intval($row['id']);
+}
+
+$subtype_rows = mysqli_query($conn, "SELECT DISTINCT TRIM(project_type) AS type_name, TRIM(project_subtype) AS subtype_name FROM internships WHERE project_type IS NOT NULL AND TRIM(project_type) <> '' AND project_subtype IS NOT NULL AND TRIM(project_subtype) <> ''");
+while ($row = mysqli_fetch_assoc($subtype_rows)) {
+    $type_name = trim($row['type_name']);
+    $subtype_name = trim($row['subtype_name']);
+    $type_id = $type_map[strtolower($type_name)] ?? 0;
+    if ($type_id > 0 && $subtype_name !== '') {
+        $subtype_name_safe = mysqli_real_escape_string($conn, $subtype_name);
+        mysqli_query($conn, "INSERT IGNORE INTO project_subtypes (project_type_id, subtype_name, status) VALUES ($type_id, '$subtype_name_safe', 'Active')");
+    }
+}
+
+if (isset($app_id) && intval($app_id) > 0) {
     $app_id = intval($app_id);
-    if ($app_id <= 0) return false;
-
-    // Fetch the application details
-    $sql = "SELECT id, status, performance_score, mentor_evaluation, certificate_status, in_talent_pool, user_id FROM internship_applications WHERE id = $app_id LIMIT 1";
+    $sql = "SELECT status, performance_score, mentor_evaluation, certificate_status, in_talent_pool, user_id FROM internship_applications WHERE id = $app_id LIMIT 1";
     $res = mysqli_query($conn, $sql);
-    if ($res && $row = mysqli_fetch_assoc($res)) {
+    if (!$res) {
+        error_log("Database query failed in db.php: " . mysqli_error($conn) . " SQL: " . $sql);
+    } elseif ($row = mysqli_fetch_assoc($res)) {
         $status = strtolower($row['status']);
         $score = $row['performance_score'];
         $mentor_eval = strtolower($row['mentor_evaluation']);
@@ -158,15 +246,38 @@ function checkAndAddToTalentPool($conn, $app_id) {
             } else {
                 mysqli_query($conn, "UPDATE internship_applications SET in_talent_pool = 1, talent_pool_status = 'Yes' WHERE id = $app_id");
             }
-            return true;
         } else {
             // If not eligible, set status to No and remove from pool
             mysqli_query($conn, "UPDATE internship_applications SET in_talent_pool = 0, talent_pool_status = 'No' WHERE id = $app_id");
-            return false;
         }
     }
-    return false;
 }
+
+// Ensure message_logs table exists
+mysqli_query($conn, "CREATE TABLE IF NOT EXISTS message_logs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    sender_id INT NOT NULL,
+    sender_role VARCHAR(50) NOT NULL,
+    receiver_id INT NOT NULL,
+    receiver_role VARCHAR(50) NOT NULL,
+    subject VARCHAR(255) NOT NULL,
+    message TEXT NOT NULL,
+    send_type ENUM('in-app', 'email', 'both') NOT NULL,
+    status VARCHAR(50) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+$_col_check = mysqli_query($conn, "SHOW COLUMNS FROM message_logs LIKE 'team_id'");
+if ($_col_check && mysqli_num_rows($_col_check) === 0) {
+    mysqli_query($conn, "ALTER TABLE message_logs ADD COLUMN team_id INT NULL DEFAULT NULL AFTER receiver_role");
+}
+unset($_col_check);
+
+$_col_check = mysqli_query($conn, "SHOW COLUMNS FROM message_logs LIKE 'recipient_group'");
+if ($_col_check && mysqli_num_rows($_col_check) === 0) {
+    mysqli_query($conn, "ALTER TABLE message_logs ADD COLUMN recipient_group VARCHAR(100) NULL DEFAULT NULL AFTER team_id");
+}
+unset($_col_check);
 
 function get_resume_view_link($profile) {
     if (!$profile) {

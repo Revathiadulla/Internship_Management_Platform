@@ -41,7 +41,7 @@ if (!in_array($verification_status, $allowed_status, true)) {
 }
 
 $app_ids = array_map('intval', $_POST['application_ids']);
-$placeholders = implode(',', array_fill(0, count($app_ids), '?');
+$placeholders = implode(',', array_fill(0, count($app_ids), '?'));
 
 // Begin transaction
 mysqli_autocommit($conn, false);
@@ -78,8 +78,13 @@ foreach ($app_ids as $app_id) {
         $failed_ids[] = $app_id;
         continue;
     }
-    // Send email notification
-    $email_sent = sendEmailNotification($user_id, $notif_title, $notif_msg, [
+    // Send email notification via student helper
+    $student_name = '';
+    $user_res = mysqli_query($conn, "SELECT full_name FROM users WHERE id = $user_id LIMIT 1");
+    if ($user_res && $user_row = mysqli_fetch_assoc($user_res)) {
+        $student_name = $user_row['full_name'];
+    }
+    $email_sent = sendStudentNotification($user_id, $student_name, $notif_title, $notif_msg, [
         'event' => 'Verification Status Update',
         'verification_status' => $verification_status,
         'action_url' => 'http://localhost/IMP/student_dashboard.php',

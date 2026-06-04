@@ -559,7 +559,6 @@ function hr_sidebar(string $active): void {
         ['Applications', 'hr_applications.php', 'assignment', 'applications'],
         ['Candidates', 'candidates.php', 'group', 'candidates'],
         ['Student Logs', 'student_logs.php', 'description', 'student_logs'],
-        ['Workflows', 'workflows.php', 'account_tree', 'workflows'],
         ['Hiring Requests', 'hr_hiring_requests.php', 'handshake', 'hiring_requests'],
         ['Reports', 'hr_reports.php', 'analytics', 'reports'],
         ['Users', 'users.php', 'manage_accounts', 'users'],
@@ -592,8 +591,6 @@ function module_search_config(string $active): array {
             return ['archived_applications.php', 'Search archived applications by name or email...'];
         case 'candidates':
             return ['candidates.php', 'Search candidates, skills, or colleges...'];
-        case 'workflows':
-            return ['workflows.php', 'Search applications, positions...'];
         case 'users':
             return ['users.php', 'Search users by name or email...'];
         default:
@@ -633,19 +630,19 @@ function module_topbar(string $active, string $action_html = '', bool $show_sear
             
             if ($is_mentor) {
                 // Mentor specific notifications query
-                $notif_res = mysqli_query($conn, "SELECT COUNT(*) AS total FROM mentor_notifications WHERE mentor_id = $uid AND is_read = 0");
+                $notif_res = mysqli_query($conn, "SELECT COUNT(*) AS total FROM notifications WHERE user_id = $uid AND is_read = 0");
                 if ($notif_res) {
                     $notification_count = (int) mysqli_fetch_assoc($notif_res)['total'];
                 }
                 
-                $notif_q = mysqli_query($conn, "SELECT id, title, type, message, created_at, is_read FROM mentor_notifications WHERE mentor_id = $uid ORDER BY id DESC LIMIT 5");
+                $notif_q = mysqli_query($conn, "SELECT id, title, type, message, created_at, is_read FROM notifications WHERE user_id = $uid ORDER BY id DESC LIMIT 5");
                 if ($notif_q) {
                     while ($n_row = mysqli_fetch_assoc($notif_q)) {
                         $recent_notifs[] = $n_row;
                     }
                 }
                 
-                $interns_q = mysqli_query($conn, "SELECT COUNT(*) AS total FROM mentor_assignments WHERE mentor_id = $uid AND status = 'active'");
+                $interns_q = mysqli_query($conn, "SELECT COUNT(DISTINCT student_id) AS total FROM project_team_members ptm JOIN project_teams pt ON ptm.project_team_id = pt.id WHERE pt.mentor_id = $uid AND pt.status = 'Active'");
                 if ($interns_q) {
                     $interns_count = (int) mysqli_fetch_assoc($interns_q)['total'];
                 }
@@ -1037,7 +1034,7 @@ function mentor_sidebar(string $active): void {
     if (isset($conn) && $conn instanceof mysqli) {
         $uid = current_user_id();
         if ($uid) {
-            $res = mysqli_query($conn, "SELECT COUNT(*) AS total FROM mentor_notifications WHERE mentor_id = $uid AND is_read = 0");
+            $res = mysqli_query($conn, "SELECT COUNT(*) AS total FROM notifications WHERE user_id = $uid AND is_read = 0");
             if ($res) {
                 $unread_count = (int) mysqli_fetch_assoc($res)['total'];
             }

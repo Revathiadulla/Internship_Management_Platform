@@ -5,10 +5,24 @@ if (!isset($_SESSION['user_id']) || !isset($_SESSION['role']) || strtolower($_SE
     exit();
 }
 include "db.php";
+
+// Fetch admin notifications unread count for badge
+$admin_unread_res = mysqli_query($conn, "SELECT COUNT(*) as count FROM notifications WHERE user_id = " . intval($_SESSION['user_id']) . " AND role = 'admin' AND is_read = 0");
+$admin_unread_row = mysqli_fetch_assoc($admin_unread_res);
+$admin_unread_count = $admin_unread_row['count'] ?? 0;
 include_once __DIR__ . "/includes/mail_helper.php";
 
 $success_msg = "";
 $error_msg = "";
+
+// Fetch coordinators list for manual override selection
+$coordinators_res = mysqli_query($conn, "SELECT id, full_name, email FROM users WHERE role = 'coordinator' ORDER BY full_name ASC");
+$coordinators_list = [];
+if ($coordinators_res) {
+    while ($row = mysqli_fetch_assoc($coordinators_res)) {
+        $coordinators_list[] = $row;
+    }
+}
 
 // ── Workflow Oversight Actions ──
 // Handle POST-based review actions (from modal form with admin_remarks)
@@ -20,36 +34,77 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && isset($_
 
     if ($id > 0 && in_array($action, ['approve', 'reject', 'request_changes'])) {
         $new_status = match($action) {
-            'approve'         => 'Active',
+            'approve'         => 'Approved',
             'reject'          => 'Rejected',
             'request_changes' => 'Changes Requested',
+            default           => ''
         };
         $new_approval = $new_status;
 
-        $esc_remarks = mysqli_real_escape_string($conn, $admin_remarks);
-        $update_sql = "UPDATE internships SET status = '$new_status', approval_status = '$new_approval',
-                       approved_by = $admin_id, approved_at = NOW(),
-                       admin_remarks = '$esc_remarks'
-                       WHERE id = $id";
+        // Fetch current project_type and coordinator_id to auto-resolve if needed
+        $i_check_res = mysqli_query($conn, "SELECT project_type, coordinator_id FROM internships WHERE id = $id");
+        $i_row = mysqli_fetch_assoc($i_check_res);
+        $project_type = $i_row['project_type'] ?? '';
+        $current_coordinator_id = isset($i_row['coordinator_id']) ? intval($i_row['coordinator_id']) : 0;
 
-        if (mysqli_query($conn, $update_sql)) {
-            $success_msg = "Project posting status updated to: $new_status";
+        $override_coordinator_id = isset($_POST['override_coordinator_id']) ? intval($_POST['override_coordinator_id']) : 0;
+        $resolved_coordinator_id = $current_coordinator_id;
+        if ($override_coordinator_id > 0) {
+            $resolved_coordinator_id = $override_coordinator_id;
+        } elseif ($resolved_coordinator_id == 0 && !empty($project_type)) {
+            // Auto-determine coordinator based on assignments table
+            $auto_res = mysqli_query($conn, "
+                SELECT ca.coordinator_id 
+                FROM coordinator_assignments ca
+                JOIN project_types pt ON ca.project_type_id = pt.id
+                WHERE pt.type_name = '" . mysqli_real_escape_string($conn, $project_type) . "' AND ca.status = 'Active'
+                LIMIT 1
+            ");
+            if ($auto_res && $auto_row = mysqli_fetch_assoc($auto_res)) {
+                $resolved_coordinator_id = intval($auto_row['coordinator_id']);
+            }
+        }
 
-            // Fetch coordinator's email to notify them
-            $coord_res = mysqli_query($conn, "SELECT u.email, u.full_name, i.title
+        $stmt = mysqli_prepare($conn, "UPDATE internships SET status = ?, approval_status = ?, admin_remarks = ?, coordinator_id = ? WHERE id = ?");
+        if ($stmt) {
+            mysqli_stmt_bind_param($stmt, "sssii", $new_status, $new_approval, $admin_remarks, $resolved_coordinator_id, $id);
+            if (mysqli_stmt_execute($stmt)) {
+                $success_msg = "Project posting status updated to: $new_status";
+            } else {
+                $error_msg = "Failed to update status: " . mysqli_error($conn);
+            }
+            mysqli_stmt_close($stmt);
+        } else {
+            $error_msg = "Failed to prepare approval query: " . mysqli_error($conn);
+        }
+
+        if (empty($error_msg)) {
+            // Fetch coordinator's details to notify them
+            $coord_res = mysqli_query($conn, "SELECT u.id as coord_user_id, u.email, u.full_name, i.title
                 FROM internships i LEFT JOIN users u ON i.coordinator_id = u.id
                 WHERE i.id = $id LIMIT 1");
             $coord_row = mysqli_fetch_assoc($coord_res);
+
+            if ($coord_row && !empty($coord_row['coord_user_id'])) {
+                $coord_uid = intval($coord_row['coord_user_id']);
+                $c_title = 'Project Status Updated';
+                $c_msg = "Your project posting '" . ($coord_row['title'] ?? 'Your Project') . "' has been " . $new_status . " by Admin." . (!empty($admin_remarks) ? " Remarks: $admin_remarks" : "");
+                $c_type = $new_status === 'Approved' ? 'success' : ($new_status === 'Rejected' ? 'alert' : 'info');
+
+                $link = "coordinator_internships.php?view=" . intval($id);
+                $coord_stmt = $conn->prepare("INSERT INTO notifications (user_id, role, title, message, type, link) VALUES (?, 'coordinator', ?, ?, ?, ?)");
+                if ($coord_stmt) {
+                    $coord_stmt->bind_param("issss", $coord_uid, $c_title, $c_msg, $c_type, $link);
+                    $coord_stmt->execute();
+                    $coord_stmt->close();
+                }
+            }
+
             if ($coord_row && !empty($coord_row['email'])) {
                 $coord_email = $coord_row['email'];
-                $coord_name  = $coord_row['full_name'] ?? 'Coordinator';
-                $proj_title  = $coord_row['title'] ?? 'Your Project';
-                $action_labels = [
-                    'Active'            => 'Approved',
-                    'Rejected'          => 'Rejected',
-                    'Changes Requested' => 'Changes Requested'
-                ];
-                $action_label_str = $action_labels[$new_status] ?? $new_status;
+                $coord_name = $coord_row['full_name'] ?? 'Coordinator';
+                $proj_title = $coord_row['title'] ?? 'Your Project';
+                $action_label_str = $new_status;
                 $notif_subject = "IMP – Project Review Decision: $action_label_str – $proj_title";
                 $notif_message = "Dear $coord_name,\n\nYour project posting \"$proj_title\" has been reviewed by the Admin.\n\nDecision: $action_label_str" .
                     (!empty($admin_remarks) ? "\nAdmin Remarks: $admin_remarks" : "") .
@@ -63,8 +118,93 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && isset($_
                     'action_label'  => 'View My Postings'
                 ]);
             }
-        } else {
-            $error_msg = "Failed to update status: " . mysqli_error($conn);
+        }
+    } elseif ($id > 0 && $action === 'delete') {
+        if (!function_exists('tableExists')) {
+            function tableExists($conn, $table) {
+                $table = mysqli_real_escape_string($conn, $table);
+                $result = mysqli_query($conn, "SHOW TABLES LIKE '$table'");
+                return $result && mysqli_num_rows($result) > 0;
+            }
+        }
+        if (!function_exists('columnExists')) {
+            function columnExists($conn, $table, $column) {
+                $table = mysqli_real_escape_string($conn, $table);
+                $column = mysqli_real_escape_string($conn, $column);
+                $result = mysqli_query($conn, "SHOW COLUMNS FROM `$table` LIKE '$column'");
+                return $result && mysqli_num_rows($result) > 0;
+            }
+        }
+
+        if (tableExists($conn, 'test_mappings') && columnExists($conn, 'test_mappings', 'internship_id')) {
+            mysqli_query($conn, "DELETE FROM test_mappings WHERE internship_id = $id");
+        }
+        if (tableExists($conn, 'subtype_tests') && columnExists($conn, 'subtype_tests', 'internship_id')) {
+            mysqli_query($conn, "DELETE FROM subtype_tests WHERE internship_id = $id");
+        }
+        if (tableExists($conn, 'subtype_test_questions') && columnExists($conn, 'subtype_test_questions', 'internship_id')) {
+            mysqli_query($conn, "DELETE FROM subtype_test_questions WHERE internship_id = $id");
+        }
+        if (tableExists($conn, 'coordinator_assignments') && columnExists($conn, 'coordinator_assignments', 'internship_id')) {
+            mysqli_query($conn, "DELETE FROM coordinator_assignments WHERE internship_id = $id");
+        }
+        
+        $del_stmt = mysqli_prepare($conn, "DELETE FROM internships WHERE id = ?");
+        if ($del_stmt) {
+            mysqli_stmt_bind_param($del_stmt, "i", $id);
+            if (mysqli_stmt_execute($del_stmt)) {
+                $success_msg = "Internship deleted successfully.";
+                $admin_id = intval($_SESSION['user_id']);
+                $admin_link = "admin_internships.php";
+                @mysqli_query($conn, "INSERT INTO notifications (user_id, role, title, message, type, link) VALUES ($admin_id, 'admin', 'Internship Deleted', 'Internship ID $id was permanently deleted.', 'info', '$admin_link')");
+            } else {
+                $error_msg = "Failed to delete internship: " . mysqli_error($conn);
+            }
+            mysqli_stmt_close($del_stmt);
+        }
+    }
+}
+
+// Handle POST-based Save Remarks action from Details Modal
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'save_remarks' && isset($_POST['id'])) {
+    $id = intval($_POST['id']);
+    $admin_remarks = trim($_POST['admin_remarks'] ?? '');
+    $admin_id = intval($_SESSION['user_id']);
+
+    // Fetch coordinator info for notification
+    $coord_res = mysqli_query($conn, "SELECT i.title, u.id as coord_id, u.email as coord_email FROM internships i LEFT JOIN users u ON i.coordinator_id = u.id WHERE i.id = $id");
+    if ($coord_res && $coord_row = mysqli_fetch_assoc($coord_res)) {
+        $update_stmt = mysqli_prepare($conn, "UPDATE internships SET admin_remarks = ? WHERE id = ?");
+        if ($update_stmt) {
+            mysqli_stmt_bind_param($update_stmt, "si", $admin_remarks, $id);
+            if (mysqli_stmt_execute($update_stmt)) {
+                $success_msg = "Remarks saved successfully.";
+                
+                // Send notifications if a coordinator exists
+                if (!empty($coord_row['coord_id'])) {
+                    $coord_id = intval($coord_row['coord_id']);
+                    $proj_title = $coord_row['title'];
+                    $notif_title = "Admin Remarks Added";
+                    $notif_msg = "Admin has added remarks to your internship posting: $proj_title";
+                    
+                    $link_str = "coordinator_internships.php?view=" . intval($id);
+                    @mysqli_query($conn, "INSERT INTO notifications (user_id, role, title, message, type, link) VALUES ($coord_id, 'coordinator', '" . mysqli_real_escape_string($conn, $notif_title) . "', '" . mysqli_real_escape_string($conn, $notif_msg) . "', 'info', '" . mysqli_real_escape_string($conn, $link_str) . "')");
+
+                    if (!empty($coord_row['coord_email'])) {
+                        require_once 'includes/mail_helper.php';
+                        $notif_subject = "IMP – Admin Remarks Added: $proj_title";
+                        sendEmailNotification($coord_row['coord_email'], $notif_subject, $notif_msg . "\n\nPlease review them in the coordinator dashboard.", [
+                            'event'         => 'Admin Remarks Updated',
+                            'project_title' => $proj_title,
+                            'action_url'    => 'http://localhost/IMP/coordinator_internships.php',
+                            'action_label'  => 'View Project Postings'
+                        ]);
+                    }
+                }
+            } else {
+                $error_msg = "Failed to save remarks: " . mysqli_error($conn);
+            }
+            mysqli_stmt_close($update_stmt);
         }
     }
 }
@@ -76,7 +216,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action']) && isset($_GE
 
     if ($id > 0) {
         if ($action === 'archive') {
-            $stmt = mysqli_prepare($conn, "UPDATE internships SET status = 'Archived', approval_status = 'Archived' WHERE id = ? AND status IN ('Active', 'Completed')");
+            $stmt = mysqli_prepare($conn, "UPDATE internships SET status = 'Archived', approval_status = 'Archived' WHERE id = ?");
             mysqli_stmt_bind_param($stmt, "i", $id);
             if (mysqli_stmt_execute($stmt)) {
                 $success_msg = "Internship archived successfully!";
@@ -84,16 +224,79 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action']) && isset($_GE
                 $error_msg = "Failed to archive internship. " . mysqli_error($conn);
             }
             mysqli_stmt_close($stmt);
+        } elseif ($action === 'unarchive') {
+            $stmt = mysqli_prepare($conn, "UPDATE internships SET status = 'Approved', approval_status = 'Approved' WHERE id = ?");
+            mysqli_stmt_bind_param($stmt, "i", $id);
+            if (mysqli_stmt_execute($stmt)) {
+                $success_msg = "Internship unarchived and set to Approved successfully!";
+            } else {
+                $error_msg = "Failed to unarchive internship. " . mysqli_error($conn);
+            }
+            mysqli_stmt_close($stmt);
+        } elseif ($action === 'approve') {
+            $stmt = mysqli_prepare($conn, "UPDATE internships SET status = 'Approved', approval_status = 'Approved' WHERE id = ?");
+            mysqli_stmt_bind_param($stmt, "i", $id);
+            if (mysqli_stmt_execute($stmt)) {
+                $success_msg = "Internship approved successfully!";
+                
+                // Fetch coordinator to notify
+                $coord_res = mysqli_query($conn, "SELECT i.title, u.id as coord_id, u.email as coord_email FROM internships i LEFT JOIN users u ON i.coordinator_id = u.id WHERE i.id = $id");
+                if ($coord_res && $coord_row = mysqli_fetch_assoc($coord_res)) {
+                    if (!empty($coord_row['coord_id'])) {
+                        $coord_id = intval($coord_row['coord_id']);
+                        $proj_title = $coord_row['title'];
+                        $notif_msg = "Your internship posting has been approved by Admin: $proj_title";
+                        $link_str = "coordinator_internships.php?view=" . intval($id);
+                        @mysqli_query($conn, "INSERT INTO notifications (user_id, role, title, message, type, link) VALUES ($coord_id, 'coordinator', 'Internship Approved', '" . mysqli_real_escape_string($conn, $notif_msg) . "', 'success', '" . mysqli_real_escape_string($conn, $link_str) . "')");
+
+                        if (!empty($coord_row['coord_email'])) {
+                            require_once 'includes/mail_helper.php';
+                            sendEmailNotification($coord_row['coord_email'], "IMP – Internship Approved: $proj_title", $notif_msg, [
+                                'event'         => 'Internship Approved',
+                                'project_title' => $proj_title,
+                                'action_url'    => 'http://localhost/IMP/coordinator_internships.php',
+                                'action_label'  => 'View Project Postings'
+                            ]);
+                        }
+                    }
+                }
+            } else {
+                $error_msg = "Failed to approve internship. " . mysqli_error($conn);
+            }
+            mysqli_stmt_close($stmt);
         }
     }
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['ajax']) && $_GET['ajax'] === 'details' && isset($_GET['id'])) {
+    $detail_id = intval($_GET['id']);
+    $detail_stmt = mysqli_prepare($conn, "SELECT i.*, u.full_name as mentor_name, uc.full_name as coordinator_name FROM internships i LEFT JOIN users u ON i.assigned_mentor = u.id LEFT JOIN users uc ON i.coordinator_id = uc.id WHERE i.id = ? LIMIT 1");
+
+    header('Content-Type: application/json');
+    if ($detail_stmt) {
+        mysqli_stmt_bind_param($detail_stmt, "i", $detail_id);
+        mysqli_stmt_execute($detail_stmt);
+        $detail_result = mysqli_stmt_get_result($detail_stmt);
+        $detail_row = mysqli_fetch_assoc($detail_result);
+        mysqli_stmt_close($detail_stmt);
+
+        if ($detail_row) {
+            echo json_encode(['success' => true, 'data' => $detail_row]);
+        } else {
+            echo json_encode(['success' => false, 'message' => 'Internship details not found.']);
+        }
+    } else {
+        echo json_encode(['success' => false, 'message' => 'Unable to prepare details query.']);
+    }
+    exit();
+}
+
 // Calculate counters
-$cnt_pending = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as c FROM internships WHERE status = 'Pending Approval'"))['c'] ?? 0;
-$cnt_active = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as c FROM internships WHERE status = 'Active'"))['c'] ?? 0;
-$cnt_completed = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as c FROM internships WHERE status = 'Completed'"))['c'] ?? 0;
-$cnt_archived = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as c FROM internships WHERE status = 'Archived'"))['c'] ?? 0;
-$cnt_rejected = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as c FROM internships WHERE status = 'Rejected'"))['c'] ?? 0;
+$cnt_pending = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as c FROM internships WHERE status = 'Pending Approval' AND is_deleted = 0 AND status != 'Inactive'"))['c'] ?? 0;
+$cnt_active = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as c FROM internships WHERE status = 'Active' AND is_deleted = 0 AND status != 'Inactive'"))['c'] ?? 0;
+$cnt_completed = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as c FROM internships WHERE status = 'Completed' AND is_deleted = 0 AND status != 'Inactive'"))['c'] ?? 0;
+$cnt_archived = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as c FROM internships WHERE status = 'Archived' AND is_deleted = 0 AND status != 'Inactive'"))['c'] ?? 0;
+$cnt_rejected = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as c FROM internships WHERE status = 'Rejected' AND is_deleted = 0 AND status != 'Inactive'"))['c'] ?? 0;
 
 // ── Search & Filter Logic ──
 $search = isset($_GET['search']) ? trim($_GET['search']) : '';
@@ -125,6 +328,9 @@ if (!empty($mode_filter)) {
     $types .= "s";
 }
 
+$where_clauses[] = "i.is_deleted = 0";
+$where_clauses[] = "i.status != 'Inactive'";
+
 $where_sql = "";
 if (!empty($where_clauses)) {
     $where_sql = " WHERE " . implode(" AND ", $where_clauses);
@@ -137,6 +343,7 @@ $internships_sql = "
     LEFT JOIN users u ON i.assigned_mentor = u.id
     LEFT JOIN users uc ON i.coordinator_id = uc.id
     " . $where_sql . "
+    GROUP BY i.id
     ORDER BY i.id DESC
 ";
 $stmt = mysqli_prepare($conn, $internships_sql);
@@ -151,12 +358,7 @@ while ($row = mysqli_fetch_assoc($internships_res)) {
 }
 mysqli_stmt_close($stmt);
 
-// Fetch mentors for select dropdown
-$mentors_res = mysqli_query($conn, "SELECT id, full_name FROM users WHERE role='mentor' ORDER BY full_name ASC");
-$mentors_list = [];
-while ($row = mysqli_fetch_assoc($mentors_res)) {
-    $mentors_list[] = $row;
-}
+
 
 // Fetch admin header details
 $header_uid = $_SESSION['user_id'];
@@ -231,6 +433,14 @@ $header_photo = $header_user['profile_photo'] ?? '';
         <span class="font-semibold text-slate-700">System Online</span>
       </div>
       
+      <!-- Notifications Bell -->
+      <a href="admin_received_notifications.php" class="p-2 text-gray-500 hover:bg-gray-50 transition-colors rounded-full relative flex items-center justify-center">
+        <span class="material-symbols-outlined">notifications</span>
+        <?php if ($admin_unread_count > 0): ?>
+          <span class="absolute top-1 right-1 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center text-[9px] font-bold"><?php echo $admin_unread_count; ?></span>
+        <?php endif; ?>
+      </a>
+
       <!-- Profile Button -->
       <div class="relative">
         <button onclick="document.getElementById('profile-dropdown').classList.toggle('hidden')" class="flex items-center gap-2 focus:outline-none cursor-pointer group">
@@ -261,59 +471,7 @@ $header_photo = $header_user['profile_photo'] ?? '';
 
   <div class="flex flex-1 overflow-hidden">
     <!-- Sidebar -->
-    <aside class="w-64 bg-white border-r border-gray-200 p-6 flex flex-col justify-between overflow-y-auto shrink-0">
-      <div class="space-y-6">
-        <div>
-          <h2 class="text-[10px] font-bold text-gray-400 tracking-widest mb-4 uppercase">Main Menu</h2>
-          <nav class="flex flex-col gap-1">
-            <a href="admin_dashboard.php" class="flex items-center gap-3 text-gray-700 px-4 py-2.5 rounded-lg hover:bg-gray-50 text-sm font-medium transition-colors">
-              <span class="material-symbols-outlined text-xl">dashboard</span>
-              Dashboard
-            </a>
-            <a href="admin_users.php" class="flex items-center gap-3 text-gray-700 px-4 py-2.5 rounded-lg hover:bg-gray-50 text-sm font-medium transition-colors">
-              <span class="material-symbols-outlined text-xl">group</span>
-              Users
-            </a>
-            <a href="admin_internships.php" class="flex items-center gap-3 bg-blue-50 text-blue-700 border-l-4 border-blue-600 px-4 py-2.5 rounded-r-lg text-sm font-bold">
-              <span class="material-symbols-outlined text-xl">work</span>
-              Internships
-            </a>
-            <a href="admin_applications.php" class="flex items-center gap-3 text-gray-700 px-4 py-2.5 rounded-lg hover:bg-gray-50 text-sm font-medium transition-colors">
-              <span class="material-symbols-outlined text-xl">assignment</span>
-              Applications
-            </a>
-            <a href="admin_projects.php" class="flex items-center gap-3 text-gray-700 px-4 py-2.5 rounded-lg hover:bg-gray-50 text-sm font-medium transition-colors">
-              <span class="material-symbols-outlined text-xl">account_tree</span>
-              Projects
-            </a>
-            <a href="admin_daily_logs.php" class="flex items-center gap-3 text-gray-700 px-4 py-2.5 rounded-lg hover:bg-gray-50 text-sm font-medium transition-colors">
-              <span class="material-symbols-outlined text-xl">monitoring</span>
-              Daily Logs
-            </a>
-            <a href="admin_reports.php" class="flex items-center gap-3 text-gray-700 px-4 py-2.5 rounded-lg hover:bg-gray-50 text-sm font-medium transition-colors">
-              <span class="material-symbols-outlined text-xl">analytics</span>
-              Reports
-            </a>
-            <a href="admin_notifications.php" class="flex items-center gap-3 text-gray-700 px-4 py-2.5 rounded-lg hover:bg-gray-50 text-sm font-medium transition-colors">
-              <span class="material-symbols-outlined text-xl">campaign</span>
-              Notifications
-            </a>
-            <a href="admin_talent_pool.php" class="flex items-center gap-3 text-gray-700 px-4 py-2.5 rounded-lg hover:bg-gray-50 text-sm font-medium transition-colors">
-              <span class="material-symbols-outlined text-xl">stars</span>
-              Talent Pool
-            </a>
-          </nav>
-        </div>
-      </div>
-      <div>
-        <nav class="flex flex-col gap-1 border-t border-gray-150 pt-4">
-          <a href="logout.php" class="flex items-center gap-3 text-red-600 px-4 py-2.5 rounded-lg hover:bg-red-50 text-sm font-medium transition-colors">
-            <span class="material-symbols-outlined text-xl">logout</span>
-            Logout
-          </a>
-        </nav>
-      </div>
-    </aside>
+    <?php include 'includes/admin_sidebar.php'; ?>
 
     <!-- Main Content -->
     <main class="flex-1 p-8 overflow-y-auto bg-gray-50">
@@ -459,23 +617,30 @@ $header_photo = $header_user['profile_photo'] ?? '';
                   
                   <div class="space-y-1.5 text-xs text-gray-600">
                     <p><span class="font-bold text-gray-700">Created By:</span> <?php echo htmlspecialchars($item['coordinator_name'] ?: 'System/Admin'); ?></p>
-                    <p><span class="font-bold text-gray-700">Submitted:</span> <?php echo $item['submission_date'] ? date('M d, Y', strtotime($item['submission_date'])) : 'N/A'; ?></p>
+                    <p><span class="font-bold text-gray-700">Submitted:</span> 
+                      <?php 
+                        $raw_date = !empty($item['created_at']) ? $item['created_at'] : (!empty($item['submission_date']) ? $item['submission_date'] : null);
+                        if ($raw_date) {
+                            echo date('M d, Y', strtotime($raw_date));
+                        } else {
+                            echo 'N/A';
+                        }
+                      ?>
+                      <!-- DEBUG DUMP: <?php var_dump($raw_date); ?> -->
+                    </p>
                     <p class="truncate"><span class="font-bold text-gray-700">Stack:</span> <?php echo htmlspecialchars($item['technology_stack'] ?: 'N/A'); ?></p>
-                    <p><span class="font-bold text-gray-700">Duration:</span> <?php echo htmlspecialchars($item['duration']); ?> &bull; <span class="font-bold text-gray-700">Slots:</span> <?php echo htmlspecialchars($item['openings']); ?></p>
-                    <p><span class="font-bold text-gray-700">Difficulty:</span> <span class="font-bold text-blue-600"><?php echo htmlspecialchars($item['difficulty_level']); ?></span></p>
-                    <p class="truncate"><span class="font-bold text-gray-700">Mentor:</span> <?php echo htmlspecialchars($item['mentor_name'] ?: 'None Assigned'); ?></p>
+                    <p><span class="font-bold text-gray-700">Duration:</span> <?php echo htmlspecialchars($item['duration']); ?></p>
                   </div>
                 </div>
 
                 <div class="pt-4 border-t border-gray-100 flex flex-wrap gap-1.5 justify-end items-center">
-                  <button onclick='openDetailsModal(<?php echo json_encode($item); ?>)' class="px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-bold text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer">View Details</button>
+                  <button type="button" data-id="<?php echo intval($item['id']); ?>" onclick="openDetailsModal(this)" class="px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-bold text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer">View Details</button>
                   
-                  <?php if (in_array(strtolower($item['status']), ['pending approval', 'changes requested'])): ?>
-                    <button onclick='openReviewModal(<?php echo $item["id"]; ?>, <?php echo json_encode($item["title"]); ?>)' class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer">Review</button>
-                  <?php endif; ?>
-                  
-                  <?php if (in_array(strtolower($item['status']), ['active', 'completed'])): ?>
+                  <?php if (in_array(strtolower($item['status']), ['pending approval', 'changes requested', 'new'])): ?>
+                    <a href="admin_internships.php?action=approve&id=<?php echo $item['id']; ?>" class="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-bold transition-colors">Approve</a>
                     <a href="admin_internships.php?action=archive&id=<?php echo $item['id']; ?>" onclick="return confirm('Are you sure you want to archive this posting?')" class="px-3 py-1.5 bg-gray-600 hover:bg-gray-700 text-white rounded-lg text-xs font-bold transition-colors">Archive</a>
+                  <?php elseif (strtolower($item['status']) === 'archived'): ?>
+                    <a href="admin_internships.php?action=unarchive&id=<?php echo $item['id']; ?>" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-colors">Unarchive</a>
                   <?php endif; ?>
                 </div>
               </div>
@@ -526,27 +691,7 @@ $header_photo = $header_user['profile_photo'] ?? '';
           </div>
         </div>
 
-        <div class="grid grid-cols-2 gap-4">
-          <div>
-            <span class="text-[9px] text-gray-400 uppercase font-bold tracking-wider block">Open slots / Openings</span>
-            <p id="det-openings" class="text-gray-900 font-bold"></p>
-          </div>
-          <div>
-            <span class="text-[9px] text-gray-400 uppercase font-bold tracking-wider block">Difficulty level</span>
-            <p id="det-difficulty" class="text-gray-900 font-bold"></p>
-          </div>
-        </div>
 
-        <div class="grid grid-cols-2 gap-4">
-          <div>
-            <span class="text-[9px] text-gray-400 uppercase font-bold tracking-wider block">Project Assignment Title</span>
-            <p id="det-project-title" class="text-gray-900 font-bold"></p>
-          </div>
-          <div>
-            <span class="text-[9px] text-gray-400 uppercase font-bold tracking-wider block">Milestone / Focus Task</span>
-            <p id="det-task-title" class="text-gray-900 font-bold"></p>
-          </div>
-        </div>
 
         <div class="grid grid-cols-2 gap-4">
           <div>
@@ -564,21 +709,7 @@ $header_photo = $header_user['profile_photo'] ?? '';
           <p id="det-tech-stack" class="text-gray-900 font-bold"></p>
         </div>
 
-        <div>
-          <span class="text-[9px] text-gray-400 uppercase font-bold tracking-wider block">Required Skills</span>
-          <p id="det-skills" class="text-gray-900 font-bold"></p>
-        </div>
 
-        <div class="grid grid-cols-2 gap-4">
-          <div>
-            <span class="text-[9px] text-gray-400 uppercase font-bold tracking-wider block">Assigned Mentor Guide</span>
-            <p id="det-mentor" class="text-gray-900 font-bold"></p>
-          </div>
-          <div>
-            <span class="text-[9px] text-gray-400 uppercase font-bold tracking-wider block">Workflow Status</span>
-            <p id="det-status" class="text-gray-900 font-bold"></p>
-          </div>
-        </div>
 
         <div class="grid grid-cols-2 gap-4">
           <div>
@@ -589,6 +720,25 @@ $header_photo = $header_user['profile_photo'] ?? '';
             <span class="text-[9px] text-gray-400 uppercase font-bold tracking-wider block">Submission Date</span>
             <p id="det-submission-date" class="text-gray-900 font-bold"></p>
           </div>
+        </div>
+
+        <div>
+          <span class="text-[9px] text-gray-400 uppercase font-bold tracking-wider block">Project Status</span>
+          <p id="det-status" class="text-gray-900 font-bold"></p>
+        </div>
+
+        <div class="pt-4 border-t border-gray-100">
+          <form method="POST" action="admin_internships.php">
+            <input type="hidden" name="action" value="save_remarks">
+            <input type="hidden" name="id" id="det-internship-id">
+            <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Admin Remarks</label>
+            <textarea id="det-admin-remarks" name="admin_remarks" rows="3"
+              class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+              placeholder="Type remarks or requested changes for coordinator..."></textarea>
+            <div class="flex justify-end items-center mt-2">
+              <button type="submit" class="px-4 py-2 bg-[#003ea8] hover:bg-blue-800 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer">Save Remarks</button>
+            </div>
+          </form>
         </div>
 
         <div>
@@ -604,40 +754,90 @@ $header_photo = $header_user['profile_photo'] ?? '';
   </div>
 
   <script>
-    function openDetailsModal(item) {
-      document.getElementById('det-title').textContent = item.title;
-      document.getElementById('det-project-type').textContent = item.project_type || 'N/A';
-      document.getElementById('det-project-subtype').textContent = item.project_subtype || 'N/A';
-      document.getElementById('det-duration').textContent = item.duration;
-      document.getElementById('det-mode').textContent = item.mode;
-      document.getElementById('det-openings').textContent = item.openings || '0';
-      document.getElementById('det-difficulty').textContent = item.difficulty_level || 'N/A';
-      document.getElementById('det-project-title').textContent = item.project_title || 'N/A';
-      document.getElementById('det-task-title').textContent = item.task_title || 'N/A';
-      document.getElementById('det-start-date').textContent = item.start_date || 'N/A';
-      document.getElementById('det-end-date').textContent = item.end_date || 'N/A';
-      document.getElementById('det-tech-stack').textContent = item.technology_stack || 'N/A';
-      document.getElementById('det-skills').textContent = item.skills || 'N/A';
-      document.getElementById('det-mentor').textContent = item.mentor_name || 'None Assigned';
-      document.getElementById('det-status').textContent = item.status;
-      document.getElementById('det-coordinator').textContent = item.coordinator_name || 'System / Admin';
-      document.getElementById('det-submission-date').textContent = item.submission_date || 'N/A';
-      document.getElementById('det-description').textContent = item.description || 'No description details provided.';
-      
-      document.getElementById('details-modal').classList.remove('hidden');
+    function openDetailsModal(button) {
+      const internshipId = button.dataset.id;
+      if (!internshipId) {
+        return;
+      }
+      fetchInternshipDetails(internshipId);
+    }
+
+    async function fetchInternshipDetails(id) {
+      try {
+        const response = await fetch(`admin_internships.php?ajax=details&id=${encodeURIComponent(id)}`);
+        const payload = await response.json();
+        if (!payload.success) {
+          console.error(payload.message || 'Unable to load internship details');
+          return;
+        }
+        const item = payload.data;
+
+        document.getElementById('det-title').textContent = item.title || 'N/A';
+        document.getElementById('det-project-type').textContent = item.project_type || 'N/A';
+        document.getElementById('det-project-subtype').textContent = item.project_subtype || 'N/A';
+        document.getElementById('det-duration').textContent = item.duration || 'N/A';
+        document.getElementById('det-mode').textContent = item.mode || 'N/A';
+        document.getElementById('det-start-date').textContent = item.start_date || 'N/A';
+        document.getElementById('det-end-date').textContent = item.end_date || 'N/A';
+        document.getElementById('det-tech-stack').textContent = item.technology_stack || 'N/A';
+        document.getElementById('det-status').textContent = item.status || 'N/A';
+        document.getElementById('det-coordinator').textContent = item.coordinator_name || 'System / Admin';
+        if (item.created_at) {
+            const dt = new Date(item.created_at);
+            const options = { month: 'short', day: '2-digit', year: 'numeric' };
+            document.getElementById('det-submission-date').textContent = dt.toLocaleDateString('en-US', options);
+        } else {
+            document.getElementById('det-submission-date').textContent = 'N/A';
+        }
+        
+        document.getElementById('det-internship-id').value = item.id;
+        document.getElementById('det-admin-remarks').value = item.admin_remarks || '';
+
+        document.getElementById('det-description').textContent = item.description || 'No description details provided.';
+
+        document.getElementById('details-modal').classList.remove('hidden');
+      } catch (error) {
+        console.error('Error loading internship details:', error);
+      }
     }
 
     function closeModal(modalId) {
       document.getElementById(modalId).classList.add('hidden');
     }
 
-    function openReviewModal(id, title) {
+    function openReviewModal(id, title, coordinatorId = 0) {
       document.getElementById('review-internship-id').value = id;
       document.getElementById('review-title').textContent = title;
       document.getElementById('review-admin-remarks').value = '';
+      const select = document.getElementById('review-override-coordinator');
+      if (select) {
+        select.value = coordinatorId ? coordinatorId : '';
+      }
       document.getElementById('review-modal').classList.remove('hidden');
     }
+
+    function confirmDelete(id) {
+      document.getElementById('delete-internship-id').value = id;
+      document.getElementById('delete-modal').classList.remove('hidden');
+    }
   </script>
+
+  <!-- ── DELETE CONFIRMATION MODAL ── -->
+  <div id="delete-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
+      <div class="p-6 text-center space-y-4">
+        <span class="material-symbols-outlined text-red-500 text-5xl">warning</span>
+        <h3 class="text-xl font-bold text-gray-900">Confirm Deletion</h3>
+        <p class="text-sm text-gray-500">Are you sure you want to delete this internship? This action cannot be undone.</p>
+        <form method="POST" action="admin_internships.php" class="flex gap-3 justify-center pt-2">
+          <input type="hidden" name="action" value="delete">
+          <input type="hidden" name="id" id="delete-internship-id">
+          <button type="button" onclick="closeModal('delete-modal')" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-bold transition-colors cursor-pointer">Cancel</button>
+          <button type="submit" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-bold transition-colors cursor-pointer">Delete</button>
+        </form>
+      </div>
+    </div>
+  </div>
 
   <!-- ── REVIEW MODAL ── -->
   <div id="review-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
@@ -654,6 +854,16 @@ $header_photo = $header_user['profile_photo'] ?? '';
         <input type="hidden" name="id" id="review-internship-id">
         <div class="p-6 space-y-4">
           <p class="text-sm font-semibold text-gray-800">Project: <span id="review-title" class="text-blue-700"></span></p>
+          <div>
+            <label class="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Assign/Override Coordinator (Optional)</label>
+            <select name="override_coordinator_id" id="review-override-coordinator"
+              class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50 cursor-pointer">
+              <option value="">-- Keep Current / Auto-assign --</option>
+              <?php foreach ($coordinators_list as $coord): ?>
+                <option value="<?php echo $coord['id']; ?>"><?php echo htmlspecialchars($coord['full_name']); ?> (<?php echo htmlspecialchars($coord['email']); ?>)</option>
+              <?php endforeach; ?>
+            </select>
+          </div>
           <div>
             <label class="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Admin Remarks (optional)</label>
             <textarea id="review-admin-remarks" name="admin_remarks" rows="3"

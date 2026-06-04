@@ -425,11 +425,27 @@
       </div>
 
       <?php else: ?>
-      <!-- ── NO ACTIVE INTERNSHIP: Pre-internship dashboard ── -->
       <div class="mb-6">
         <h2 class="text-2xl font-extrabold text-slate-800 tracking-tight">Dashboard</h2>
         <p class="text-sm text-slate-400 mt-0.5">Welcome, <?php echo htmlspecialchars($profile['full_name']); ?>! Start your internship journey.</p>
       </div>
+
+      <?php if ($is_selected && $selected_app): ?>
+      <!-- Selection Confirmation Banner -->
+      <div class="bg-gradient-to-r from-emerald-500 to-emerald-700 rounded-2xl p-6 mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-lg">
+        <div>
+          <h3 class="text-xl font-extrabold text-white tracking-tight">Congratulations! You have been selected.</h3>
+          <p class="text-emerald-100 text-sm mt-1">Project assignment, team formation, and mentor allocation are pending from the coordinator. Please wait for further instructions.</p>
+        </div>
+        <div class="flex items-center gap-3 shrink-0">
+          <?php if (!empty($selected_app['confirmation_letter_path'])): ?>
+          <a href="<?php echo htmlspecialchars($selected_app['confirmation_letter_path']); ?>" target="_blank" class="inline-flex items-center gap-2 bg-white text-emerald-700 font-bold text-sm px-4 py-2.5 rounded-xl hover:bg-emerald-50 transition-colors shadow-sm">
+            <span class="material-symbols-outlined text-[18px]">download</span> Download Confirmation Letter
+          </a>
+          <?php endif; ?>
+        </div>
+      </div>
+      <?php endif; ?>
       <!-- Stats row -->
       <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 flex items-center gap-3">

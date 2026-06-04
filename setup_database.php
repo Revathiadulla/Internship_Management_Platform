@@ -218,9 +218,59 @@ $email_log_table = "CREATE TABLE IF NOT EXISTS email_notifications_log (
     message_text TEXT NOT NULL,
     html_body LONGTEXT NOT NULL,
     status VARCHAR(50) DEFAULT 'Sent',
+    sender_id INT NULL,
+    sender_role VARCHAR(50) NULL,
     sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )";
 executeSetupQuery($conn, $email_log_table, "Creating email_notifications_log table", $errors, $is_cli);
+// Ensure sender columns exist for older schema (safe check)
+$res = mysqli_query($conn, "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'email_notifications_log' AND COLUMN_NAME = 'user_id'");
+if (!$res || mysqli_num_rows($res) === 0) {
+    @mysqli_query($conn, "ALTER TABLE email_notifications_log ADD COLUMN user_id INT NULL");
+}
+$res = mysqli_query($conn, "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'email_notifications_log' AND COLUMN_NAME = 'sender_id'");
+if (!$res || mysqli_num_rows($res) === 0) {
+    @mysqli_query($conn, "ALTER TABLE email_notifications_log ADD COLUMN sender_id INT NULL");
+}
+$res2 = mysqli_query($conn, "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'email_notifications_log' AND COLUMN_NAME = 'sender_role'");
+if (!$res2 || mysqli_num_rows($res2) === 0) {
+    @mysqli_query($conn, "ALTER TABLE email_notifications_log ADD COLUMN sender_role VARCHAR(50) NULL");
+}
+
+// 5a. Create email_logs table
+$email_logs_table = "CREATE TABLE IF NOT EXISTS email_logs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NULL,
+    recipient_email VARCHAR(255) NULL,
+    recipient_role VARCHAR(50) NULL,
+    sender_id INT NULL,
+    sender_role VARCHAR(50) NULL,
+    subject VARCHAR(255) NULL,
+    message TEXT NULL,
+    status VARCHAR(50) NULL,
+    error_message TEXT NULL,
+    sent_at DATETIME NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+executeSetupQuery($conn, $email_logs_table, "Creating email_logs table", $errors, $is_cli);
+// Ensure all expected email_logs columns exist for older schema versions
+$email_log_cols = [
+    'user_id' => 'INT NULL',
+    'recipient_email' => 'VARCHAR(255) NULL',
+    'recipient_role' => 'VARCHAR(50) NULL',
+    'sender_id' => 'INT NULL',
+    'sender_role' => 'VARCHAR(50) NULL',
+    'subject' => 'VARCHAR(255) NULL',
+    'message' => 'TEXT NULL',
+    'status' => 'VARCHAR(50) NULL',
+    'error_message' => 'TEXT NULL',
+    'sent_at' => 'DATETIME NULL'
+];
+foreach ($email_log_cols as $col => $definition) {
+    $chk = mysqli_query($conn, "SHOW COLUMNS FROM email_logs LIKE '$col'");
+    if ($chk && mysqli_num_rows($chk) === 0) {
+        @mysqli_query($conn, "ALTER TABLE email_logs ADD COLUMN $col $definition");
+    }
+}
 
 // 6. Create daily_logs table
 $daily_logs_table = "CREATE TABLE IF NOT EXISTS daily_logs (

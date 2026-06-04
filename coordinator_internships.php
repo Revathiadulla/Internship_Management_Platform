@@ -5,7 +5,100 @@ if (!isset($_SESSION['user_id']) || strtolower($_SESSION['role']) !== 'coordinat
     exit();
 }
 include "db.php";
+$notif_unread_res = mysqli_query($conn, "SELECT COUNT(*) as count FROM notifications WHERE user_id = " . intval($_SESSION['user_id']) . " AND role = 'coordinator' AND is_read = 0");
+$notif_unread_row = mysqli_fetch_assoc($notif_unread_res);
+$unread_count = $notif_unread_row['count'] ?? 0;
 include_once __DIR__ . "/includes/mail_helper.php";
+
+// Auto-migration: ensure question_bank and student_scores tables exist
+$check_qb = $conn->query("SHOW TABLES LIKE 'question_bank'");
+if ($check_qb->num_rows == 0) {
+    $create_qb = "CREATE TABLE question_bank (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        skill VARCHAR(100) NOT NULL,
+        difficulty VARCHAR(20) NOT NULL,
+        question_text TEXT NOT NULL,
+        option_a VARCHAR(255) NOT NULL,
+        option_b VARCHAR(255) NOT NULL,
+        option_c VARCHAR(255) NOT NULL,
+        option_d VARCHAR(255) NOT NULL,
+        correct_option CHAR(1) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_question (question_text, skill, difficulty)
+    ) ENGINE=InnoDB;";
+    $conn->query($create_qb);
+}
+$check_ss = $conn->query("SHOW TABLES LIKE 'student_scores'");
+if ($check_ss->num_rows == 0) {
+    $create_ss = "CREATE TABLE student_scores (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        student_id INT NOT NULL,
+        internship_id INT NOT NULL,
+        score INT NOT NULL,
+        taken_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (student_id) REFERENCES users(id) ON UPDATE CASCADE,
+        FOREIGN KEY (internship_id) REFERENCES internships(id) ON UPDATE CASCADE
+    ) ENGINE=InnoDB;";
+    $conn->query($create_ss);
+}
+
+// Ensure internships table has num_questions column
+$check_col = $conn->query("SHOW COLUMNS FROM internships LIKE 'num_questions'");
+if ($check_col->num_rows == 0) {
+    $conn->query("ALTER TABLE internships ADD COLUMN num_questions INT DEFAULT 5");
+}
+
+// Ensure internships table has soft-delete column
+$check_deleted_col = $conn->query("SHOW COLUMNS FROM internships LIKE 'is_deleted'");
+if ($check_deleted_col->num_rows == 0) {
+    $conn->query("ALTER TABLE internships ADD COLUMN is_deleted TINYINT(1) NOT NULL DEFAULT 0");
+}
+
+// Helper function to generate test questions
+function generate_test_questions($conn, $internship_id, $skillsCsv, $difficulty, $numQuestions) {
+    // Delete old generated questions for this internship
+    $del = $conn->prepare('DELETE FROM test_questions WHERE internship_id = ?');
+    $del->bind_param('i', $internship_id);
+    $del->execute();
+
+    $skills = array_map('trim', explode(',', $skillsCsv));
+    if (empty($skills)) return [false, 0];
+    // Build placeholders for IN clause
+    $placeholders = implode(',', array_fill(0, count($skills), '?'));
+    $types = str_repeat('s', count($skills)) . 'si'; // skills (s), difficulty (s), limit (i)
+    $stmt = $conn->prepare(
+        "SELECT id FROM question_bank WHERE skill IN (".$placeholders.") AND difficulty = ? LIMIT ?"
+    );
+    $bindParams = array_merge($skills, [$difficulty, $numQuestions]);
+    $stmt->bind_param($types, ...$bindParams);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    $ids = [];
+    while($row = $res->fetch_assoc()) $ids[] = $row['id'];
+    if (count($ids) < $numQuestions) {
+        return [false, count($ids)];
+    }
+    // Fetch full questions
+    $in = implode(',', array_fill(0, count($ids), '?'));
+    $stmt2 = $conn->prepare("SELECT * FROM question_bank WHERE id IN (".$in.")");
+    $stmt2->bind_param(str_repeat('i', count($ids)), ...$ids);
+    $stmt2->execute();
+    $questions = $stmt2->get_result();
+    // Insert into test_questions
+    $ins = $conn->prepare(
+        "INSERT INTO test_questions (internship_id, question_text, option_a, option_b, option_c, option_d, correct_option) VALUES (?,?,?,?,?,?,?)"
+    );
+    while($q = $questions->fetch_assoc()) {
+        $ins->bind_param(
+            'issssss',
+            $internship_id,
+            $q['question_text'], $q['option_a'], $q['option_b'], $q['option_c'], $q['option_d'], $q['correct_option']
+        );
+        $ins->execute();
+    }
+    return [true, $numQuestions];
+}
+
 
 $success_msg = "";
 $error_msg = "";
@@ -131,18 +224,149 @@ while ($row = mysqli_fetch_assoc($mentors_res)) {
     $mentors[] = $row;
 }
 
+$active_project_types = [];
+$type_stmt = mysqli_prepare($conn, "SELECT pt.id, pt.type_name FROM project_types pt JOIN coordinator_assignments ca ON pt.id = ca.project_type_id WHERE pt.status = 'Active' AND ca.coordinator_id = ? ORDER BY pt.type_name ASC");
+if ($type_stmt) {
+    $coord_id = intval($_SESSION['user_id']);
+    $type_stmt->bind_param('i', $coord_id);
+    $type_stmt->execute();
+    $type_result = $type_stmt->get_result();
+    while ($type_row = mysqli_fetch_assoc($type_result)) {
+        $active_project_types[] = $type_row;
+    }
+    $type_stmt->close();
+}
+
+$active_project_subtypes = [];
+if (!empty($active_project_types)) {
+    $first_type_id = intval($active_project_types[0]['id']);
+    $subtype_stmt = mysqli_prepare($conn, "SELECT id, subtype_name FROM project_subtypes WHERE project_type_id = ? AND status = 'Active' ORDER BY subtype_name ASC");
+    if ($subtype_stmt) {
+        $subtype_stmt->bind_param('i', $first_type_id);
+        $subtype_stmt->execute();
+        $subtype_result = $subtype_stmt->get_result();
+        while ($subtype_row = mysqli_fetch_assoc($subtype_result)) {
+            $active_project_subtypes[] = $subtype_row;
+        }
+        $subtype_stmt->close();
+    }
+}
+
 // Handle Delete Action
 if (isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['id'])) {
     $id = intval($_GET['id']);
-    $stmt = mysqli_prepare($conn, "DELETE FROM internships WHERE id = ?");
-    mysqli_stmt_bind_param($stmt, "i", $id);
-    if (mysqli_stmt_execute($stmt)) {
-        header("Location: coordinator_internships.php?success=" . urlencode("Project posting deleted successfully!"));
-        exit();
-    } else {
-        $error_msg = "Error deleting posting: " . mysqli_error($conn);
+
+    // Check each table for linked records (safely check if table exists first)
+    $scores_count = 0;
+    $applications_count = 0;
+    $questions_count = 0;
+    $teams_count = 0;
+    $logs_count = 0;
+
+    // Check if table exists before querying
+    $table_exists = function($table_name) use ($conn) {
+        $res = mysqli_query($conn, "SHOW TABLES LIKE '$table_name'");
+        return mysqli_num_rows($res) > 0;
+    };
+
+    if ($table_exists('student_scores')) {
+        $res = mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM student_scores WHERE internship_id = $id");
+        if ($res) {
+            $row = mysqli_fetch_assoc($res);
+            $scores_count = intval($row['cnt']);
+        }
     }
-    mysqli_stmt_close($stmt);
+
+    if ($table_exists('internship_applications')) {
+        $res = mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM internship_applications WHERE internship_id = $id");
+        if ($res) {
+            $row = mysqli_fetch_assoc($res);
+            $applications_count = intval($row['cnt']);
+        }
+    }
+
+    if ($table_exists('test_questions')) {
+        $res = mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM test_questions WHERE internship_id = $id");
+        if ($res) {
+            $row = mysqli_fetch_assoc($res);
+            $questions_count = intval($row['cnt']);
+        }
+    }
+
+    if ($table_exists('project_teams')) {
+        $res = mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM project_teams WHERE internship_id = $id");
+        if ($res) {
+            $row = mysqli_fetch_assoc($res);
+            $teams_count = intval($row['cnt']);
+        }
+    }
+
+    if ($table_exists('daily_logs')) {
+        $res = mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM daily_logs WHERE internship_id = $id");
+        if ($res) {
+            $row = mysqli_fetch_assoc($res);
+            $logs_count = intval($row['cnt']);
+        }
+    }
+
+    // Check if there are critical blockers (scores, applications, teams, logs)
+    $critical_blockers = $scores_count + $applications_count + $teams_count + $logs_count;
+
+    // Build error message with specific table information
+    $blocking_reasons = [];
+    if ($scores_count > 0) {
+        $blocking_reasons[] = "$scores_count student score" . ($scores_count !== 1 ? 's' : '');
+    }
+    if ($applications_count > 0) {
+        $blocking_reasons[] = "$applications_count student application" . ($applications_count !== 1 ? 's' : '');
+    }
+    if ($teams_count > 0) {
+        $blocking_reasons[] = "$teams_count project team" . ($teams_count !== 1 ? 's' : '');
+    }
+    if ($logs_count > 0) {
+        $blocking_reasons[] = "$logs_count daily log" . ($logs_count !== 1 ? 's' : '');
+    }
+
+    // If there are only test questions (no critical data), offer deletion option
+    if ($critical_blockers === 0 && $questions_count > 0) {
+        // Allow deletion of test questions automatically before soft delete
+        if ($table_exists('test_questions')) {
+            mysqli_query($conn, "DELETE FROM test_questions WHERE internship_id = $id");
+        }
+        $stmt = mysqli_prepare($conn, "UPDATE internships SET is_deleted = 1, status = 'Inactive' WHERE id = ?");
+        mysqli_stmt_bind_param($stmt, "i", $id);
+        if (mysqli_stmt_execute($stmt)) {
+            header("Location: coordinator_internships.php?success=" . urlencode("Project posting archived" . ($questions_count > 0 ? " (test questions removed)." : ".")));
+            exit();
+        } else {
+            $error_msg = "Error archiving posting: " . mysqli_error($conn);
+        }
+        mysqli_stmt_close($stmt);
+    } elseif ($critical_blockers > 0) {
+        // Critical data exists - cannot hard delete, offer soft delete instead
+        $error_msg = "Cannot delete because: " . implode(", ", $blocking_reasons) . ". The posting will be marked as inactive instead.";
+        // Perform soft delete for critical blockers
+        $stmt = mysqli_prepare($conn, "UPDATE internships SET is_deleted = 1, status = 'Inactive' WHERE id = ?");
+        mysqli_stmt_bind_param($stmt, "i", $id);
+        if (mysqli_stmt_execute($stmt)) {
+            header("Location: coordinator_internships.php?success=" . urlencode("Project posting archived to preserve student records."));
+            exit();
+        } else {
+            $error_msg = "Error archiving posting: " . mysqli_error($conn);
+        }
+        mysqli_stmt_close($stmt);
+    } else {
+        // No related records - safe to soft delete
+        $stmt = mysqli_prepare($conn, "UPDATE internships SET is_deleted = 1, status = 'Inactive' WHERE id = ?");
+        mysqli_stmt_bind_param($stmt, "i", $id);
+        if (mysqli_stmt_execute($stmt)) {
+            header("Location: coordinator_internships.php?success=" . urlencode("Project posting removed."));
+            exit();
+        } else {
+            $error_msg = "Error deleting posting: " . mysqli_error($conn);
+        }
+        mysqli_stmt_close($stmt);
+    }
 }
 
 // Handle Create Action
@@ -154,8 +378,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $mode = trim($_POST['mode']);
     $technology_stack = trim($_POST['technology_stack']);
     $skills = $technology_stack; // sync skills with technology stack
-    // Always force Pending Approval for coordinator-created projects
-    $status = 'Pending Approval';
     
     $description = trim($_POST['description']);
     $project_type = trim($_POST['project_type']);
@@ -165,12 +387,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $start_date = !empty($_POST['start_date']) ? $_POST['start_date'] : null;
     $end_date = !empty($_POST['end_date']) ? $_POST['end_date'] : null;
 
-    if (empty($title) || empty($project_title) || empty($duration) || empty($mode) || empty($technology_stack) || empty($description)) {
+    $valid_category = false;
+    if (!empty($project_type) && !empty($project_subtype)) {
+        $type_check = mysqli_prepare($conn, "SELECT id FROM project_types WHERE type_name = ? AND status = 'Active' LIMIT 1");
+        mysqli_stmt_bind_param($type_check, "s", $project_type);
+        mysqli_stmt_execute($type_check);
+        mysqli_stmt_bind_result($type_check, $selected_type_id);
+        if (mysqli_stmt_fetch($type_check)) {
+            mysqli_stmt_close($type_check);
+            $subtype_check = mysqli_prepare($conn, "SELECT id FROM project_subtypes WHERE project_type_id = ? AND subtype_name = ? AND status = 'Active' LIMIT 1");
+            mysqli_stmt_bind_param($subtype_check, "is", $selected_type_id, $project_subtype);
+            mysqli_stmt_execute($subtype_check);
+            mysqli_stmt_store_result($subtype_check);
+            if (mysqli_stmt_num_rows($subtype_check) > 0) {
+                $valid_category = true;
+            }
+            mysqli_stmt_close($subtype_check);
+        } else {
+            mysqli_stmt_close($type_check);
+        }
+    }
+
+        if (empty($title) || empty($project_title) || empty($duration) || empty($mode) || empty($technology_stack) || empty($description) || empty($project_type) || empty($project_subtype) || empty($difficulty_level)) {
         $error_msg = "Please fill in all required fields.";
+    } elseif (!$valid_category) {
+        $error_msg = "Selected project type and subtype combination is invalid.";
     } else {
         $coord_id = intval($_SESSION['user_id']);
         $stmt = mysqli_prepare($conn, "INSERT INTO internships (title, duration, mode, skills, status, approval_status, description, project_type, project_subtype, project_title, task_title, technology_stack, difficulty_level, openings, start_date, end_date, coordinator_id, submission_date) VALUES (?, ?, ?, ?, 'Pending Approval', 'Pending Approval', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURDATE())");
-        mysqli_stmt_bind_param($stmt, "ssssssssssssissi", $title, $duration, $mode, $skills, $description, $project_type, $project_subtype, $project_title, $task_title, $technology_stack, $difficulty_level, $openings, $start_date, $end_date, $coord_id);
+        mysqli_stmt_bind_param($stmt, "sssssssssssissi", $title, $duration, $mode, $skills, $description, $project_type, $project_subtype, $project_title, $task_title, $technology_stack, $difficulty_level, $openings, $start_date, $end_date, $coord_id);
         
         if (mysqli_stmt_execute($stmt)) {
             $new_id = mysqli_insert_id($conn);
@@ -214,7 +459,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $mode = trim($_POST['mode']);
     $technology_stack = trim($_POST['technology_stack']);
     $skills = $technology_stack; // sync skills with technology stack
-    $status = trim($_POST['status']);
     
     $description = trim($_POST['description']);
     $project_type = trim($_POST['project_type']);
@@ -224,8 +468,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $start_date = !empty($_POST['start_date']) ? $_POST['start_date'] : null;
     $end_date = !empty($_POST['end_date']) ? $_POST['end_date'] : null;
 
-    if (empty($title) || empty($project_title) || empty($duration) || empty($mode) || empty($technology_stack) || empty($description)) {
+    $valid_category = false;
+    if (!empty($project_type) && !empty($project_subtype)) {
+        $type_check = mysqli_prepare($conn, "SELECT id FROM project_types WHERE type_name = ? AND status = 'Active' LIMIT 1");
+        mysqli_stmt_bind_param($type_check, "s", $project_type);
+        mysqli_stmt_execute($type_check);
+        mysqli_stmt_bind_result($type_check, $selected_type_id);
+        if (mysqli_stmt_fetch($type_check)) {
+            mysqli_stmt_close($type_check);
+            $subtype_check = mysqli_prepare($conn, "SELECT id FROM project_subtypes WHERE project_type_id = ? AND subtype_name = ? AND status = 'Active' LIMIT 1");
+            mysqli_stmt_bind_param($subtype_check, "is", $selected_type_id, $project_subtype);
+            mysqli_stmt_execute($subtype_check);
+            mysqli_stmt_store_result($subtype_check);
+            if (mysqli_stmt_num_rows($subtype_check) > 0) {
+                $valid_category = true;
+            }
+            mysqli_stmt_close($subtype_check);
+        } else {
+            mysqli_stmt_close($type_check);
+        }
+    }
+
+        if (empty($title) || empty($project_title) || empty($duration) || empty($mode) || empty($technology_stack) || empty($description) || empty($project_type) || empty($project_subtype) || empty($difficulty_level)) {
         $error_msg = "Please fill in all required fields.";
+    } elseif (!$valid_category) {
+        $error_msg = "Selected project type and subtype combination is invalid.";
     } else {
         // Fetch old values to check for changes
         $old_res = mysqli_query($conn, "SELECT start_date, duration FROM internships WHERE id = $id");
@@ -233,8 +500,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $date_changed = ($old_row && $old_row['start_date'] !== $start_date);
         $duration_changed = ($old_row && $old_row['duration'] !== $duration);
 
-        $stmt = mysqli_prepare($conn, "UPDATE internships SET title = ?, duration = ?, mode = ?, skills = ?, status = ?, description = ?, project_type = ?, project_subtype = ?, project_title = ?, task_title = ?, technology_stack = ?, difficulty_level = ?, openings = ?, start_date = ?, end_date = ? WHERE id = ?");
-        mysqli_stmt_bind_param($stmt, "ssssssssssssissi", $title, $duration, $mode, $skills, $status, $description, $project_type, $project_subtype, $project_title, $task_title, $technology_stack, $difficulty_level, $openings, $start_date, $end_date, $id);
+        $stmt = mysqli_prepare($conn, "UPDATE internships SET title = ?, duration = ?, mode = ?, skills = ?, description = ?, project_type = ?, project_subtype = ?, project_title = ?, task_title = ?, technology_stack = ?, difficulty_level = ?, openings = ?, start_date = ?, end_date = ? WHERE id = ?");
+        mysqli_stmt_bind_param($stmt, "sssssssssssissi", $title, $duration, $mode, $skills, $description, $project_type, $project_subtype, $project_title, $task_title, $technology_stack, $difficulty_level, $openings, $start_date, $end_date, $id);
         
         if (mysqli_stmt_execute($stmt)) {
             // Check if timeline phases exist
@@ -272,6 +539,8 @@ if (!empty($search)) {
     $params = [$search_param, $search_param, $search_param, $search_param, $search_param];
 }
 
+$where_clauses[] = "i.coordinator_id = " . intval($_SESSION['user_id']);
+$where_clauses[] = "i.is_deleted = 0";
 $sql = "
     SELECT i.*, m.full_name as mentor_name 
     FROM internships i 
@@ -340,71 +609,60 @@ mysqli_stmt_close($stmt);
         </style>
 </head>
 <body class="bg-gray-100 text-gray-800">
-        <!-- SideNavBar -->
-        <aside class="fixed left-0 top-0 h-screen w-60 z-50 bg-gray-50 border-r border-gray-200 flex flex-col py-6 font-sans text-sm font-medium">
+        <!-- ════════════════ SIDEBAR ════════════════ -->
+        <aside class="fixed left-0 top-0 h-screen w-60 z-50 bg-white border-r border-gray-200 flex flex-col py-6">
                 <div class="px-6 mb-8">
-                        <a href="index.html" class="flex items-center gap-2 hover:opacity-95 transition-opacity">
-                            <svg class="w-8 h-8 text-blue-600 shrink-0" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <rect width="32" height="32" rx="8" fill="currentColor"/>
-                                <circle cx="16" cy="16" r="3" fill="white"/>
-                                <line x1="16" y1="13" x2="16" y2="9" stroke="white" stroke-width="1.5"/>
-                                <circle cx="16" cy="8" r="1.5" fill="white"/>
-                                <line x1="18.5" y1="15.1" x2="22.5" y2="13.8" stroke="white" stroke-width="1.5"/>
-                                <circle cx="23.5" cy="13.5" r="1.5" fill="white"/>
-                                <line x1="17.8" y1="18.4" x2="20.0" y2="21.5" stroke="white" stroke-width="1.5"/>
-                                <circle cx="20.7" cy="22.5" r="1.5" fill="white"/>
-                                <line x1="14.2" y1="18.4" x2="12.0" y2="21.5" stroke="white" stroke-width="1.5"/>
-                                <circle cx="11.3" cy="22.5" r="1.5" fill="white"/>
-                                <line x1="13.5" y1="15.1" x2="9.5" y2="13.8" stroke="white" stroke-width="1.5"/>
-                                <circle cx="8.5" cy="13.5" r="1.5" fill="white"/>
-                            </svg>
-                            <span class="text-xl font-bold text-blue-600 tracking-tight">IMP</span>
+                        <a href="index.html" class="flex items-center gap-2">
+                                <svg class="w-8 h-8 text-blue-600 shrink-0" viewBox="0 0 32 32" fill="none">
+                                        <rect width="32" height="32" rx="8" fill="currentColor"/>
+                                        <circle cx="16" cy="16" r="3" fill="white"/>
+                                        <line x1="16" y1="13" x2="16" y2="9" stroke="white" stroke-width="1.5"/>
+                                        <circle cx="16" cy="8" r="1.5" fill="white"/>
+                                        <line x1="18.5" y1="15.1" x2="22.5" y2="13.8" stroke="white" stroke-width="1.5"/>
+                                        <circle cx="23.5" cy="13.5" r="1.5" fill="white"/>
+                                        <line x1="17.8" y1="18.4" x2="20" y2="21.5" stroke="white" stroke-width="1.5"/>
+                                        <circle cx="20.7" cy="22.5" r="1.5" fill="white"/>
+                                        <line x1="14.2" y1="18.4" x2="12" y2="21.5" stroke="white" stroke-width="1.5"/>
+                                        <circle cx="11.3" cy="22.5" r="1.5" fill="white"/>
+                                        <line x1="13.5" y1="15.1" x2="9.5" y2="13.8" stroke="white" stroke-width="1.5"/>
+                                        <circle cx="8.5" cy="13.5" r="1.5" fill="white"/>
+                                </svg>
+                                <span class="text-xl font-bold text-blue-600 tracking-tight">IMP</span>
                         </a>
-                        <p class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-2 ml-1">Coordinator Portal</p>
+                        <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-2 ml-0.5">Coordinator Portal</p>
                 </div>
-                <nav class="flex-1 space-y-1">
-                        <a class="flex items-center gap-3 text-gray-600 px-4 py-3 hover:bg-gray-100 duration-200 ease-in-out"
-                                href="coordinator_dashboard.php">
-                                <span class="material-symbols-outlined">dashboard</span>
-                                <span>Dashboard</span>
+                <nav class="flex-1 space-y-0.5 px-3">
+                        <a href="coordinator_dashboard.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
+                                <span class="material-symbols-outlined text-[20px]">dashboard</span> Dashboard
                         </a>
-                        <a class="flex items-center gap-3 bg-blue-50 text-blue-700 border-l-4 border-blue-600 px-4 py-3 duration-200 ease-in-out"
-                                href="coordinator_internships.php">
-                                <span class="material-symbols-outlined">work</span>
-                                <span>Postings</span>
+                        <a href="coordinator_internships.php" class="flex items-center gap-3 bg-blue-50 text-blue-700 border-l-4 border-blue-600 px-3 py-2.5 rounded-r-lg text-sm font-semibold">
+                                <span class="material-symbols-outlined text-[20px]">work</span> Postings
                         </a>
-                        <a class="flex items-center gap-3 text-gray-600 px-4 py-3 hover:bg-gray-100 duration-200 ease-in-out"
-                                href="coordinator_candidates.php">
-                                <span class="material-symbols-outlined">group</span>
-                                <span>Candidates</span>
+                        <a href="coordinator_candidates.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
+                                <span class="material-symbols-outlined text-[20px]">group</span> Candidates
                         </a>
-
-                        <a class="flex items-center gap-3 text-gray-600 px-4 py-3 hover:bg-gray-100 duration-200 ease-in-out"
-                                href="coordinator_daily_logs.php">
-                                <span class="material-symbols-outlined">monitoring</span>
-                                <span>Daily Logs Monitoring</span>
+                        <a href="coordinator_generate_test.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
+                                <span class="material-symbols-outlined text-[20px]">quiz</span> Generate Test
                         </a>
-                        <a class="flex items-center gap-3 text-gray-600 px-4 py-3 hover:bg-gray-100 duration-200 ease-in-out"
-                                href="coordinator_reports.php">
-                                <span class="material-symbols-outlined">analytics</span>
-                                <span>Reports</span>
+                        <a href="coordinator_daily_logs.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
+                                <span class="material-symbols-outlined text-[20px]">monitoring</span> Daily Logs
                         </a>
-                        <a class="flex items-center gap-3 text-gray-600 px-4 py-3 hover:bg-gray-100 duration-200 ease-in-out"
-                                href="coordinator_teams.php">
-                                <span class="material-symbols-outlined">manage_accounts</span>
-                                <span>Team Management</span>
+                        <a href="coordinator_reports.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
+                                <span class="material-symbols-outlined text-[20px]">analytics</span> Reports
+                        </a>
+                        <a href="coordinator_teams.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
+                                <span class="material-symbols-outlined text-[20px]">manage_accounts</span> Teams
                         </a>
                 </nav>
-                <div class="mt-auto border-t border-gray-200 pt-4">
-                        <a class="flex items-center gap-3 text-gray-600 px-4 py-3 hover:bg-gray-100 duration-200 ease-in-out"
-                                href="coordinator_help_center.php">
-                                <span class="material-symbols-outlined">help</span>
-                                <span>Help Center</span>
+                <div class="border-t border-gray-200 pt-3 px-3 space-y-0.5">
+                        <a href="coordinator_profile.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
+                                <span class="material-symbols-outlined text-[20px]">account_circle</span> My Profile
                         </a>
-                        <a class="flex items-center gap-3 text-gray-600 px-4 py-3 hover:bg-gray-100 duration-200 ease-in-out"
-                                href="logout.php">
-                                <span class="material-symbols-outlined">logout</span>
-                                <span>Logout</span>
+                        <a href="coordinator_help_center.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
+                                <span class="material-symbols-outlined text-[20px]">help</span> Help Center
+                        </a>
+                        <a href="logout.php" class="flex items-center gap-3 text-red-650 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-red-50 transition-colors">
+                                <span class="material-symbols-outlined text-[20px] text-red-400">logout</span> Logout
                         </a>
                 </div>
         </aside>
@@ -427,36 +685,46 @@ mysqli_stmt_close($stmt);
                                 <h2 class="text-lg font-bold text-gray-800">Postings</h2>
                         </div>
                         
-                        <!-- Profile Dropdown Section -->
-                        <div class="relative" id="profile-container">
-                                <button id="profile-menu-button" class="flex items-center gap-2 focus:outline-none cursor-pointer group">
-                                        <span class="text-sm font-semibold text-gray-700 group-hover:text-blue-600 transition-colors hidden sm:inline-block">
-                                                <?php echo htmlspecialchars($header_name); ?>
-                                        </span>
-                                        <div class="w-8 h-8 rounded-full overflow-hidden border border-gray-200 shadow-sm group-hover:border-blue-500 transition-colors">
-                                                <?php if (!empty($header_photo) && file_exists($header_photo)): ?>
-                                                        <img src="<?php echo htmlspecialchars($header_photo); ?>" alt="Profile" class="w-full h-full object-cover">
-                                                <?php else: ?>
-                                                        <img src="https://ui-avatars.com/api/?name=<?php echo urlencode($header_name); ?>&background=0D8ABC&color=fff" alt="Profile" class="w-full h-full object-cover">
-                                                <?php endif; ?>
+                        <div class="flex items-center gap-6">
+                                <!-- Notifications Bell -->
+                                <a href="coordinator_notifications.php" class="p-2 text-gray-500 hover:bg-gray-50 transition-colors rounded-full relative">
+                                        <span class="material-symbols-outlined">notifications</span>
+                                        <?php if ($unread_count > 0): ?>
+                                                <span class="absolute top-1.5 right-1.5 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center text-[9px] font-bold"><?php echo $unread_count; ?></span>
+                                        <?php endif; ?>
+                                </a>
+
+                                <!-- Profile Dropdown Section -->
+                                <div class="relative" id="profile-container">
+                                        <button id="profile-menu-button" class="flex items-center gap-2 focus:outline-none cursor-pointer group">
+                                                <span class="text-sm font-semibold text-gray-700 group-hover:text-blue-600 transition-colors hidden sm:inline-block">
+                                                        <?php echo htmlspecialchars($header_name); ?>
+                                                </span>
+                                                <div class="w-8 h-8 rounded-full overflow-hidden border border-gray-200 shadow-sm group-hover:border-blue-500 transition-colors">
+                                                        <?php if (!empty($header_photo) && file_exists($header_photo)): ?>
+                                                                <img src="<?php echo htmlspecialchars($header_photo); ?>" alt="Profile" class="w-full h-full object-cover">
+                                                        <?php else: ?>
+                                                                <img src="https://ui-avatars.com/api/?name=<?php echo urlencode($header_name); ?>&background=0D8ABC&color=fff" alt="Profile" class="w-full h-full object-cover">
+                                                        <?php endif; ?>
+                                                </div>
+                                                <span class="material-symbols-outlined text-gray-500 text-[18px] group-hover:text-blue-600 transition-colors">arrow_drop_down</span>
+                                        </button>
+                                        
+                                        <div id="profile-dropdown" class="hidden absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-xl shadow-lg py-2 z-50">
+                                                <a href="coordinator_profile.php" class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-blue-600 transition-colors">
+                                                        <span class="material-symbols-outlined text-gray-400 text-[20px]">account_circle</span>
+                                                        <span>My Profile</span>
+                                                </a>
+                                                <a href="coordinator_profile.php?section=settings" class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-blue-600 transition-colors">
+                                                        <span class="material-symbols-outlined text-gray-400 text-[20px]">settings</span>
+                                                        <span>Settings</span>
+                                                </a>
+                                                <hr class="my-1 border-gray-100">
+                                                <a href="logout.php" class="flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors">
+                                                        <span class="material-symbols-outlined text-red-400 text-[20px]">logout</span>
+                                                        <span>Logout</span>
+                                                </a>
                                         </div>
-                                        <span class="material-symbols-outlined text-gray-500 text-[18px] group-hover:text-blue-600 transition-colors">arrow_drop_down</span>
-                                </button>
-                                
-                                <div id="profile-dropdown" class="hidden absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-xl shadow-lg py-2 z-50">
-                                        <a href="coordinator_profile.php" class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-blue-600 transition-colors">
-                                                <span class="material-symbols-outlined text-gray-400 text-[20px]">account_circle</span>
-                                                <span>My Profile</span>
-                                        </a>
-                                        <a href="coordinator_profile.php?section=settings" class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-blue-600 transition-colors">
-                                                <span class="material-symbols-outlined text-gray-400 text-[20px]">settings</span>
-                                                <span>Settings</span>
-                                        </a>
-                                        <hr class="my-1 border-gray-100">
-                                        <a href="logout.php" class="flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors">
-                                                <span class="material-symbols-outlined text-red-400 text-[20px]">logout</span>
-                                                <span>Logout</span>
-                                        </a>
                                 </div>
                         </div>
                 </header>
@@ -483,14 +751,14 @@ mysqli_stmt_close($stmt);
 
                 <div class="flex-1 p-8 space-y-6">
                         <?php if ($success_msg): ?>
-                            <div class="p-4 mb-4 text-sm text-green-800 rounded-lg bg-green-50 border border-green-200 flex items-center gap-2">
+                            <div class="p-4 mb-4 text-sm text-green-800 rounded-lg bg-green-50 border border-green-200 flex items-center gap-2 alert-success">
                                 <span class="material-symbols-outlined text-green-500">check_circle</span>
                                 <span><?php echo $success_msg; ?></span>
                             </div>
                         <?php endif; ?>
 
                         <?php if ($error_msg): ?>
-                            <div class="p-4 mb-4 text-sm text-red-800 rounded-lg bg-red-50 border border-red-200 flex items-center gap-2">
+                            <div class="p-4 mb-4 text-sm text-red-800 rounded-lg bg-red-50 border border-red-200 flex items-center gap-2 alert-danger">
                                 <span class="material-symbols-outlined text-red-500">error</span>
                                 <span><?php echo $error_msg; ?></span>
                             </div>
@@ -603,14 +871,9 @@ mysqli_stmt_close($stmt);
                                                                         <?php endif; ?>
                                                                 </td>
                                                                 <td class="px-6 py-4 text-right space-x-2 whitespace-nowrap">
-                                                                        <?php $is_active = ($item['status'] ?? '') === 'Active'; ?>
-                                                                        <?php if ($is_active): ?>
-                                                                            <button onclick='openTimelineModal(<?php echo json_encode($item); ?>)' class="text-indigo-600 hover:text-indigo-800 font-bold text-xs cursor-pointer mr-1">Timeline</button>
-                                                                        <?php else: ?>
-                                                                            <span class="text-gray-300 font-bold text-xs mr-1 cursor-not-allowed" title="Timeline is only available for Active projects">Timeline</span>
-                                                                        <?php endif; ?>
-                                                                        <button onclick='openEditModal(<?php echo json_encode($item); ?>)' class="text-blue-600 hover:text-blue-800 font-bold text-xs cursor-pointer mr-1">Edit</button>
-                                                                        <a href="coordinator_internships.php?action=delete&id=<?php echo $item['id']; ?>" onclick="return confirm('Are you sure you want to delete this project posting?');" class="text-red-600 hover:text-red-800 font-bold text-xs">Delete</a>
+                                                                    <button onclick='openViewModal(<?php echo json_encode($item); ?>)' class="text-indigo-600 hover:text-indigo-800 font-bold text-xs cursor-pointer mr-1">View</button>
+                                                                    <button onclick='openEditModal(<?php echo json_encode($item); ?>)' class="text-blue-600 hover:text-blue-800 font-bold text-xs cursor-pointer mr-1">Edit</button>
+                                                                    <a href="coordinator_internships.php?action=delete&id=<?php echo $item['id']; ?>" onclick="return confirm('Are you sure you want to delete this project posting?');" class="text-red-600 hover:text-red-800 font-bold text-xs">Delete</a>
                                                                 </td>
                                                         </tr>
                                                     <?php endforeach; ?>
@@ -636,24 +899,44 @@ mysqli_stmt_close($stmt);
                                 <input type="hidden" name="id" id="internship-id">
                                 
                                 <div class="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+                                        <div class="mb-2 p-3 bg-gray-50 border border-gray-200 rounded-xl" id="admin-remarks-container" style="display: none;">
+                                                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Admin Remarks</label>
+                                                <p id="form-admin-remarks" class="text-sm text-gray-800"></p>
+                                        </div>
+
                                         <div>
                                                 <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Project Title</label>
                                                 <input type="text" name="title" id="form-title" required class="w-full rounded-xl border-gray-200 text-xs py-2 focus:border-blue-600 focus:ring-blue-600/10" placeholder="e.g. Internship Management Portal">
                                         </div>
 
+                                        <div>
+                                                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Technology Stack (comma separated)</label>
+                                                <input type="text" name="technology_stack" id="form-tech-stack" required class="w-full rounded-xl border-gray-200 text-xs py-2 focus:border-blue-600 focus:ring-blue-600/10" placeholder="HTML,CSS,JavaScript">
+                                        </div>
+
                                         <div class="grid grid-cols-2 gap-4">
                                                 <div>
                                                         <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Project Type</label>
-                                                        <select name="project_type" id="form-project-type" class="w-full rounded-xl border-gray-200 text-xs py-2 focus:border-blue-600 focus:ring-blue-600/10 cursor-pointer">
-                                                                <option value="Development" selected>Development</option>
-                                                                <option value="Design">Design</option>
-                                                                <option value="Marketing">Marketing</option>
+                                                        <select name="project_type" id="form-project-type" class="w-full rounded-xl border-gray-200 text-xs py-2 focus:border-blue-600 focus:ring-blue-600/10 cursor-pointer" required>
+                                                                <?php if (empty($active_project_types)): ?>
+                                                                    <option value="" selected>No project types available</option>
+                                                                <?php else: ?>
+                                                                    <?php foreach ($active_project_types as $type): ?>
+                                                                        <option value="<?php echo htmlspecialchars($type['type_name']); ?>" data-type-id="<?php echo (int)$type['id']; ?>"><?php echo htmlspecialchars($type['type_name']); ?></option>
+                                                                    <?php endforeach; ?>
+                                                                <?php endif; ?>
                                                         </select>
                                                 </div>
                                                 <div>
                                                         <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Project Subtype</label>
-                                                        <select name="project_subtype" id="form-project-subtype" class="w-full rounded-xl border-gray-200 text-xs py-2 focus:border-blue-600 focus:ring-blue-600/10 cursor-pointer">
-                                                                <!-- Options populated dynamically -->
+                                                        <select name="project_subtype" id="form-project-subtype" class="w-full rounded-xl border-gray-200 text-xs py-2 focus:border-blue-600 focus:ring-blue-600/10 cursor-pointer" required>
+                                                                <?php if (empty($active_project_subtypes)): ?>
+                                                                    <option value="">Select a type first</option>
+                                                                <?php else: ?>
+                                                                    <?php foreach ($active_project_subtypes as $subtype): ?>
+                                                                        <option value="<?php echo htmlspecialchars($subtype['subtype_name']); ?>"><?php echo htmlspecialchars($subtype['subtype_name']); ?></option>
+                                                                    <?php endforeach; ?>
+                                                                <?php endif; ?>
                                                         </select>
                                                 </div>
                                         </div>
@@ -714,20 +997,6 @@ mysqli_stmt_close($stmt);
                                         </div>
 
                                         <div>
-                                                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Status</label>
-                                                <input type="hidden" name="status" id="form-status" value="Pending Approval">
-                                                <div class="flex items-center gap-2 py-2">
-                                                        <span id="form-status-display" class="px-3 py-1 rounded-full text-xs font-bold border bg-orange-50 text-orange-700 border-orange-200">Pending Approval</span>
-                                                        <span class="text-[10px] text-gray-400">(Set by Admin workflow)</span>
-                                                </div>
-                                        </div>
-
-                                        <div>
-                                                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Technology Stack (Comma separated)</label>
-                                                <input type="text" name="technology_stack" id="form-tech-stack" required class="w-full rounded-xl border-gray-200 text-xs py-2 focus:border-blue-600 focus:ring-blue-600/10" placeholder="e.g. React.js, Node.js, Express, MySQL">
-                                        </div>
-
-                                        <div>
                                                 <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Project Description</label>
                                                 <textarea name="description" id="form-description" required class="w-full rounded-xl border-gray-200 text-xs py-2 focus:border-blue-600 focus:ring-blue-600/10" placeholder="Describe the milestones, requirements, and deliverables..." rows="3"></textarea>
                                         </div>
@@ -741,6 +1010,34 @@ mysqli_stmt_close($stmt);
                                         </div>
 
         <!-- Timeline Modal -->
+        <!-- View Modal -->
+        <div id="view-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+            <div class="bg-white rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+                <div class="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                    <h3 class="text-lg font-bold text-gray-900 font-sans">Internship Details</h3>
+                    <button onclick="closeViewModal()" class="text-gray-400 hover:text-gray-600 transition-colors cursor-pointer">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+                <div class="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+                    <div><strong>Title:</strong> <span id="view-title"></span></div>
+                    <div><strong>Project Type:</strong> <span id="view-project-type"></span></div>
+                    <div><strong>Project Subtype:</strong> <span id="view-project-subtype"></span></div>
+                    <div><strong>Technology Stack:</strong> <span id="view-tech-stack"></span></div>
+                    <div><strong>Difficulty:</strong> <span id="view-difficulty"></span></div>
+                    <div><strong>Openings:</strong> <span id="view-openings"></span></div>
+                    <div><strong>Mode:</strong> <span id="view-mode"></span></div>
+                    <div><strong>Duration:</strong> <span id="view-duration"></span></div>
+                    <div><strong>Start Date:</strong> <span id="view-start-date"></span></div>
+                    <div><strong>End Date:</strong> <span id="view-end-date"></span></div>
+                    <div><strong>Mentor:</strong> <span id="view-mentor"></span></div>
+                    <div><strong>Status:</strong> <span id="view-status"></span></div>
+                    <div><strong>Admin Remarks:</strong> <span id="view-admin-remarks"></span></div>
+                    <div><strong>Description:</strong> <p id="view-description" class="whitespace-pre-wrap"></p></div>
+                </div>
+            </div>
+        </div>
+
         <div id="timeline-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
                 <div class="bg-white rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
                         <div class="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
@@ -780,7 +1077,6 @@ mysqli_stmt_close($stmt);
                 const titleInput = document.getElementById('form-title');
                 const durationInput = document.getElementById('form-duration');
                 const modeInput = document.getElementById('form-mode');
-                const statusInput = document.getElementById('form-status');
                 
                 const typeInput = document.getElementById('form-project-type');
                 const subtypeInput = document.getElementById('form-project-subtype');
@@ -791,66 +1087,120 @@ mysqli_stmt_close($stmt);
                 const techStackInput = document.getElementById('form-tech-stack');
                 const descriptionInput = document.getElementById('form-description');
 
-                const subtypesMap = {
-                        'Development': [
-                                'Web Development',
-                                'Mobile Apps',
-                                'Backend Systems'
-                        ],
-                        'Design': [
-                                'UI/UX Design',
-                                'Graphic Design',
-                                'Product Design'
-                        ],
-                        'Marketing': [
-                                'SEO Campaigns',
-                                'Social Media Strategy',
-                                'Content Marketing'
-                        ]
-                };
+                let currentSubtypes = [];
 
-                function mapOldType(oldType) {
-                        if (!oldType) return 'Development';
-                        const t = oldType.toLowerCase();
-                        if (t.includes('development') || t.includes('general') || t.includes('data') || t.includes('analytics')) {
-                                return 'Development';
+                function getSelectedTypeId(typeValue) {
+                        const option = Array.from(typeInput.options).find(opt => opt.value === typeValue);
+                        return option ? option.dataset.typeId : '';
+                }
+
+                function autofillSubtypeFields() {
+                        const selectedSubtypeName = subtypeInput.value;
+                        const subtypeObj = currentSubtypes.find(sub => sub.subtype_name === selectedSubtypeName);
+                        if (subtypeObj) {
+                                if (subtypeObj.skills) {
+                                        techStackInput.value = subtypeObj.skills;
+                                }
+                                if (subtypeObj.mode) {
+                                        let modeValue = subtypeObj.mode;
+                                        if (modeValue === 'Offline') {
+                                                modeValue = 'On-Site';
+                                        }
+                                        let modeExists = Array.from(modeInput.options).some(opt => opt.value === modeValue);
+                                        if (!modeExists && modeValue) {
+                                                const opt = document.createElement('option');
+                                                opt.value = modeValue;
+                                                opt.textContent = modeValue;
+                                                modeInput.appendChild(opt);
+                                        }
+                                        if (modeValue) {
+                                                modeInput.value = modeValue;
+                                        }
+                                }
+                                if (subtypeObj.duration) {
+                                        let durationExists = Array.from(durationInput.options).some(opt => opt.value === subtypeObj.duration);
+                                        if (!durationExists && subtypeObj.duration) {
+                                                const opt = document.createElement('option');
+                                                opt.value = subtypeObj.duration;
+                                                opt.textContent = subtypeObj.duration;
+                                                durationInput.appendChild(opt);
+                                        }
+                                        durationInput.value = subtypeObj.duration;
+                                }
+                                calculateEndDate();
                         }
-                        if (t.includes('design') || t.includes('ux') || t.includes('ui')) {
-                                return 'Design';
-                        }
-                        if (t.includes('marketing') || t.includes('seo')) {
-                                return 'Marketing';
-                        }
-                        return 'Development';
                 }
 
                 function updateSubtypes(selectedType, selectedSubtype = '') {
+                        const typeId = getSelectedTypeId(selectedType);
                         subtypeInput.innerHTML = '';
-                        const list = subtypesMap[selectedType] || [];
-                        list.forEach(sub => {
-                                const opt = document.createElement('option');
-                                opt.value = sub;
-                                opt.textContent = sub;
-                                subtypeInput.appendChild(opt);
-                        });
 
-                        // Ensure we don't lose existing custom subtype value from DB when editing
-                        if (selectedSubtype && !list.includes(selectedSubtype)) {
+                        if (!typeId) {
                                 const opt = document.createElement('option');
-                                opt.value = selectedSubtype;
-                                opt.textContent = selectedSubtype;
+                                opt.value = '';
+                                opt.textContent = 'Select a valid project type';
                                 subtypeInput.appendChild(opt);
+                                return;
                         }
 
-                        if (selectedSubtype) {
-                                subtypeInput.value = selectedSubtype;
-                        } else if (subtypeInput.options.length > 0) {
-                                subtypeInput.value = subtypeInput.options[0].value;
-                        }
+                        fetch('project_category_api.php?action=get_subtypes&type_id=' + encodeURIComponent(typeId))
+                            .then(response => response.json())
+                            .then(list => {
+                                currentSubtypes = list;
+                                if (!Array.isArray(list) || list.length === 0) {
+                                    const opt = document.createElement('option');
+                                    opt.value = '';
+                                    opt.textContent = 'No subtypes available for this type';
+                                    subtypeInput.appendChild(opt);
+                                    if (selectedSubtype) {
+                                        const customOpt = document.createElement('option');
+                                        customOpt.value = selectedSubtype;
+                                        customOpt.textContent = selectedSubtype;
+                                        customOpt.selected = true;
+                                        subtypeInput.appendChild(customOpt);
+                                    }
+                                    return;
+                                }
+
+                                list.forEach(sub => {
+                                        const opt = document.createElement('option');
+                                        opt.value = sub.subtype_name;
+                                        opt.textContent = sub.subtype_name;
+                                        subtypeInput.appendChild(opt);
+                                });
+
+                                if (selectedSubtype && Array.from(subtypeInput.options).some(opt => opt.value === selectedSubtype)) {
+                                        subtypeInput.value = selectedSubtype;
+                                } else if (selectedSubtype) {
+                                        const opt = document.createElement('option');
+                                        opt.value = selectedSubtype;
+                                        opt.textContent = selectedSubtype;
+                                        customOpt.selected = true;
+                                        subtypeInput.appendChild(opt);
+                                        subtypeInput.value = selectedSubtype;
+                                } else if (subtypeInput.options.length > 0) {
+                                        subtypeInput.value = subtypeInput.options[0].value;
+                                }
+
+                                if (formAction.value === 'create') {
+                                        autofillSubtypeFields();
+                                }
+                            })
+                            .catch(() => {
+                                subtypeInput.innerHTML = '';
+                                const opt = document.createElement('option');
+                                opt.value = '';
+                                opt.textContent = 'Unable to load subtypes';
+                                subtypeInput.appendChild(opt);
+                            });
                 }
 
                 typeInput.addEventListener('change', (e) => {
                         updateSubtypes(e.target.value);
+                });
+
+                subtypeInput.addEventListener('change', () => {
+                        autofillSubtypeFields();
                 });
 
                 function calculateDuration() {
@@ -929,7 +1279,9 @@ mysqli_stmt_close($stmt);
                         formAction.value = 'create';
                         modalTitle.textContent = 'New Project Posting';
                         internshipIdInput.value = '';
-                        updateSubtypes('Development');
+                        document.getElementById('admin-remarks-container').style.display = 'none';
+                        document.getElementById('form-admin-remarks').textContent = '';
+                        updateSubtypes(typeInput.value || (typeInput.options[0] ? typeInput.options[0].value : '' ));
                         modal.classList.remove('hidden');
                 }
 
@@ -937,11 +1289,20 @@ mysqli_stmt_close($stmt);
                         formAction.value = 'edit';
                         modalTitle.textContent = 'Edit Project Posting';
                         internshipIdInput.value = item.id;
+                        
+                        document.getElementById('admin-remarks-container').style.display = 'block';
+                        document.getElementById('form-admin-remarks').textContent = item.admin_remarks ? item.admin_remarks : 'No remarks available.';
+
                         titleInput.value = item.title;
                         
-                        const mappedType = mapOldType(item.project_type);
-                        typeInput.value = mappedType;
-                        updateSubtypes(mappedType, item.project_subtype || '');
+                        if (![...typeInput.options].some(o => o.value === item.project_type)) {
+                                const option = document.createElement('option');
+                                option.value = item.project_type;
+                                option.textContent = item.project_type || 'Unknown Type';
+                                typeInput.appendChild(option);
+                        }
+                        typeInput.value = item.project_type || (typeInput.options[0] ? typeInput.options[0].value : '');
+                        updateSubtypes(typeInput.value, item.project_subtype || '');
 
                         // Ensure option exists in duration select to avoid blank selection
                         let durationExists = false;
@@ -960,21 +1321,6 @@ mysqli_stmt_close($stmt);
                         durationInput.value = item.duration || '3 Months';
 
                         modeInput.value = item.mode;
-                        // Preserve the existing status — coordinators cannot change it
-                        const statusVal = item.status || 'Pending Approval';
-                        document.getElementById('form-status').value = statusVal;
-                        const statusDisplay = document.getElementById('form-status-display');
-                        const statusColors = {
-                                'pending approval': 'bg-orange-50 text-orange-700 border-orange-200',
-                                'active':           'bg-green-50 text-green-700 border-green-200',
-                                'completed':        'bg-slate-50 text-slate-700 border-slate-200',
-                                'archived':         'bg-gray-50 text-gray-700 border-gray-200',
-                                'rejected':         'bg-red-50 text-red-700 border-red-200'
-                        };
-                        const colorCls = statusColors[statusVal.toLowerCase()] || 'bg-orange-50 text-orange-700 border-orange-200';
-                        statusDisplay.className = 'px-3 py-1 rounded-full text-xs font-bold border ' + colorCls;
-                        statusDisplay.textContent = statusVal;
-
                         difficultyInput.value = item.difficulty_level || 'Medium';
                         openingsInput.value = item.openings || 1;
                         startDateInput.value = item.start_date || '';
@@ -986,17 +1332,19 @@ mysqli_stmt_close($stmt);
                 }
 
                 function closeModal() {
-                        modal.classList.add('hidden');
+                    modal.classList.add('hidden');
+                }
+                function closeViewModal() {
+                    document.getElementById('view-modal').classList.add('hidden');
                 }
 
                 const timelineModal = document.getElementById('timeline-modal');
+                const viewModal = document.getElementById('view-modal');
                 const timelineInternshipId = document.getElementById('timeline-internship-id');
                 const timelineModalSubtitle = document.getElementById('timeline-modal-subtitle');
                 const timelinePhasesContainer = document.getElementById('timeline-phases-container');
 
                 function openTimelineModal(item) {
-                        timelineInternshipId.value = item.id;
-                        timelineModalSubtitle.textContent = `${item.title} (${item.duration})`;
                         timelinePhasesContainer.innerHTML = `
                                 <div class="flex flex-col items-center justify-center py-8">
                                         <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -1060,6 +1408,24 @@ mysqli_stmt_close($stmt);
                                 });
                 }
 
+function openViewModal(item) {
+    document.getElementById('view-title').textContent = item.title || '';
+    document.getElementById('view-project-type').textContent = item.project_type || '';
+    document.getElementById('view-project-subtype').textContent = item.project_subtype || '';
+    document.getElementById('view-tech-stack').textContent = item.technology_stack || '';
+    document.getElementById('view-difficulty').textContent = item.difficulty_level || '';
+    document.getElementById('view-openings').textContent = item.openings ?? '';
+    document.getElementById('view-mode').textContent = item.mode || '';
+    document.getElementById('view-duration').textContent = item.duration || '';
+    document.getElementById('view-start-date').textContent = item.start_date ? new Date(item.start_date).toLocaleDateString() : '';
+    document.getElementById('view-end-date').textContent = item.end_date ? new Date(item.end_date).toLocaleDateString() : '';
+    document.getElementById('view-mentor').textContent = item.mentor_name || '';
+    document.getElementById('view-status').textContent = item.status || '';
+    document.getElementById('view-admin-remarks').textContent = item.admin_remarks || 'No admin remarks available.';
+    document.getElementById('view-description').textContent = item.description || '';
+    viewModal.classList.remove('hidden');
+}
+
                 function closeTimelineModal() {
                          timelineModal.classList.add('hidden');
                 }
@@ -1078,5 +1444,6 @@ mysqli_stmt_close($stmt);
                     });
                 }
         </script>
+<script src="js/alerts.js"></script>
 </body>
 </html>

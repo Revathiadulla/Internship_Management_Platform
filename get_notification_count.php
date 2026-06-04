@@ -21,14 +21,14 @@ if ($role === 'hr' || $role === 'admin') {
     }
 } elseif ($role === 'mentor') {
     $uid = current_user_id();
-    $notif_res = mysqli_query($conn, "SELECT COUNT(*) AS total FROM mentor_notifications WHERE mentor_id = $uid AND is_read = 0");
+    $notif_res = mysqli_query($conn, "SELECT COUNT(*) AS total FROM notifications WHERE user_id = $uid AND is_read = 0");
     if ($notif_res) {
         $notification_count = (int) mysqli_fetch_assoc($notif_res)['total'];
     }
 
 } elseif ($role === 'coordinator') {
     $uid = current_user_id();
-    $notif_res = mysqli_query($conn, "SELECT COUNT(*) AS total FROM coordinator_notifications WHERE coordinator_id = $uid AND is_read = 0");
+    $notif_res = mysqli_query($conn, "SELECT COUNT(*) AS total FROM notifications WHERE user_id = $uid AND is_read = 0");
     if ($notif_res) {
         $notification_count = (int) mysqli_fetch_assoc($notif_res)['total'];
     }

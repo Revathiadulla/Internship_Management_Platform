@@ -19,14 +19,33 @@ if (!$profile) { header("Location: student_profile_form.php"); exit(); }
 $intern_sql = "SELECT a.id as app_id, a.applied_date, a.test_score, a.education_status,
                       COALESCE(i.title, a.internship_name) as title,
                       COALESCE(i.duration, '3 Months') as duration,
-                      COALESCE(i.mode, 'Remote') as mode
+                      COALESCE(i.mode, 'Remote') as mode,
+                      ss.score as ss_score,
+                      ss.total_questions as ss_total_questions
                FROM internship_applications a
                LEFT JOIN internships i ON a.internship_id = i.id AND a.internship_id > 0
+               LEFT JOIN student_scores ss ON a.id = ss.application_id
                WHERE a.user_id = '$user_id' AND a.status = 'Started'
                LIMIT 1";
 $intern_res  = mysqli_query($conn, $intern_sql);
 $intern      = mysqli_fetch_assoc($intern_res);
 $has_intern  = ($intern !== null);
+
+$cert_score = 0;
+$cert_total = 30;
+if ($has_intern) {
+    if (isset($intern['ss_score']) && $intern['ss_score'] !== null) {
+        $cert_score = intval($intern['ss_score']);
+        $cert_total = intval($intern['ss_total_questions'] ?: 30);
+    } else if (isset($intern['test_score']) && $intern['test_score'] !== null) {
+        $p = intval($intern['test_score']);
+        if ($p > 30) {
+            $cert_score = intval(round(($p / 100) * 30));
+        } else {
+            $cert_score = $p;
+        }
+    }
+}
 
 // Fetch total logs
 $logs_res  = mysqli_query($conn, "SELECT COUNT(*) as cnt, SUM(time_spent) as total_hours FROM daily_logs WHERE user_id='$user_id'");
@@ -242,7 +261,7 @@ $unread_count = intval($unread_row['c'] ?? 0);
                 </div>
                 <div class="text-right">
                   <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Assessment Score</p>
-                  <p class="font-bold text-slate-800 text-sm"><?php echo ($has_intern && $intern['test_score'] !== null) ? intval($intern['test_score']) . '/30 — ' . round(intval($intern['test_score'])/30*100) . '%' : 'N/A'; ?></p>
+                  <p class="font-bold text-slate-800 text-sm"><?php echo ($has_intern && $intern['test_score'] !== null && $cert_total > 0) ? $cert_score . '/' . $cert_total . ' — ' . round(($cert_score / $cert_total) * 100) . '%' : 'N/A'; ?></p>
                 </div>
               </div>
 
@@ -341,7 +360,7 @@ $unread_count = intval($unread_row['c'] ?? 0);
               </div>
               <div class="bg-slate-50 rounded-xl p-3 text-center">
                 <p class="text-[10px] text-slate-400 font-bold uppercase">Test Score</p>
-                <p class="text-base font-black text-slate-800 mt-0.5"><?php echo ($has_intern && $intern['test_score'] !== null) ? intval($intern['test_score']) . '/30' : '—'; ?></p>
+                <p class="text-base font-black text-slate-800 mt-0.5"><?php echo ($has_intern && $intern['test_score'] !== null) ? $cert_score . '/' . $cert_total : '—'; ?></p>
               </div>
             </div>
           </div>

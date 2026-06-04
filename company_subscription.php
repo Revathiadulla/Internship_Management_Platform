@@ -263,13 +263,13 @@ if ($notif_list_stmt) {
 
             <!-- Alerts -->
             <?php if ($success_msg !== ''): ?>
-                <div class="p-4 bg-green-50 border border-green-200 text-green-800 text-sm font-semibold rounded-2xl flex items-center gap-3">
+                <div class="p-4 bg-green-50 border border-green-200 text-green-800 text-sm font-semibold rounded-2xl flex items-center gap-3 alert-success">
                     <span class="material-symbols-outlined text-green-600">check_circle</span>
                     <span><?php echo htmlspecialchars($success_msg); ?></span>
                 </div>
             <?php endif; ?>
             <?php if ($error_msg !== ''): ?>
-                <div class="p-4 bg-red-50 border border-red-200 text-red-800 text-sm font-semibold rounded-2xl flex items-center gap-3">
+                <div class="p-4 bg-red-50 border border-red-200 text-red-800 text-sm font-semibold rounded-2xl flex items-center gap-3 alert-danger">
                     <span class="material-symbols-outlined text-red-600">error</span>
                     <span><?php echo htmlspecialchars($error_msg); ?></span>
                 </div>
@@ -460,5 +460,6 @@ if ($notif_list_stmt) {
         </div>
     </main>
 
+<script src="js/alerts.js"></script>
 </body>
 </html>

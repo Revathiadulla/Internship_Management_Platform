@@ -5,6 +5,7 @@ if (!isset($_SESSION['user_id']) || !isset($_SESSION['role']) || strtolower($_SE
     exit();
 }
 include "db.php";
+include_once __DIR__ . "/includes/discontinuation_helpers.php";
 
 // Fetch header user info
 $header_uid = $_SESSION['user_id'];
@@ -12,6 +13,19 @@ $header_res = mysqli_query($conn, "SELECT full_name, profile_photo FROM users WH
 $header_user = mysqli_fetch_assoc($header_res);
 $header_name = $header_user['full_name'] ?? 'Admin';
 $header_photo = $header_user['profile_photo'] ?? '';
+
+// Fetch admin notifications info
+$admin_unread_res = mysqli_query($conn, "SELECT COUNT(*) as count FROM notifications WHERE user_id = " . intval($_SESSION['user_id']) . " AND role = 'admin' AND is_read = 0");
+$admin_unread_row = mysqli_fetch_assoc($admin_unread_res);
+$admin_unread_count = $admin_unread_row['count'] ?? 0;
+
+$admin_latest_res = mysqli_query($conn, "SELECT * FROM notifications WHERE user_id = " . intval($_SESSION['user_id']) . " AND role = 'admin' ORDER BY created_at DESC LIMIT 5");
+$admin_latest_notifications = [];
+if ($admin_latest_res) {
+    while ($row = mysqli_fetch_assoc($admin_latest_res)) {
+        $admin_latest_notifications[] = $row;
+    }
+}
 
 // Calculate metrics
 $total_students = intval(mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as c FROM users WHERE role='student'"))['c'] ?? 0);
@@ -33,6 +47,10 @@ if ($status_exists) {
 } else {
     $active_internships = $total_internships;
 }
+
+// Get internship status counts (Active, On Hold, Discontinued, etc.)
+$internship_status_counts = get_internship_status_counts($conn);
+$pending_reports_count = get_pending_reports_count($conn);
 
 // Fetch recent users for User Management table preview
 $user_status_exists_res = mysqli_query($conn, "SHOW COLUMNS FROM users LIKE 'status'");
@@ -106,16 +124,15 @@ $activities = array_slice($activities, 0, 5);
 $assigned_pct = $total_students > 0 ? round(($active_internships / $total_students) * 100) : 0;
 ?>
 <!DOCTYPE html>
-<html class="light" lang="en">
+<html lang="en">
 <head>
     <meta charset="utf-8">
     <meta content="width=device-width, initial-scale=1.0" name="viewport">
     <title>Admin Dashboard – IMP</title>
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
     <script id="tailwind-config">
     tailwind.config = {
+      darkMode: "class",
       theme: {
         extend: {
           colors: {
@@ -129,8 +146,15 @@ $assigned_pct = $total_students > 0 ? round(($active_internships / $total_studen
           }
         }
       }
+    };
+    if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
     }
     </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
     <style>
       body { background-color: #f8f9fa; color: #191c1d; }
       .material-symbols-outlined {
@@ -141,7 +165,7 @@ $assigned_pct = $total_students > 0 ? round(($active_internships / $total_studen
       .stat-card:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.06); }
     </style>
 </head>
-<body class="min-h-screen flex flex-col font-sans antialiased">
+<body class="min-h-screen flex flex-col font-sans antialiased dark:bg-slate-950 dark:text-slate-100 transition-colors duration-200">
   <!-- Top Nav -->
   <header class="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between sticky top-0 z-40">
     <div class="flex items-center gap-8">
@@ -172,10 +196,53 @@ $assigned_pct = $total_students > 0 ? round(($active_internships / $total_studen
         <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
         <span class="font-semibold text-slate-700">System Online</span>
       </div>
+
+      <!-- Theme Switcher -->
+      <button id="theme-toggle" class="p-2 text-gray-500 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors rounded-full flex items-center justify-center cursor-pointer">
+          <span class="material-symbols-outlined text-[20px]" id="theme-toggle-icon">dark_mode</span>
+      </button>
+      <!-- Notifications Bell -->
+      <div class="relative mr-1" id="notifications-container-menu">
+          <button id="notifications-menu-button" class="p-2 text-gray-500 hover:bg-gray-50 transition-colors rounded-full relative focus:outline-none cursor-pointer flex items-center justify-center">
+              <span class="material-symbols-outlined">notifications</span>
+              <?php if ($admin_unread_count > 0): ?>
+                  <span class="absolute top-1 right-1 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center text-[9px] font-bold"><?php echo $admin_unread_count; ?></span>
+              <?php endif; ?>
+          </button>
+          <div id="notifications-dropdown" class="hidden absolute right-0 mt-2 w-80 bg-white border border-gray-200 rounded-xl shadow-lg py-2 z-50">
+              <div class="px-4 py-2 border-b border-gray-100 flex items-center justify-between">
+                  <span class="font-bold text-xs text-gray-800">Notifications</span>
+                  <?php if ($admin_unread_count > 0): ?>
+                      <a href="mark_notification_read.php?action=read_all&redirect=admin_dashboard.php" class="text-[10px] font-bold text-blue-600 hover:text-blue-800">Mark all read</a>
+                  <?php endif; ?>
+              </div>
+              <div class="max-h-64 overflow-y-auto divide-y divide-gray-100">
+                  <?php if (empty($admin_latest_notifications)): ?>
+                      <div class="px-4 py-3 text-center text-xs text-gray-400">No notifications.</div>
+                  <?php else: ?>
+                      <?php foreach ($admin_latest_notifications as $notif): ?>
+                          <a href="admin_received_notifications.php" class="block px-4 py-2.5 hover:bg-gray-50 transition-colors">
+                              <div class="flex justify-between items-start gap-1">
+                                  <span class="text-[9px] font-bold uppercase tracking-wider text-gray-400"><?php echo htmlspecialchars($notif['title']); ?></span>
+                                  <?php if (!$notif['is_read']): ?>
+                                      <span class="w-1.5 h-1.5 bg-blue-600 rounded-full shrink-0 mt-1"></span>
+                                  <?php endif; ?>
+                              </div>
+                              <p class="text-xs text-gray-700 font-medium truncate mt-0.5" title="<?php echo htmlspecialchars($notif['message']); ?>"><?php echo htmlspecialchars($notif['message']); ?></p>
+                              <span class="text-[9px] text-gray-400 mt-1 block"><?php echo date('h:i A, d M', strtotime($notif['created_at'])); ?></span>
+                          </a>
+                      <?php endforeach; ?>
+                  <?php endif; ?>
+              </div>
+              <div class="border-t border-gray-100 pt-1 text-center">
+                  <a href="admin_received_notifications.php" class="block py-2 text-xs font-bold text-blue-600 hover:text-blue-800">View all notifications</a>
+              </div>
+          </div>
+      </div>
       
       <!-- Profile Button -->
       <div class="relative">
-        <button onclick="document.getElementById('profile-dropdown').classList.toggle('hidden')" class="flex items-center gap-2 focus:outline-none cursor-pointer group">
+        <button id="profile-menu-button" class="flex items-center gap-2 focus:outline-none cursor-pointer group">
           <span class="text-sm font-semibold text-gray-700 group-hover:text-blue-600 transition-colors hidden sm:inline">
             <?php echo htmlspecialchars($header_name); ?> (Admin)
           </span>
@@ -203,59 +270,7 @@ $assigned_pct = $total_students > 0 ? round(($active_internships / $total_studen
 
   <div class="flex flex-1 overflow-hidden">
     <!-- Sidebar -->
-    <aside class="w-64 bg-white border-r border-gray-200 p-6 flex flex-col justify-between overflow-y-auto shrink-0">
-      <div class="space-y-6">
-        <div>
-          <h2 class="text-[10px] font-bold text-gray-400 tracking-widest mb-4 uppercase">Main Menu</h2>
-          <nav class="flex flex-col gap-1">
-            <a href="admin_dashboard.php" class="flex items-center gap-3 bg-blue-50 text-blue-700 border-l-4 border-blue-600 px-4 py-2.5 rounded-r-lg text-sm font-bold">
-              <span class="material-symbols-outlined text-xl">dashboard</span>
-              Dashboard
-            </a>
-            <a href="admin_users.php" class="flex items-center gap-3 text-gray-700 px-4 py-2.5 rounded-lg hover:bg-gray-50 text-sm font-medium transition-colors">
-              <span class="material-symbols-outlined text-xl">group</span>
-              Users
-            </a>
-            <a href="admin_internships.php" class="flex items-center gap-3 text-gray-700 px-4 py-2.5 rounded-lg hover:bg-gray-50 text-sm font-medium transition-colors">
-              <span class="material-symbols-outlined text-xl">work</span>
-              Internships
-            </a>
-            <a href="admin_applications.php" class="flex items-center gap-3 text-gray-700 px-4 py-2.5 rounded-lg hover:bg-gray-50 text-sm font-medium transition-colors">
-              <span class="material-symbols-outlined text-xl">assignment</span>
-              Applications
-            </a>
-            <a href="admin_projects.php" class="flex items-center gap-3 text-gray-700 px-4 py-2.5 rounded-lg hover:bg-gray-50 text-sm font-medium transition-colors">
-              <span class="material-symbols-outlined text-xl">account_tree</span>
-              Projects
-            </a>
-            <a href="admin_daily_logs.php" class="flex items-center gap-3 text-gray-700 px-4 py-2.5 rounded-lg hover:bg-gray-50 text-sm font-medium transition-colors">
-              <span class="material-symbols-outlined text-xl">monitoring</span>
-              Daily Logs
-            </a>
-            <a href="admin_reports.php" class="flex items-center gap-3 text-gray-700 px-4 py-2.5 rounded-lg hover:bg-gray-50 text-sm font-medium transition-colors">
-              <span class="material-symbols-outlined text-xl">analytics</span>
-              Reports
-            </a>
-            <a href="admin_notifications.php" class="flex items-center gap-3 text-gray-700 px-4 py-2.5 rounded-lg hover:bg-gray-50 text-sm font-medium transition-colors">
-              <span class="material-symbols-outlined text-xl">campaign</span>
-              Notifications
-            </a>
-            <a href="admin_talent_pool.php" class="flex items-center gap-3 text-gray-700 px-4 py-2.5 rounded-lg hover:bg-gray-50 text-sm font-medium transition-colors">
-              <span class="material-symbols-outlined text-xl">stars</span>
-              Talent Pool
-            </a>
-          </nav>
-        </div>
-      </div>
-      <div>
-        <nav class="flex flex-col gap-1 border-t border-gray-150 pt-4">
-          <a href="logout.php" class="flex items-center gap-3 text-red-600 px-4 py-2.5 rounded-lg hover:bg-red-50 text-sm font-medium transition-colors">
-            <span class="material-symbols-outlined text-xl">logout</span>
-            Logout
-          </a>
-        </nav>
-      </div>
-    </aside>
+    <?php include 'includes/admin_sidebar.php'; ?>
 
     <!-- Main Content -->
     <main class="flex-1 p-8 overflow-y-auto bg-gray-50">
@@ -267,12 +282,12 @@ $assigned_pct = $total_students > 0 ? round(($active_internships / $total_studen
             <h1 class="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
             <p class="text-gray-500 text-sm mt-1">Complete system control and platform monitoring</p>
           </div>
-          <div class="flex gap-3">
+          <div class="flex flex-wrap gap-3">
             <button onclick="window.location.href='admin_users.php'" class="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium hover:bg-gray-50 hover:shadow-md transition-all shadow-sm cursor-pointer">
               <span class="material-symbols-outlined text-lg">person_add</span> Manage Users
             </button>
-            <button onclick="window.location.href='admin_notifications.php'" class="bg-[#003ea8] text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium hover:bg-blue-800 hover:shadow-md transition-all shadow-sm cursor-pointer">
-              <span class="material-symbols-outlined text-lg">send</span> Broadcast Announcement
+            <button onclick="window.location.href='manual_message.php'" class="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium hover:bg-blue-700 hover:shadow-md transition-all shadow-sm cursor-pointer">
+              <span class="material-symbols-outlined text-lg">chat</span> Send Message
             </button>
           </div>
         </div>
@@ -393,27 +408,68 @@ $assigned_pct = $total_students > 0 ? round(($active_internships / $total_studen
               <div class="bg-slate-50 p-2.5 rounded-full text-slate-600">
                 <span class="material-symbols-outlined">campaign</span>
               </div>
-              <span class="text-slate-600 text-xs font-bold bg-slate-50 px-2 py-0.5 rounded-full">Broadcasts</span>
+              <span class="text-slate-600 text-xs font-bold bg-slate-50 px-2 py-0.5 rounded-full">Messages Sent</span>
             </div>
-            <h3 class="text-gray-500 text-xs font-medium uppercase tracking-wide">Notifications</h3>
+            <h3 class="text-gray-500 text-xs font-medium uppercase tracking-wide">Messages Sent</h3>
             <p class="text-3xl font-black text-gray-900 mt-1"><?php echo $total_notifications; ?></p>
+          </div>
+
+          <!-- Pending Reports (New) -->
+          <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm stat-card">
+            <div class="flex justify-between items-start mb-3">
+              <div class="bg-red-50 p-2.5 rounded-full text-red-600">
+                <span class="material-symbols-outlined">warning</span>
+              </div>
+              <span class="text-red-600 text-xs font-bold bg-red-50 px-2 py-0.5 rounded-full">Action</span>
+            </div>
+            <h3 class="text-gray-500 text-xs font-medium uppercase tracking-wide">Pending Reports</h3>
+            <p class="text-3xl font-black text-gray-900 mt-1">
+              <a href="admin_student_reports.php" class="text-red-600 hover:text-red-700"><?php echo $pending_reports_count; ?></a>
+            </p>
           </div>
         </div>
 
-        <!-- Student Placement Progress -->
-        <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+        <!-- Internship Status Distribution -->
+        <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm mt-6">
           <div class="flex justify-between items-center mb-4">
-            <h2 class="text-lg font-bold text-gray-900">Student Placement Progress</h2>
-            <span class="text-sm font-semibold text-blue-600"><?php echo $active_internships; ?> / <?php echo $total_students; ?> Active Placements</span>
+            <h2 class="text-lg font-bold text-gray-900">Internship Status Distribution</h2>
+            <a href="admin_student_reports.php" class="text-sm font-semibold text-blue-600 hover:text-blue-700">View All Reports →</a>
           </div>
-          <div class="w-full bg-gray-200 h-3 rounded-full overflow-hidden">
-            <div class="bg-[#003ea8] h-full rounded-full transition-all duration-500" style="width: <?php echo $assigned_pct; ?>%"></div>
+          <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <!-- Active -->
+            <div class="bg-green-50 p-4 rounded-lg border border-green-200">
+              <p class="text-xs font-bold text-green-700 uppercase tracking-wider">Active</p>
+              <p class="text-3xl font-black text-green-900 mt-2"><?php echo $internship_status_counts['active']; ?></p>
+            </div>
+
+            <!-- On Hold -->
+            <div class="bg-orange-50 p-4 rounded-lg border border-orange-200">
+              <p class="text-xs font-bold text-orange-700 uppercase tracking-wider">On Hold</p>
+              <p class="text-3xl font-black text-orange-900 mt-2"><?php echo $internship_status_counts['on_hold']; ?></p>
+            </div>
+
+            <!-- Discontinued -->
+            <div class="bg-red-50 p-4 rounded-lg border border-red-200">
+              <p class="text-xs font-bold text-red-700 uppercase tracking-wider">Discontinued</p>
+              <p class="text-3xl font-black text-red-900 mt-2"><?php echo $internship_status_counts['discontinued']; ?></p>
+            </div>
+
+            <!-- Removed -->
+            <div class="bg-slate-50 p-4 rounded-lg border border-slate-200">
+              <p class="text-xs font-bold text-slate-700 uppercase tracking-wider">Removed</p>
+              <p class="text-3xl font-black text-slate-900 mt-2"><?php echo $internship_status_counts['removed']; ?></p>
+            </div>
+
+            <!-- Completed -->
+            <div class="bg-emerald-50 p-4 rounded-lg border border-emerald-200">
+              <p class="text-xs font-bold text-emerald-700 uppercase tracking-wider">Completed</p>
+              <p class="text-3xl font-black text-emerald-900 mt-2"><?php echo $internship_status_counts['completed']; ?></p>
+            </div>
           </div>
-          <p class="text-xs text-gray-500 mt-2 font-medium">Currently, <?php echo $assigned_pct; ?>% of registered students are assigned to active internships.</p>
         </div>
 
         <!-- Grid Layout for Tables & Activities -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
           
           <!-- Recently Registered Users (Col span 2) -->
           <div class="bg-white rounded-xl border border-gray-200 shadow-sm lg:col-span-2 hover:shadow-md transition-shadow">
@@ -526,5 +582,62 @@ $assigned_pct = $total_students > 0 ? round(($active_internships / $total_studen
       </footer>
     </main>
   </div>
+  <script>
+    // Profile Dropdown
+    const profileBtn = document.getElementById('profile-menu-button');
+    const profileDropdown = document.getElementById('profile-dropdown');
+    
+    // Notifications Dropdown
+    const notifBtn = document.getElementById('notifications-menu-button');
+    const notifDropdown = document.getElementById('notifications-dropdown');
+
+    if (profileBtn && profileDropdown) {
+        profileBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            profileDropdown.classList.toggle('hidden');
+            if (notifDropdown) notifDropdown.classList.add('hidden');
+        });
+    }
+
+    if (notifBtn && notifDropdown) {
+        notifBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            notifDropdown.classList.toggle('hidden');
+            if (profileDropdown) profileDropdown.classList.add('hidden');
+        });
+    }
+
+    document.addEventListener('click', () => {
+        if (profileDropdown) profileDropdown.classList.add('hidden');
+        if (notifDropdown) notifDropdown.classList.add('hidden');
+    });
+  </script>
+  <script>
+  document.addEventListener('DOMContentLoaded', () => {
+      const themeToggle = document.getElementById('theme-toggle');
+      const themeToggleIcon = document.getElementById('theme-toggle-icon');
+      
+      if (themeToggle && themeToggleIcon) {
+          // Set initial icon
+          if (document.documentElement.classList.contains('dark')) {
+              themeToggleIcon.textContent = 'light_mode';
+          } else {
+              themeToggleIcon.textContent = 'dark_mode';
+          }
+          
+          themeToggle.addEventListener('click', () => {
+              if (document.documentElement.classList.contains('dark')) {
+                  document.documentElement.classList.remove('dark');
+                  localStorage.setItem('theme', 'light');
+                  themeToggleIcon.textContent = 'dark_mode';
+              } else {
+                  document.documentElement.classList.add('dark');
+                  localStorage.setItem('theme', 'dark');
+                  themeToggleIcon.textContent = 'light_mode';
+              }
+          });
+      }
+  });
+  </script>
 </body>
 </html>
