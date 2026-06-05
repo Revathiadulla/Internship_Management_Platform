@@ -202,11 +202,11 @@ function sendEmail($to, $subjectOrName, $messageOrSubject = null, $message = nul
                 'email' => $smtpConfig['from_email']
             ],
             'to' => [
-                [
-                    'email' => $toEmail,
-                    'name'  => $toName ?: ''
-                ]
-            ],
+    [
+        'email' => $toEmail,
+        'name' => !empty($toName) ? $toName : $toEmail
+    ]
+],
             'subject' => $subject,
             'htmlContent' => $body,
             'textContent' => strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $body))
