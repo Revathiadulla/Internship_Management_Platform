@@ -683,11 +683,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Update application status and test scores
     $percentage_int = intval(round($percentage_decimal));
     $new_status = ($percentage_int >= 60) ? 'HR Review' : 'Rejected';
-    $upd = $conn->prepare("UPDATE internship_applications SET status = ?, test_score = ?, test_completed_at = NOW(), test_status = 'Completed', test_submitted_date = NOW() WHERE id = ? AND status NOT IN ('Selected','HOD Approved','HOD Approval Pending','Rejected')");
+    
+    $current_status = $row['status'] ?? '';
+    $status_to_update = $current_status;
+    if (!in_array($current_status, ['Selected', 'HOD Approved', 'HOD Approval Pending', 'Rejected'])) {
+        if ($new_status === 'HR Review') {
+            if (in_array($current_status, ['Applied', 'Test Completed'])) {
+                $status_to_update = 'HR Review';
+            }
+        } else {
+            $status_to_update = 'Rejected';
+        }
+    }
+
+    $upd = $conn->prepare("UPDATE internship_applications SET status = ?, test_score = ?, test_completed_at = NOW(), test_status = 'Completed', test_submitted_date = NOW() WHERE id = ?");
     if (!$upd) {
         die('Database error: ' . $conn->error);
     }
-    $upd->bind_param('sii', $new_status, $percentage_int, $app_id);
+    $upd->bind_param('sii', $status_to_update, $percentage_int, $app_id);
     $upd->execute();
     $upd->close();
 

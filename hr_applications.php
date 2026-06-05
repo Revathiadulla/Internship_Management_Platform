@@ -128,10 +128,9 @@ foreach ($where_clauses_no_view as $key => $clause) {
     }
 }
 // Removed outdated exclusion filters for review view
-    // WHERE clause for HR Review tab (test_score IS NOT NULL)
+    // WHERE clause for HR Review tab
     $where_clauses_review = $where_clauses_no_view;
-    $where_clauses_review[] = "a.test_score IS NOT NULL";
-    // Show ONLY HR Round or HR Review
+    // Show ONLY status = 'HR Review'
     $where_clauses_review[] = "a.status = 'HR Review'";
 $review_where_sql = implode(' AND ', $where_clauses_review);
 if (empty($review_where_sql)) { $review_where_sql = '1'; }
