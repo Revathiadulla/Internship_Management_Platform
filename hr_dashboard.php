@@ -7,7 +7,8 @@ include_once __DIR__ . '/includes/hr_module_helpers.php';
 ensure_module_schema($conn);
 sync_candidates_from_applications($conn);
 
-$status_order = ['Applied', 'Test Completed', 'HR Round', 'HOD Approved', 'Selected', 'Rejected'];
+$status_order = ['Applied', 'Test Completed', 'HR Round', 'HR Review', 'HOD Approved', 'Selected', 'Rejected'];
+$status_options = ['Applied', 'Test Completed', 'Documents Verified', 'HR Round', 'HR Review', 'HOD Approval Pending', 'HOD Approved', 'Selected', 'Interview Scheduled', 'Offer Sent', 'Onboarding Completed', 'Rejected'];
 $status_counts = array_fill_keys($status_order, 0);
 $status_res = mysqli_query($conn, "SELECT COALESCE(status, 'Applied') AS status, COUNT(*) AS cnt FROM internship_applications WHERE is_deleted = 0 GROUP BY status");
 if ($status_res) {
