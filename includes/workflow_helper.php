@@ -3,7 +3,7 @@
  * workflow_helper.php – central helpers for status audit, workflow logs, and schema safety.
  */
 
-require_once __DIR__ . '/db_connection.php'; // assumed existing DB connection $conn
+require_once dirname(__DIR__) . '/db.php'; // assumed existing DB connection $conn
 
 /**
  * Ensure the `status_audit` table exists and its `id` column is safe.
