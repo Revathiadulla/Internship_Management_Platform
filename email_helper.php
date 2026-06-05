@@ -53,8 +53,16 @@ function getSmtpConfig(): array {
         'from_email' => getEnvVar(['SMTP_FROM', 'SMTP_FROM_EMAIL'], defined('SMTP_FROM') ? SMTP_FROM : (defined('SMTP_FROM_EMAIL') ? SMTP_FROM_EMAIL : '')),
         'from_name' => getEnvVar(['SMTP_FROM_NAME'], defined('SMTP_FROM_NAME') ? SMTP_FROM_NAME : 'Internship Management Platform'),
     ];
+    // Fallback to Gmail SMTP defaults if not provided (Render may not set them explicitly)
+    if (empty($config['host'])) {
+        $config['host'] = 'smtp.gmail.com';
+    }
+    if (empty($config['port'])) {
+        $config['port'] = '587';
+    }
 
-    // Determine missing required variables for diagnostics
+
+    // Determine missing required variables for diagnostics (after fallback defaults)
     $missing = [];
     if (empty($config['host'])) $missing[] = 'SMTP_HOST';
     if (empty($config['port'])) $missing[] = 'SMTP_PORT';
@@ -70,7 +78,7 @@ function getSmtpConfig(): array {
     logSmtpConfig($logConfig, $missing);
 
     return $config;
-}
+
 
 /**
  * Logs SMTP configuration values and missing variables for debugging.
