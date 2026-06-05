@@ -956,6 +956,9 @@ if ($team_msg_res) {
                         <a href="coordinator_reports.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
                                 <span class="material-symbols-outlined text-[20px]">analytics</span> Reports
                         </a>
+						<a href="coordinator_student_reports.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
+							<span class="material-symbols-outlined text-[20px]">warning</span> Student Reports
+						</a>
                         <a href="coordinator_teams.php" class="flex items-center gap-3 bg-blue-50 text-blue-700 border-l-4 border-blue-600 px-3 py-2.5 rounded-r-lg text-sm font-semibold">
                                 <span class="material-symbols-outlined text-[20px]">manage_accounts</span> Teams
                         </a>

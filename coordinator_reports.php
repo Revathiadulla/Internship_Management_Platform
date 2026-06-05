@@ -234,6 +234,9 @@ mysqli_stmt_close($student_stmt);
                         <a href="coordinator_reports.php" class="flex items-center gap-3 bg-blue-50 text-blue-700 border-l-4 border-blue-600 px-3 py-2.5 rounded-r-lg text-sm font-semibold">
                                 <span class="material-symbols-outlined text-[20px]">analytics</span> Reports
                         </a>
+						<a href="coordinator_student_reports.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
+							<span class="material-symbols-outlined text-[20px]">warning</span> Student Reports
+						</a>
                         <a href="coordinator_teams.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
                                 <span class="material-symbols-outlined text-[20px]">manage_accounts</span> Teams
                         </a>
@@ -496,6 +499,9 @@ mysqli_stmt_close($student_stmt);
                             <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg text-xs font-bold transition-all">Search</button>
                             <?php if (!empty($search)): ?>
                                 <a href="coordinator_reports.php" class="bg-gray-100 hover:bg-gray-200 border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center">Reset</a>
+						<a href="coordinator_student_reports.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
+							<span class="material-symbols-outlined text-[20px]">warning</span> Student Reports
+						</a>
                             <?php endif; ?>
                         </form>
                     </div>

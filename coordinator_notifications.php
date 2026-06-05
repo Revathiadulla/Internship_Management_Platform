@@ -102,6 +102,9 @@ $internships_list = fetchAssignedInternships($conn);
             <a href="coordinator_reports.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
                 <span class="material-symbols-outlined text-[20px]">analytics</span> Reports
             </a>
+						<a href="coordinator_student_reports.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
+							<span class="material-symbols-outlined text-[20px]">warning</span> Student Reports
+						</a>
             <a href="coordinator_teams.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
                 <span class="material-symbols-outlined text-[20px]">manage_accounts</span> Teams
             </a>

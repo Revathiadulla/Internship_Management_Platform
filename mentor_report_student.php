@@ -81,7 +81,8 @@ $check_stmt->close();
 // Fetch application and student details
 $app_sql = "SELECT a.id, a.user_id, a.internship_id, a.internship_name, 
                    COALESCE(i.title, a.internship_name) as internship_title,
-                   a.internship_status
+                   a.internship_status,
+                   i.coordinator_id
             FROM internship_applications a
             LEFT JOIN internships i ON a.internship_id = i.id AND a.internship_id > 0
             WHERE a.id = ? AND a.user_id = ? LIMIT 1";
@@ -127,6 +128,19 @@ try {
     }
     $update_stmt->close();
 
+    // 1b. Save report in mentor_reports table
+    $ins_sql = "INSERT INTO mentor_reports (student_id, mentor_id, application_id, reason, remarks, status, created_at)
+                VALUES (?, ?, ?, ?, ?, 'Open', NOW())";
+    $ins_stmt = $conn->prepare($ins_sql);
+    if (!$ins_stmt) {
+        throw new Exception('Failed to prepare mentor reports insert: ' . $conn->error);
+    }
+    $ins_stmt->bind_param('iiiss', $student_id, $mentor_id, $app_id, $reason, $remarks);
+    if (!$ins_stmt->execute()) {
+        throw new Exception('Failed to save mentor report: ' . $ins_stmt->error);
+    }
+    $ins_stmt->close();
+
     // 2. Log to audit trail
     $audit_sql = "INSERT INTO internship_status_history 
                   (application_id, old_status, new_status, report_reason, remarks, changed_by, changed_by_role, change_type)
@@ -142,7 +156,7 @@ try {
     }
     $audit_stmt->close();
 
-    // 3. Get student and admin details for notifications
+    // 3. Get student, mentor and coordinator details for notifications
     $student_res = mysqli_query($conn, "SELECT full_name, email FROM users WHERE id = $student_id LIMIT 1");
     $student = mysqli_fetch_assoc($student_res);
     $student_name = $student['full_name'] ?? 'Student';
@@ -151,6 +165,8 @@ try {
     $mentor_res = mysqli_query($conn, "SELECT full_name FROM users WHERE id = $mentor_id LIMIT 1");
     $mentor = mysqli_fetch_assoc($mentor_res);
     $mentor_name = $mentor['full_name'] ?? 'Mentor';
+
+    $coordinator_id = intval($app['coordinator_id'] ?? 0);
 
     // 4. Create notification for admins
     $admin_res = mysqli_query($conn, "SELECT id FROM users WHERE LOWER(role) = 'admin' LIMIT 10");
@@ -167,6 +183,20 @@ try {
                 $notif_stmt->execute();
             }
             $notif_stmt->close();
+        }
+    }
+
+    // 4b. Create notification for coordinator
+    if ($coordinator_id > 0) {
+        $c_title = 'Student Reported by Mentor';
+        $c_msg = "Mentor " . ($_SESSION['full_name'] ?? 'Mentor') . " reported student " . ($student_name ?? 'Student') . " on '" . $app['internship_title'] . "'.";
+        $c_type = 'alert';
+        $c_link = "coordinator_student_reports.php";
+        $c_notif_stmt = $conn->prepare("INSERT INTO notifications (user_id, role, title, message, type, link) VALUES (?, 'coordinator', ?, ?, ?, ?)");
+        if ($c_notif_stmt) {
+            $c_notif_stmt->bind_param("issss", $coordinator_id, $c_title, $c_msg, $c_type, $c_link);
+            $c_notif_stmt->execute();
+            $c_notif_stmt->close();
         }
     }
 

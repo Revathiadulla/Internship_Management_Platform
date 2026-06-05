@@ -12,6 +12,7 @@ $menu_items = [
     'admin_project_categories.php' => ['icon' => 'category', 'label' => 'Project Categories'],
     'admin_coordinator_assignments.php' => ['icon' => 'assignment_ind', 'label' => 'Coordinator Assignments'],
     'admin_daily_logs.php' => ['icon' => 'monitoring', 'label' => 'Daily Logs'],
+    'admin_student_reports.php' => ['icon' => 'warning', 'label' => 'Student Reports'],
     'admin_reports.php' => ['icon' => 'analytics', 'label' => 'Reports'],
     'admin_received_notifications.php' => ['icon' => 'campaign', 'label' => 'Notifications'],
     'manual_message.php' => ['icon' => 'chat', 'label' => 'Send Message'],
