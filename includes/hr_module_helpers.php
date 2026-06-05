@@ -89,12 +89,27 @@ function ensure_module_schema(mysqli $conn): void {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )");
 
-    // Ensure id column has AUTO_INCREMENT (migration for legacy tables)
-    $chk_ws = mysqli_query($conn, "SHOW COLUMNS FROM workflow_stages LIKE 'id'");
-    if ($chk_ws && $row_ws = mysqli_fetch_assoc($chk_ws)) {
-        if (stripos($row_ws['Extra'] ?? '', 'auto_increment') === false) {
-            mysqli_query($conn, "ALTER TABLE workflow_stages MODIFY id INT NOT NULL AUTO_INCREMENT");
+    // Ensure the 'id' column has AUTO_INCREMENT only if needed and no other AUTO_INCREMENT column exists
+    $chk_ws = mysqli_query($conn, "SHOW COLUMNS FROM workflow_stages");
+    $has_id = false;
+    $has_auto = false;
+    if ($chk_ws) {
+        while ($col = mysqli_fetch_assoc($chk_ws)) {
+            if ($col['Field'] === 'id') {
+                $has_id = true;
+                if (stripos($col['Extra'] ?? '', 'auto_increment') !== false) {
+                    $has_auto = true; // id already auto_increment
+                }
+            } else {
+                if (stripos($col['Extra'] ?? '', 'auto_increment') !== false) {
+                    $has_auto = true; // another column is auto_increment
+                }
+            }
         }
+    }
+    if ($has_id && !$has_auto) {
+        // Add AUTO_INCREMENT and ensure primary key
+        mysqli_query($conn, "ALTER TABLE workflow_stages MODIFY id INT NOT NULL AUTO_INCREMENT, ADD PRIMARY KEY (id)");
     }
 
     mysqli_query($conn, "CREATE TABLE IF NOT EXISTS workflow_logs (
