@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/includes/ensure_extended_schema.php';
 // student_test.php - Test display and submission handler
 // Handles test display with prepared statements, multiple attempt prevention, and scoring
 

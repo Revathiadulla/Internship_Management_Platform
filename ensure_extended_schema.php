@@ -602,6 +602,17 @@ try {
         UNIQUE KEY uq_student_test (student_id, test_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
     mysqli_query($conn, $create_student_scores);
+    // -------------------------------------------------
+    // Ensure student_scores.id has PRIMARY KEY and AUTO_INCREMENT
+    // -------------------------------------------------
+    $check_pk = mysqli_query($conn, "SHOW INDEX FROM student_scores WHERE Key_name = 'PRIMARY'");
+    if ($check_pk && mysqli_num_rows($check_pk) > 0) {
+        // Primary key exists, ensure AUTO_INCREMENT
+        mysqli_query($conn, "ALTER TABLE student_scores MODIFY id INT NOT NULL AUTO_INCREMENT");
+    } else {
+        // Add PRIMARY KEY and AUTO_INCREMENT
+        mysqli_query($conn, "ALTER TABLE student_scores MODIFY id INT NOT NULL AUTO_INCREMENT, ADD PRIMARY KEY (id)");
+    }
 
     // Ensure student_scores columns exist and are correct
     $student_scores_cols = [
