@@ -730,7 +730,7 @@ if (isset($_GET['error'])) {
             <h3 class="text-base font-extrabold text-slate-800 mt-0.5 leading-snug"><?php echo htmlspecialchars($active_intern['title']); ?></h3>
           </div>
           <div class="grid grid-cols-2 gap-3 text-xs border-t border-slate-100 pt-4">
-            <div><p class="text-slate-400 font-semibold">Start Date</p><p class="font-bold text-slate-700 mt-0.5"><?php echo date('M d, Y', strtotime($active_intern['start_date'] ?: $active_intern['applied_date'])); ?></p></div>
+            <div><p class="text-slate-400 font-semibold">Start Date</p><p class="font-bold text-slate-700 mt-0.5"><?php echo !empty($active_intern['start_date']) || !empty($active_intern['applied_date']) ? date('M d, Y', strtotime($active_intern['start_date'] ?: $active_intern['applied_date'])) : 'Not available'; ?></p></div>
             <div><p class="text-slate-400 font-semibold">End Date</p><p class="font-bold text-slate-700 mt-0.5"><?php echo $d_end->format('M d, Y'); ?></p></div>
             <div><p class="text-slate-400 font-semibold">Duration</p><p class="font-bold text-slate-700 mt-0.5"><?php echo !empty($active_intern['duration'])?htmlspecialchars($active_intern['duration']):'3 Months'; ?></p></div>
             <div><p class="text-slate-400 font-semibold">Mode</p><p class="font-bold text-slate-700 mt-0.5 capitalize"><?php echo !empty($active_intern['mode'])?htmlspecialchars($active_intern['mode']):'Hybrid'; ?></p></div>
@@ -1133,7 +1133,7 @@ if (isset($_GET['error'])) {
                   ?>
                   <td class="py-3 px-3 font-medium text-slate-800 max-w-[180px] truncate"><?php echo htmlspecialchars($display_title); ?></td>
                   <td class="py-3 px-3"><span class="px-2.5 py-1 rounded-full text-[11px] font-bold <?php echo $bg; ?>"><?php echo htmlspecialchars($st); ?></span></td>
-                  <td class="py-3 px-3 text-slate-400 text-xs"><?php echo date('M d, Y',strtotime($app['applied_date'])); ?></td>
+                  <td class="py-3 px-3 text-slate-400 text-xs"><?php echo !empty($app['applied_date']) ? date('M d, Y', strtotime($app['applied_date'])) : 'Not available'; ?></td>
                 </tr>
                 <?php endforeach; ?>
               </tbody>
@@ -1219,7 +1219,7 @@ if (isset($_GET['error'])) {
                   ?>
                   <td class="py-3 px-3 font-medium text-slate-800 max-w-[180px] truncate"><?php echo htmlspecialchars($display_title); ?></td>
                   <td class="py-3 px-3"><span class="px-2.5 py-1 rounded-full text-[11px] font-bold <?php echo $bg; ?>"><?php echo htmlspecialchars($st); ?></span></td>
-                  <td class="py-3 px-3 text-slate-400 text-xs"><?php echo date('M d, Y',strtotime($app['applied_date'])); ?></td>
+                  <td class="py-3 px-3 text-slate-400 text-xs"><?php echo !empty($app['applied_date']) ? date('M d, Y', strtotime($app['applied_date'])) : 'Not available'; ?></td>
                 </tr>
                 <?php endforeach; ?>
               </tbody>
@@ -1314,11 +1314,11 @@ if (isset($_GET['error'])) {
               <div class="grid grid-cols-2 md:grid-cols-3 gap-5 text-sm">
                 <div class="bg-slate-50 rounded-xl p-3.5 border border-slate-100">
                   <p class="text-slate-400 text-[10px] font-bold uppercase tracking-wide mb-1">Applied Date</p>
-                  <p class="font-bold text-slate-800"><?php echo date('M d, Y', strtotime($active_intern['applied_date'])); ?></p>
+                  <p class="font-bold text-slate-800"><?php echo !empty($active_intern['applied_date']) ? date('M d, Y', strtotime($active_intern['applied_date'])) : 'Not available'; ?></p>
                 </div>
                 <div class="bg-slate-50 rounded-xl p-3.5 border border-slate-100">
                   <p class="text-slate-400 text-[10px] font-bold uppercase tracking-wide mb-1">Start Date</p>
-                  <p class="font-bold text-slate-800"><?php echo date('M d, Y', strtotime($active_intern['start_date'] ?: $active_intern['applied_date'])); ?></p>
+                  <p class="font-bold text-slate-800"><?php echo !empty($active_intern['start_date']) || !empty($active_intern['applied_date']) ? date('M d, Y', strtotime($active_intern['start_date'] ?: $active_intern['applied_date'])) : 'Not available'; ?></p>
                 </div>
                 <div class="bg-slate-50 rounded-xl p-3.5 border border-slate-100">
                   <p class="text-slate-400 text-[10px] font-bold uppercase tracking-wide mb-1">End Date</p>
