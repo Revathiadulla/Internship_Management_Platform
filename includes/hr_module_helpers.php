@@ -89,6 +89,14 @@ function ensure_module_schema(mysqli $conn): void {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )");
 
+    // Ensure id column has AUTO_INCREMENT (migration for legacy tables)
+    $chk_ws = mysqli_query($conn, "SHOW COLUMNS FROM workflow_stages LIKE 'id'");
+    if ($chk_ws && $row_ws = mysqli_fetch_assoc($chk_ws)) {
+        if (stripos($row_ws['Extra'] ?? '', 'auto_increment') === false) {
+            mysqli_query($conn, "ALTER TABLE workflow_stages MODIFY id INT NOT NULL AUTO_INCREMENT");
+        }
+    }
+
     mysqli_query($conn, "CREATE TABLE IF NOT EXISTS workflow_logs (
         id INT AUTO_INCREMENT PRIMARY KEY,
         application_id INT DEFAULT NULL,
