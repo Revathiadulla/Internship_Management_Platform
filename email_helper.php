@@ -79,7 +79,7 @@ function getSmtpConfig(): array {
 
     return $config;
 
-
+}
 /**
  * Logs SMTP configuration values and missing variables for debugging.
  * The log is written to /logs/smtp_config_debug.log relative to project root.
