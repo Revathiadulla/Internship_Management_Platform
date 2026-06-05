@@ -118,13 +118,6 @@ function getSmtpDiagnostics(): array {
 
 function testSmtpConnection(string &$debugOutput = null): bool {
     $smtpConfig = getSmtpConfig();
-    $debugOutput = '';
-
-    if (empty($smtpConfig['host']) || empty($smtpConfig['port'])) {
-        $debugOutput = 'SMTP host or port is missing.';
-        return false;
-    }
-
     try {
         $mail = new PHPMailer(true);
         $mail->SMTPDebug = 2;
@@ -166,7 +159,11 @@ function writeEmailLog(string $message): void {
     @file_put_contents($logPath, '[' . date('Y-m-d H:i:s') . '] ' . $message . "\n", FILE_APPEND);
 }
 
+// ---------------------------------------------------------------------------
+// sendEmail() – now uses Brevo Transactional Email API instead of PHPMailer SMTP
+// ---------------------------------------------------------------------------
 function sendEmail($to, $subjectOrName, $messageOrSubject = null, $message = null, &$debugInfo = null): bool {
+    // Determine parameters (same logic as before)
     if ($message === null) {
         $toEmail = trim((string)$to);
         $toName = '';
@@ -185,93 +182,73 @@ function sendEmail($to, $subjectOrName, $messageOrSubject = null, $message = nul
         return false;
     }
 
-    $smtpConfig = getSmtpConfig();
-    if (empty($smtpConfig['host']) || empty($smtpConfig['port']) || empty($smtpConfig['username']) || empty($smtpConfig['password']) || empty($smtpConfig['from_email'])) {
-$debugInfo = 'Missing SMTP configuration. Please set SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, SMTP_FROM.';
-        writeEmailLog('Missing SMTP configuration. Please set SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, SMTP_FROM.');
-        return false;
-    }
-
-    try {
-        $debugOutput = '';
-        $mail = new PHPMailer(true);
-        $mail->SMTPDebug = 2;
-        $mail->Debugoutput = function($str, $level) use (&$debugOutput) {
-            $debugOutput .= '[' . $level . '] ' . trim($str) . "\n";
-        };
-
-        $mail->isSMTP();
-        $mail->Host = $smtpConfig['host'];
-        $mail->SMTPAuth = true;
-        $mail->Username = $smtpConfig['username'];
-        $mail->Password = $smtpConfig['password'];
-        $mail->Port = 587;
-        $mail->CharSet = 'UTF-8';
-        // Allow caller to override From name and provide Reply-To via global mail options
-        $fromName = $smtpConfig['from_name'];
-        if (!empty($GLOBALS['mail_options']) && is_array($GLOBALS['mail_options'])) {
-            $opts = $GLOBALS['mail_options'];
-            if (!empty($opts['from_name'])) {
-                $fromName = $opts['from_name'];
-            }
+    $smtpConfig = getSmtpConfig();        if (empty($smtpConfig['from_email'])) {
+            $debugInfo = 'Missing email configuration. Please set SMTP_FROM.';
+            writeEmailLog('Missing email configuration. Please set SMTP_FROM.');
+            return false;
         }
 
-        $mail->setFrom($smtpConfig['from_email'], $fromName);
-        // Add Reply-To if provided
-        if (!empty($GLOBALS['mail_options']) && is_array($GLOBALS['mail_options'])) {
-            $opts = $GLOBALS['mail_options'];
-            if (!empty($opts['reply_to']) && filter_var($opts['reply_to'], FILTER_VALIDATE_EMAIL)) {
-                $replyName = !empty($opts['reply_to_name']) ? $opts['reply_to_name'] : '';
-                $mail->addReplyTo($opts['reply_to'], $replyName);
-            }
-            // clear global options after consuming
-            unset($GLOBALS['mail_options']);
+        // Use Brevo Transactional Email API
+        $apiKey = getenv('BREVO_API_KEY');
+        if (empty($apiKey)) {
+            $debugInfo = 'Missing BREVO_API_KEY environment variable.';
+            writeEmailLog('Missing BREVO_API_KEY environment variable.');
+            return false;
         }
 
-        $mail->addAddress($toEmail, $toName ?: '');
-        
-        // Add attachments if provided
-        if (!empty($GLOBALS['mail_options_attachments']) && is_array($GLOBALS['mail_options_attachments'])) {
-            foreach ($GLOBALS['mail_options_attachments'] as $attachment) {
-                if (isset($attachment['path']) && file_exists($attachment['path'])) {
-                    $name = isset($attachment['name']) ? $attachment['name'] : '';
-                    $mail->addAttachment($attachment['path'], $name);
-                }
-            }
-            // clear global attachments after consuming
-            unset($GLOBALS['mail_options_attachments']);
-        }
-
-        $mail->isHTML(true);
-        $mail->Subject = $subject;
-        $mail->Body = $body;
-        $mail->AltBody = strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $body));
-        $mail->Timeout = 30;
-        $mail->SMTPKeepAlive = false;
-        $mail->SMTPOptions = [
-            'ssl' => [
-                'verify_peer' => false,
-                'verify_peer_name' => false,
-                'allow_self_signed' => true,
+        $payload = [
+            'sender' => [
+                'name'  => $smtpConfig['from_name'] ?? '',
+                'email' => $smtpConfig['from_email']
             ],
+            'to' => [
+                [
+                    'email' => $toEmail,
+                    'name'  => $toName ?: ''
+                ]
+            ],
+            'subject' => $subject,
+            'htmlContent' => $body,
+            'textContent' => strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $body))
         ];
 
-        $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+        // TODO: attachment support can be added later
 
-        $mail->send();
-        if ($debugInfo !== null) {
-            $debugInfo = $debugOutput;
+        $ch = curl_init('https://api.brevo.com/v3/smtp/email');
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'api-key: ' . $apiKey,
+            'Content-Type: application/json',
+            'Accept: application/json'
+        ]);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+
+        $responseBody = curl_exec($ch);
+        $curlError = curl_error($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($curlError) {
+            $errorMessage = "Brevo request error: $curlError";
+            writeEmailLog($errorMessage);
+            if ($debugInfo !== null) {
+                $debugInfo = $errorMessage;
+            }
+            return false;
         }
-        return true;
-    } catch (Exception $e) {
-        $errorMessage = 'Failed to send email to ' . $toEmail . ' via ' . ($smtpConfig['host'] ?? 'unknown host') . '. Error: ' . $e->getMessage() . ' (' . $mail->ErrorInfo . ')';
-        if ($debugOutput !== '') {
-            $errorMessage .= ' Debug: ' . $debugOutput;
-        }
-        writeEmailLog($errorMessage);
-        if ($debugInfo !== null) {
-            $debugInfo = $errorMessage;
-        }
-        return false;
-    }
-}
+
+        if ($httpCode >= 200 && $httpCode < 300) {
+            if ($debugInfo !== null) {
+                $debugInfo = "HTTP $httpCode: $responseBody";
+            }
+            return true;
+        } else {
+            $errorMessage = "Brevo API error (HTTP $httpCode): $responseBody";
+            writeEmailLog($errorMessage);
+            if ($debugInfo !== null) {
+                $debugInfo = $errorMessage;
+            }
+            return false;
+        } }
