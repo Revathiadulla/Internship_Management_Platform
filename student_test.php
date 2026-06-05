@@ -709,7 +709,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($coord_stmt) {
             while ($c_row = mysqli_fetch_assoc($coord_res)) {
                 $c_id = intval($c_row['id']);
-                $coord_stmt->bind_param('isssss', $c_id, $c_title, $c_msg, $c_type, $link);
+                $coord_stmt->bind_param('issss', $c_id, $c_title, $c_msg, $c_type, $link);
                 $coord_stmt->execute();
             }
             $coord_stmt->close();
