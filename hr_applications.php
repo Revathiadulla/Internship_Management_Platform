@@ -373,7 +373,7 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
                   </td>
                   <!-- Internship Applied -->
                   <td class="py-4 px-6">
-                    <p class="font-medium text-slate-800"><?php echo htmlspecialchars($app['title']); ?></p>
+                    <p class="font-medium text-slate-800"><?php echo htmlspecialchars($app['status'] === 'Selected' ? $app['title'] : 'Awaiting Selection'); ?></p>
                     <p class="text-xs text-slate-400"><?php echo htmlspecialchars($app['duration']); ?> • <?php echo htmlspecialchars($app['mode']); ?></p>
                   </td>
                   <!-- Applied Date -->

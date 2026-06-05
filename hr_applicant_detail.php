@@ -925,7 +925,7 @@ $status_colors = [
                 $hod_email_val   = $d['hod_email'] ?? $d['sp_hod_email'] ?? '';
               ?>
 
-              <?php if ($current_status !== 'Selected' && $current_status !== 'Rejected' && $current_status !== 'HOD Rejected'): ?>
+              <?php if ($current_status !== 'Rejected' && $current_status !== 'HOD Rejected'): ?>
                 <div class="mt-5 border-t border-slate-100 pt-5 space-y-3">
                   <p class="text-xs font-bold uppercase tracking-wider text-slate-400">Available Actions</p>
                   
@@ -939,74 +939,59 @@ $status_colors = [
                     </div>
                   <?php endif; ?>
 
-                  <?php if ($current_status === 'Applied' || $current_status === 'Test Completed'): ?>
-                    <button type="button" 
-                            id="btn-shortlist-candidate" 
-                            class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition-all shadow-sm cursor-pointer">
-                      <span class="material-symbols-outlined text-base">check_circle</span>
-                      Shortlist Candidate
-                    </button>
-                  <?php endif; ?>
-
                   <?php
-                    $student_type = $d['student_type'] ?? '';
-                    $education_status = $d['education_status'] ?? '';
-                    
-                    // A student is considered pursuing if they have 'pursuing' related keywords in education_status or student_type
-                    // However, we strictly rely on the database value.
-                    // The user's requirement: IF education_status = 'Passed Out' -> HR can directly select.
-                    // IF student_type = 'Pursuing / Current Student' -> HOD Approval Pending.
-                    
-                    // Check if passed out strictly
-                    $is_passed_out = (strcasecmp($education_status, 'Passed Out') === 0 || strcasecmp($student_type, 'Passed Out') === 0 || strcasecmp($student_type, 'passed_out') === 0);
-                    
-                    // If not explicitly passed out, assume pursuing to require HOD approval (safe fallback)
-                    $is_pursuing = !$is_passed_out;
-                    
+                    $student_type = strtolower(trim($d['student_type'] ?? ''));
+                    $is_pursuing = ($student_type === 'pursuing' || $student_type === 'current student' || empty($student_type));
+                    $is_passed_out = ($student_type === 'passed_out' || $student_type === 'passed out');
                     $can_approve = (($d['aadhaar_status'] ?? '') === 'verified' && ($d['pan_status'] ?? '') === 'verified');
-                    
-                    if ($is_pursuing && ($current_status === 'HR Round' || $current_status === 'Test Completed' || $current_status === 'Applied')):
                   ?>
-                    <?php if ($can_approve): ?>
-                      <a href="hr_forward_to_hod.php?app_id=<?php echo $app_id; ?>" onclick="return confirm('Are you sure you want to send HOD approval email?');" class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition-all shadow-sm cursor-pointer">
-                        <span class="material-symbols-outlined text-base">forward</span>
-                        Send for HOD Approval
-                      </a>
-                    <?php else: ?>
-                      <button type="button" onclick="alert('HR cannot forward any candidate without verifying both Aadhaar and PAN.');" class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-500 cursor-not-allowed">
-                        <span class="material-symbols-outlined text-base">forward</span>
-                        Send for HOD Approval
-                      </button>
-                    <?php endif; ?>
-                  <?php endif; ?>
 
-                  <?php if ($current_status !== 'Selected'): ?>
-                    <?php if ((!$is_pursuing && ($current_status === 'HR Round' || $current_status === 'HOD Approved' || $current_status === 'Applied' || $current_status === 'Test Completed')) || ($is_pursuing && $current_status === 'HOD Approved')): ?>
-                      <?php if ($can_approve): ?>
-                        <button type="button" onclick="if(confirm('Are you sure you want to confirm selection of this candidate?')) performTransition('Selected');" class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 transition-all shadow-sm cursor-pointer">
-                          <span class="material-symbols-outlined text-base">verified</span>
-                          Confirm Selection
-                        </button>
-                      <?php else: ?>
-                        <button type="button" onclick="alert('HR cannot approve any candidate without verifying both Aadhaar and PAN.');" class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-500 cursor-not-allowed">
-                          <span class="material-symbols-outlined text-base">verified</span>
-                          Confirm Selection
-                        </button>
-                      <?php endif; ?>
-                    <?php endif; ?>
-                  <?php else: ?>
+                  <?php if ($current_status === 'Selected'): ?>
+                    <button type="button" 
+                            id="btn-send-conf-letter" 
+                            class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition-all shadow-sm cursor-pointer">
+                      <span class="material-symbols-outlined text-base">mail</span>
+                      Send Confirmation Letter
+                    </button>
                     <button disabled class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-200 px-4 py-2.5 text-sm font-semibold text-white cursor-not-allowed">
                       <span class="material-symbols-outlined text-base">verified</span>
                       Selected
                     </button>
                   <?php endif; ?>
-                  
-                  <button type="button" 
-                          id="btn-trigger-reject"
-                          class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-100 transition-all border border-red-100 cursor-pointer">
-                    <span class="material-symbols-outlined text-base">cancel</span>
-                    Reject Candidate
-                  </button>
+
+                  <?php if ($current_status === 'HR Review'): ?>
+                    <?php if ($can_approve): ?>
+                      <?php if ($is_pursuing): ?>
+                        <a href="hr_forward_to_hod.php?app_id=<?php echo $app_id; ?>" onclick="return confirm('Are you sure you want to send HOD approval email?');" class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition-all shadow-sm cursor-pointer">
+                          <span class="material-symbols-outlined text-base">forward</span>
+                          Send for HOD Approval
+                        </a>
+                      <?php elseif ($is_passed_out): ?>
+                        <button type="button" onclick="if(confirm('Are you sure you want to confirm selection of this candidate?')) performTransition('Selected');" class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 transition-all shadow-sm cursor-pointer">
+                          <span class="material-symbols-outlined text-base">verified</span>
+                          Confirm Selection
+                        </button>
+                      <?php endif; ?>
+                    <?php endif; ?>
+                  <?php endif; ?>
+
+                  <?php if ($current_status === 'HOD Approved'): ?>
+                    <?php if ($can_approve): ?>
+                      <button type="button" onclick="if(confirm('Are you sure you want to confirm selection of this candidate?')) performTransition('Selected');" class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 transition-all shadow-sm cursor-pointer">
+                        <span class="material-symbols-outlined text-base">verified</span>
+                        Confirm Selection
+                      </button>
+                    <?php endif; ?>
+                  <?php endif; ?>
+
+                  <?php if ($current_status !== 'Selected'): ?>
+                    <button type="button" 
+                            id="btn-trigger-reject"
+                            class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-100 transition-all border border-red-100 cursor-pointer">
+                      <span class="material-symbols-outlined text-base">cancel</span>
+                      Reject Candidate
+                    </button>
+                  <?php endif; ?>
 
                   <!-- Hidden Rejection Form -->
                   <div id="rejection-form-container" class="hidden border border-red-200 bg-red-50/50 rounded-2xl p-4 mt-3 space-y-3">
@@ -1254,12 +1239,35 @@ $status_colors = [
       }
     }
 
-    // Shortlist Candidate handler
-    const btnShortlist = document.getElementById('btn-shortlist-candidate');
-    if (btnShortlist) {
-      btnShortlist.addEventListener('click', function() {
-        if (confirm('Are you sure you want to transition candidate to "HR Round"?')) {
-          performTransition('HR Round', 'Candidate shortlisted for HR Round.');
+    // Send Confirmation Letter handler
+    const btnSendConfLetter = document.getElementById('btn-send-conf-letter');
+    if (btnSendConfLetter) {
+      btnSendConfLetter.addEventListener('click', async function() {
+        if (!confirm('Are you sure you want to generate and send the confirmation letter?')) {
+          return;
+        }
+        btnSendConfLetter.disabled = true;
+        btnSendConfLetter.textContent = 'Sending...';
+        try {
+          const formData = new FormData();
+          formData.append('application_id', '<?php echo $app_id; ?>');
+          const response = await fetch('send_confirmation_letter.php', {
+            method: 'POST',
+            body: formData
+          });
+          const result = await response.json();
+          if (result.success) {
+            showToast('success', 'Confirmation Letter Sent', result.message);
+            setTimeout(() => location.reload(), 1200);
+          } else {
+            showToast('error', 'Failed to Send', result.message);
+            btnSendConfLetter.disabled = false;
+            btnSendConfLetter.textContent = 'Send Confirmation Letter';
+          }
+        } catch (e) {
+          showToast('error', 'Error', 'Failed to send request.');
+          btnSendConfLetter.disabled = false;
+          btnSendConfLetter.textContent = 'Send Confirmation Letter';
         }
       });
     }
@@ -1274,7 +1282,7 @@ $status_colors = [
     const btnConfirmReject = document.getElementById('btn-confirm-reject');
     const rejectionReasonInput = document.getElementById('rejection-reason');
 
-    const workflowButtons = [btnShortlist];
+    const workflowButtons = [btnSendConfLetter];
 
     if (btnTriggerReject) {
       btnTriggerReject.addEventListener('click', () => {

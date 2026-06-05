@@ -37,7 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['role']      = $user['role'];
 
             // Role-based redirection
-            $role = strtolower($user['role']);
+            $role = strtolower(trim($user['role']));
             
             if ($role == "student") {
                 // Check if student has completed profile
