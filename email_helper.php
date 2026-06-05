@@ -137,9 +137,9 @@ function testSmtpConnection(string &$debugOutput = null): bool {
         $mail->SMTPAuth = true;
         $mail->Username = $smtpConfig['username'];
         $mail->Password = $smtpConfig['password'];
-        $mail->Port = (int)$smtpConfig['port'];
+        $mail->Port = 465;
         $mail->CharSet = 'UTF-8';
-        $mail->Timeout = 30;
+        $mail->Timeout = 60;
         $mail->SMTPKeepAlive = false;
         $mail->SMTPOptions = [
             'ssl' => [
@@ -149,11 +149,7 @@ function testSmtpConnection(string &$debugOutput = null): bool {
             ],
         ];
 
-        if ($mail->Port === 465) {
-            $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
-        } else {
-            $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-        }
+        $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
 
         $mail->smtpConnect();
         $mail->smtpClose();
@@ -209,7 +205,7 @@ $debugInfo = 'Missing SMTP configuration. Please set SMTP_HOST, SMTP_PORT, SMTP_
         $mail->SMTPAuth = true;
         $mail->Username = $smtpConfig['username'];
         $mail->Password = $smtpConfig['password'];
-        $mail->Port = (int)$smtpConfig['port'];
+        $mail->Port = 465;
         $mail->CharSet = 'UTF-8';
         // Allow caller to override From name and provide Reply-To via global mail options
         $fromName = $smtpConfig['from_name'];
@@ -260,11 +256,7 @@ $debugInfo = 'Missing SMTP configuration. Please set SMTP_HOST, SMTP_PORT, SMTP_
             ],
         ];
 
-        if ($mail->Port === 465) {
-            $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
-        } else {
-            $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-        }
+        $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
 
         $mail->send();
         if ($debugInfo !== null) {
