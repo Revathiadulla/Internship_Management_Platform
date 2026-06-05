@@ -683,7 +683,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Update application status and test scores
     $percentage_int = intval(round($percentage_decimal));
     $new_status = ($percentage_int >= 60) ? 'HR Review' : 'Rejected';
-    $upd = $conn->prepare("UPDATE internship_applications SET status = ?, test_score = ?, test_completed_at = NOW(), test_status = 'Completed', test_submitted_date = NOW() WHERE id = ?");
+    $upd = $conn->prepare("UPDATE internship_applications SET status = ?, test_score = ?, test_completed_at = NOW(), test_status = 'Completed', test_submitted_date = NOW() WHERE id = ? AND status NOT IN ('Selected','HOD Approved','HOD Approval Pending','Rejected')");
     if (!$upd) {
         die('Database error: ' . $conn->error);
     }
