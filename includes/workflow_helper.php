@@ -14,14 +14,15 @@ function ensure_status_audit_schema() {
     $res = $conn->query("SHOW TABLES LIKE 'status_audit'");
     if ($res->num_rows == 0) {
         $create = "CREATE TABLE status_audit (
-            id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-            entity VARCHAR(50) NOT NULL,
-            entity_id INT NOT NULL,
-            old_status VARCHAR(50) NOT NULL,
-            new_status VARCHAR(50) NOT NULL,
-            extra TEXT NULL,
-            changed_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        ) ENGINE=InnoDB";
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            application_id INT NOT NULL,
+            old_status VARCHAR(100) NULL,
+            new_status VARCHAR(100) NOT NULL,
+            changed_by INT NULL,
+            changed_by_role VARCHAR(50) NULL,
+            remarks TEXT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )";
         $conn->query($create);
         return;
     }
@@ -31,17 +32,25 @@ function ensure_status_audit_schema() {
         $col = $colInfo->fetch_assoc();
         $extra = $col['Extra'];
         if (strpos($extra, 'auto_increment') === false) {
-            // Ensure no other AUTO_INCREMENT column exists
-            $other = $conn->query(
-                "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS " .
-                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'status_audit' " .
-                "AND COLUMN_NAME <> 'id' AND EXTRA LIKE '%auto_increment%'"
-            );
-            if ($other->num_rows == 0) {
-                $conn->query("ALTER TABLE status_audit MODIFY id INT NOT NULL AUTO_INCREMENT");
+            $pkCheck = $conn->query("SHOW KEYS FROM status_audit WHERE Key_name = 'PRIMARY' AND Column_name = 'id'");
+            if ($pkCheck && $pkCheck->num_rows === 0) {
+                @$conn->query("ALTER TABLE status_audit ADD PRIMARY KEY (id)");
             }
+            $conn->query("ALTER TABLE status_audit MODIFY id INT NOT NULL AUTO_INCREMENT");
         }
+        return;
     }
+    // Check if any AUTO_INCREMENT column already exists
+    $other = $conn->query(
+        "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS " .
+        "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'status_audit' " .
+        "AND EXTRA LIKE '%auto_increment%'"
+    );
+    if ($other->num_rows > 0) {
+        return;
+    }
+    // Add id column
+    $conn->query("ALTER TABLE status_audit ADD COLUMN id INT NOT NULL AUTO_INCREMENT PRIMARY KEY FIRST");
 }
 
 /**
@@ -121,10 +130,23 @@ function ensure_internship_applications_schema() {
 function log_status_change($entity, $entity_id, $old_status, $new_status, $extra = null) {
     global $conn;
     ensure_status_audit_schema();
-    $stmt = $conn->prepare(
-        "INSERT INTO status_audit (entity, entity_id, old_status, new_status, extra) VALUES (?,?,?,?,?)"
-    );
-    $stmt->bind_param('sisss', $entity, $entity_id, $old_status, $new_status, $extra);
+    
+    // Check if column 'entity' exists to determine the schema style
+    $checkCol = $conn->query("SHOW COLUMNS FROM status_audit LIKE 'entity'");
+    if ($checkCol && $checkCol->num_rows > 0) {
+        $stmt = $conn->prepare(
+            "INSERT INTO status_audit (entity, entity_id, old_status, new_status, extra) VALUES (?,?,?,?,?)"
+        );
+        $stmt->bind_param('sisss', $entity, $entity_id, $old_status, $new_status, $extra);
+    } else {
+        $changed_by = isset($_SESSION['user_id']) ? intval($_SESSION['user_id']) : null;
+        $changed_by_role = isset($_SESSION['role']) ? $_SESSION['role'] : null;
+        
+        $stmt = $conn->prepare(
+            "INSERT INTO status_audit (application_id, old_status, new_status, changed_by, changed_by_role, remarks) VALUES (?,?,?,?,?,?)"
+        );
+        $stmt->bind_param('ississ', $entity_id, $old_status, $new_status, $changed_by, $changed_by_role, $extra);
+    }
     $stmt->execute();
     $stmt->close();
 }
@@ -150,6 +172,23 @@ function ensure_all_schemas() {
     ensure_status_audit_schema();
     ensure_workflow_logs_schema();
     ensure_internship_applications_schema();
+}
+
+if (!function_exists('add_notification')) {
+    function add_notification($userId, $role, $title, $message, $type = 'info') {
+        if (function_exists('createNotification')) {
+            return createNotification($userId, $role, $title, $message, $type);
+        }
+        global $conn;
+        $stmt = $conn->prepare("INSERT INTO notifications (user_id, role, title, message, type) VALUES (?, ?, ?, ?, ?)");
+        if ($stmt) {
+            $stmt->bind_param('issss', $userId, $role, $title, $message, $type);
+            $res = $stmt->execute();
+            $stmt->close();
+            return $res;
+        }
+        return false;
+    }
 }
 
 // Auto‑run on include
