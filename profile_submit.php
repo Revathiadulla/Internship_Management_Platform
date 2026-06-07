@@ -34,12 +34,13 @@ $graduation_year = $graduation_year === '' ? null : $graduation_year;
 $previous_college = $previous_college === '' ? null : $previous_college;
 
 // Ensure upload directories exist and are writable
+$baseUploadDir = __DIR__ . '/uploads/';
+
 $upload_dirs = [
-    'uploads' => __DIR__ . '/uploads/',
-    'aadhaar' => __DIR__ . '/uploads/aadhaar/',
-    'pan' => __DIR__ . '/uploads/pan/',
-    'resumes' => __DIR__ . '/uploads/resumes/',
-    'profile' => __DIR__ . '/uploads/profile/'
+    'aadhaar' => $baseUploadDir . 'aadhaar/',
+    'pan' => $baseUploadDir . 'pan/',
+    'resumes' => $baseUploadDir . 'resumes/',
+    'profile' => $baseUploadDir . 'profile/'
 ];
 
 foreach ($upload_dirs as $name => $dir) {
@@ -83,7 +84,7 @@ if (isset($_FILES['resume']) && $_FILES['resume']['error'] === UPLOAD_ERR_OK) {
     
     $clean_resume_name = preg_replace("/[^a-zA-Z0-9\._-]/", "", $resume_name);
     $unique_resume = time() . "_resume_" . $clean_resume_name;
-    $resumes_dir = __DIR__ . '/uploads/resumes/';
+    $resumes_dir = $baseUploadDir . 'resumes/';
     
     if (move_uploaded_file($resume_tmp, $resumes_dir . $unique_resume)) {
         $new_resume = 'uploads/resumes/' . $unique_resume;
@@ -121,7 +122,7 @@ if (isset($_FILES['aadhaar_file']) && $_FILES['aadhaar_file']['error'] === UPLOA
     
     $clean_aadhaar_name = preg_replace("/[^a-zA-Z0-9\._-]/", "", $aadhaar_name);
     $unique_aadhaar = time() . "_aadhaar_" . $clean_aadhaar_name;
-    $aadhaar_dir = __DIR__ . '/uploads/aadhaar/';
+    $aadhaar_dir = $baseUploadDir . 'aadhaar/';
     
     if (move_uploaded_file($aadhaar_tmp, $aadhaar_dir . $unique_aadhaar)) {
         $new_aadhaar = 'uploads/aadhaar/' . $unique_aadhaar;
@@ -160,7 +161,7 @@ if (isset($_FILES['pan_file']) && $_FILES['pan_file']['error'] === UPLOAD_ERR_OK
     
     $clean_pan_name = preg_replace("/[^a-zA-Z0-9\._-]/", "", $pan_name);
     $unique_pan = time() . "_pan_" . $clean_pan_name;
-    $pan_dir = __DIR__ . '/uploads/pan/';
+    $pan_dir = $baseUploadDir . 'pan/';
     
     if (move_uploaded_file($pan_tmp, $pan_dir . $unique_pan)) {
         $new_pan = 'uploads/pan/' . $unique_pan;
