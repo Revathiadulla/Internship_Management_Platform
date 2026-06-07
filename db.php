@@ -335,6 +335,9 @@ function resolve_resume_file_path($filename) {
     $search_dirs = [
         __DIR__ . '/uploads/resumes/',
         __DIR__ . '/uploads/secure/',
+        __DIR__ . '/uploads/aadhaar/',
+        __DIR__ . '/uploads/pan/',
+        __DIR__ . '/uploads/profile/',
         __DIR__ . '/uploads/',
         sys_get_temp_dir() . '/imp_uploads/',
     ];

@@ -1,4 +1,5 @@
 <?php
+ob_start();
 session_start();
 include "db.php";
 
@@ -32,15 +33,26 @@ $department = $department === '' ? null : $department;
 $graduation_year = $graduation_year === '' ? null : $graduation_year;
 $previous_college = $previous_college === '' ? null : $previous_college;
 
-$folder = sys_get_temp_dir() . "/imp_uploads/";
-if (!is_dir($folder)) {
-    if (!mkdir($folder, 0777, true)) {
-        header("Location: student_profile_form.php?error=" . urlencode("Failed to create upload directory."));
+// Ensure upload directories exist and are writable
+$upload_dirs = [
+    'uploads' => __DIR__ . '/uploads/',
+    'aadhaar' => __DIR__ . '/uploads/aadhaar/',
+    'pan' => __DIR__ . '/uploads/pan/',
+    'resumes' => __DIR__ . '/uploads/resumes/',
+    'profile' => __DIR__ . '/uploads/profile/'
+];
+
+foreach ($upload_dirs as $name => $dir) {
+    if (!is_dir($dir)) {
+        if (!@mkdir($dir, 0775, true)) {
+            header("Location: student_profile_form.php?error=" . urlencode("Failed to create directory: uploads/$name"));
+            exit();
+        }
+    }
+    if (!is_writable($dir)) {
+        header("Location: student_profile_form.php?error=" . urlencode("Upload directory is not writable: uploads/$name. Please contact administrator."));
         exit();
     }
-    // Create an .htaccess file to restrict access
-    $htaccess = "Order Deny,Allow\nDeny from all";
-    file_put_contents($folder . ".htaccess", $htaccess);
 }
 
 // Fetch existing profile data to preserve old files if new ones aren't uploaded
@@ -71,11 +83,17 @@ if (isset($_FILES['resume']) && $_FILES['resume']['error'] === UPLOAD_ERR_OK) {
     
     $clean_resume_name = preg_replace("/[^a-zA-Z0-9\._-]/", "", $resume_name);
     $unique_resume = time() . "_resume_" . $clean_resume_name;
+    $resumes_dir = __DIR__ . '/uploads/resumes/';
     
-    if (move_uploaded_file($resume_tmp, $folder . $unique_resume)) {
-        $new_resume = $unique_resume;
-        if ($existing_profile && !empty($existing_profile['resume_file']) && file_exists($folder . $existing_profile['resume_file'])) {
-            @unlink($folder . $existing_profile['resume_file']);
+    if (move_uploaded_file($resume_tmp, $resumes_dir . $unique_resume)) {
+        $new_resume = 'uploads/resumes/' . $unique_resume;
+        if ($existing_profile && !empty($existing_profile['resume_file'])) {
+            $old_file = $existing_profile['resume_file'];
+            if (strpos($old_file, 'uploads/') !== 0) {
+                @unlink(sys_get_temp_dir() . "/imp_uploads/" . $old_file);
+            } else {
+                @unlink(__DIR__ . '/' . $old_file);
+            }
         }
     } else {
         header("Location: student_profile_form.php?error=" . urlencode("Failed to move uploaded resume file."));
@@ -86,7 +104,6 @@ if (isset($_FILES['resume']) && $_FILES['resume']['error'] === UPLOAD_ERR_OK) {
     exit();
 }
 
-// 2. Aadhaar File Upload Validation & Processing
 // 2. Aadhaar File Upload Validation & Processing
 if (isset($_FILES['aadhaar_file']) && $_FILES['aadhaar_file']['error'] === UPLOAD_ERR_OK) {
     $aadhaar_name = $_FILES['aadhaar_file']['name'];
@@ -104,21 +121,17 @@ if (isset($_FILES['aadhaar_file']) && $_FILES['aadhaar_file']['error'] === UPLOA
     
     $clean_aadhaar_name = preg_replace("/[^a-zA-Z0-9\._-]/", "", $aadhaar_name);
     $unique_aadhaar = time() . "_aadhaar_" . $clean_aadhaar_name;
-    
     $aadhaar_dir = __DIR__ . '/uploads/aadhaar/';
-    if (!is_dir($aadhaar_dir)) {
-        mkdir($aadhaar_dir, 0777, true);
-    }
     
     if (move_uploaded_file($aadhaar_tmp, $aadhaar_dir . $unique_aadhaar)) {
         $new_aadhaar = 'uploads/aadhaar/' . $unique_aadhaar;
         if ($existing_profile && !empty($existing_profile['aadhaar_file'])) {
-            $old_path = $existing_profile['aadhaar_file'];
-            if (strpos($old_path, 'uploads/') !== 0) {
-                @unlink(__DIR__ . '/uploads/secure/' . $old_path);
-                @unlink($folder . $old_path);
+            $old_file = $existing_profile['aadhaar_file'];
+            if (strpos($old_file, 'uploads/') !== 0) {
+                @unlink(__DIR__ . '/uploads/secure/' . $old_file);
+                @unlink(sys_get_temp_dir() . "/imp_uploads/" . $old_file);
             } else {
-                @unlink(__DIR__ . '/' . $old_path);
+                @unlink(__DIR__ . '/' . $old_file);
             }
         }
     } else {
@@ -147,21 +160,17 @@ if (isset($_FILES['pan_file']) && $_FILES['pan_file']['error'] === UPLOAD_ERR_OK
     
     $clean_pan_name = preg_replace("/[^a-zA-Z0-9\._-]/", "", $pan_name);
     $unique_pan = time() . "_pan_" . $clean_pan_name;
-    
     $pan_dir = __DIR__ . '/uploads/pan/';
-    if (!is_dir($pan_dir)) {
-        mkdir($pan_dir, 0777, true);
-    }
     
     if (move_uploaded_file($pan_tmp, $pan_dir . $unique_pan)) {
         $new_pan = 'uploads/pan/' . $unique_pan;
         if ($existing_profile && !empty($existing_profile['pan_file'])) {
-            $old_path = $existing_profile['pan_file'];
-            if (strpos($old_path, 'uploads/') !== 0) {
-                @unlink(__DIR__ . '/uploads/secure/' . $old_path);
-                @unlink($folder . $old_path);
+            $old_file = $existing_profile['pan_file'];
+            if (strpos($old_file, 'uploads/') !== 0) {
+                @unlink(__DIR__ . '/uploads/secure/' . $old_file);
+                @unlink(sys_get_temp_dir() . "/imp_uploads/" . $old_file);
             } else {
-                @unlink(__DIR__ . '/' . $old_path);
+                @unlink(__DIR__ . '/' . $old_file);
             }
         }
     } else {
