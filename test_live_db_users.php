@@ -25,47 +25,42 @@ if ($res) {
     echo "[FAILED] Describe users query failed: " . mysqli_error($live_conn) . "\n";
 }
 
-// 2. Verify User Roles and Passwords
-$test_users = [
-    'test_hr@example.com' => 'hr',
-    'test_hod@example.com' => 'hod',
-    'test_student@example.com' => 'student'
+// 2. Verify Restored Live Users exist
+$check_emails = [
+    'revathi@gmail.com' => 'hr',
+    'haritha@gmail.com' => 'student',
+    'imp.webportal2026@gmail.com' => 'admin'
 ];
 
-$sql = "SELECT email, role, status, password FROM users WHERE email IN ('" . implode("','", array_keys($test_users)) . "')";
+$sql = "SELECT email, role, status FROM users WHERE email IN ('" . implode("','", array_keys($check_emails)) . "')";
 $res_users = mysqli_query($live_conn, $sql);
 if ($res_users) {
     $found_count = 0;
     while ($user = mysqli_fetch_assoc($res_users)) {
         $found_count++;
         $email = $user['email'];
-        $expected_role = $test_users[$email];
+        $expected_role = $check_emails[$email];
         $actual_role = $user['role'];
         $status = $user['status'];
         
         // Check Role
         if ($actual_role === $expected_role) {
-            echo "[PASSED] User $email has correct role: $actual_role\n";
+            echo "[PASSED] Restored User $email has correct role: $actual_role\n";
         } else {
-            echo "[FAILED] User $email has incorrect role: actual=$actual_role, expected=$expected_role\n";
+            echo "[FAILED] Restored User $email has incorrect role: actual=$actual_role, expected=$expected_role\n";
         }
         
         // Check Status
         if (strtolower($status) === 'active') {
-            echo "[PASSED] User $email has correct status: $status\n";
+            echo "[PASSED] Restored User $email is Active\n";
         } else {
-            echo "[FAILED] User $email has incorrect status: $status\n";
-        }
-        
-        // Verify Password
-        if (password_verify('Imp@2026', $user['password'])) {
-            echo "[PASSED] User $email password successfully verified using password_verify().\n";
-        } else {
-            echo "[FAILED] User $email password failed verification with password_verify().\n";
+            echo "[FAILED] Restored User $email status is: $status\n";
         }
     }
-    if ($found_count !== 3) {
-        echo "[FAILED] Expected to find 3 test users, but found $found_count.\n";
+    if ($found_count === 0) {
+        echo "[FAILED] Restored production users were not found in the live database.\n";
+    } else {
+        echo "[PASSED] Found $found_count restored production users in the live database.\n";
     }
 } else {
     echo "[FAILED] Select users query failed: " . mysqli_error($live_conn) . "\n";

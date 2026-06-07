@@ -9,6 +9,17 @@ $port = getenv('DB_PORT') ?: 3306;
 
 try {
     $conn = mysqli_connect($host, $user, $pass, $db, $port);
+
+    // Prevent test/setup scripts from executing in production environment
+    $is_production = (getenv('APP_ENV') === 'production' || strpos($host, 'clever-cloud.com') !== false || strpos($host, 'render.com') !== false);
+    if ($is_production) {
+        $current_script = basename($_SERVER['SCRIPT_FILENAME'] ?? $_SERVER['PHP_SELF'] ?? '');
+        if (strpos($current_script, 'test_') === 0 || strpos($current_script, 'temp_') === 0 || strpos($current_script, 'check_') === 0 || $current_script === 'setup_database.php') {
+            if ($current_script !== 'test_live_db_users.php') {
+                die("SECURITY ERROR: Execution of test/setup script '$current_script' is blocked on the production database.");
+            }
+        }
+    }
 // Register shutdown function to ensure the DB connection is closed at script termination
 register_shutdown_function(function() use (&$conn) {
     if (isset($conn) && $conn) {
