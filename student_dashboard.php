@@ -495,6 +495,10 @@ $error_message = '';
 if (isset($_GET['error'])) {
     $error_message = $_GET['error'] === '1' ? 'Unable to process daily log.' : $_GET['error'];
 }
+$warning_message = '';
+if (isset($_GET['warning'])) {
+    $warning_message = $_GET['warning'];
+}
 ?>
 <?php if ($success_message): ?>
 <div id="success-toast" class="fixed top-6 right-6 z-50 bg-green-600 text-white rounded-2xl shadow-xl px-5 py-4 flex items-center gap-3 transform translate-x-[420px] transition-transform duration-500 ease-out">
@@ -521,6 +525,22 @@ if (isset($_GET['error'])) {
 <script>
   document.addEventListener('DOMContentLoaded', () => {
     const t = document.getElementById('error-toast');
+    if (!t) return;
+    setTimeout(() => t.classList.remove('translate-x-[420px]'), 100);
+    setTimeout(() => { t.classList.add('translate-x-[420px]'); setTimeout(() => t.remove(), 500); }, 4500);
+  });
+</script>
+<?php endif; ?>
+
+<?php if ($warning_message): ?>
+<div id="warning-toast" class="fixed top-6 right-6 z-50 bg-amber-500 text-white rounded-2xl shadow-xl px-5 py-4 flex items-center gap-3 transform translate-x-[420px] transition-transform duration-500 ease-out">
+  <span class="material-symbols-outlined">warning</span>
+  <span class="text-sm font-semibold"><?php echo htmlspecialchars($warning_message); ?></span>
+  <button onclick="this.parentElement.remove()" class="ml-3 hover:opacity-70"><span class="material-symbols-outlined text-[18px]">close</span></button>
+</div>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const t = document.getElementById('warning-toast');
     if (!t) return;
     setTimeout(() => t.classList.remove('translate-x-[420px]'), 100);
     setTimeout(() => { t.classList.add('translate-x-[420px]'); setTimeout(() => t.remove(), 500); }, 4500);
