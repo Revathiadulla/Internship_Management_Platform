@@ -56,20 +56,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $update_stmt->close();
             }
 
-            // Check status: only block if status is present and not active
+            // Check status: only block if status matches blocked list
             $status = isset($user['status']) ? trim($user['status']) : '';
             $blocked = false;
             $block_reason = "Your account has been deactivated. Please contact support.";
 
-            if ($status !== '') {
-                $status_lower = strtolower($status);
-                if ($status_lower !== 'active') {
-                    $blocked = true;
-                }
+            $status_lower = strtolower($status);
+            $blocked_statuses = ['inactive', 'deactivated', 'disabled', 'blocked'];
+            if (in_array($status_lower, $blocked_statuses, true)) {
+                $blocked = true;
             }
 
             if ($blocked) {
-                log_login_debug($email, 'Yes', $user['role'] ?? 'unknown', 'Passed', $status ?: 'inactive');
+                log_login_debug($email, 'Yes', $user['role'] ?? 'unknown', 'Passed', $status);
                 header("Location: login.php?error=" . urlencode($block_reason));
                 exit();
             }
@@ -86,7 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $valid_roles = ['student', 'coordinator', 'admin', 'hr', 'mentor', 'company', 'hod'];
 
             if (!in_array($role, $valid_roles, true)) {
-                log_login_debug($email, 'Yes', $role, 'Passed (Invalid Role)', $status ?: 'Active');
+                log_login_debug($email, 'Yes', $role, 'Passed (Invalid Role)', $status);
                 header("Location: login.php?error=" . urlencode("Invalid role configuration. Please contact admin."));
                 exit();
             }
@@ -113,7 +112,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit();
         } else {
             // Failed password verify
-            log_login_debug($email, 'Yes', $user['role'] ?? 'unknown', 'Failed', $user['status'] ?? 'Active');
+            log_login_debug($email, 'Yes', $user['role'] ?? 'unknown', 'Failed', isset($user['status']) ? trim($user['status']) : '');
             header("Location: login.php?error=" . urlencode("Invalid email or password"));
             exit();
         }
