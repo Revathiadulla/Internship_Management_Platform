@@ -56,42 +56,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $update_stmt->close();
             }
 
-            // 5. Check status/is_active column: only block if status is inactive/disabled
+            // Check status: only block if status is present and not active
+            $status = isset($user['status']) ? trim($user['status']) : '';
             $blocked = false;
             $block_reason = "Your account has been deactivated. Please contact support.";
 
-            if (isset($user['status'])) {
-                $status_lower = strtolower(trim($user['status']));
-                if ($status_lower === 'inactive' || $status_lower === 'disabled') {
-                    $blocked = true;
-                }
-            }
-            if (isset($user['is_active'])) {
-                $is_active_val = strval($user['is_active']);
-                if ($is_active_val === '0' || strtolower($is_active_val) === 'inactive' || strtolower($is_active_val) === 'disabled') {
+            if ($status !== '') {
+                $status_lower = strtolower($status);
+                if ($status_lower !== 'active') {
                     $blocked = true;
                 }
             }
 
             if ($blocked) {
-                log_login_debug($email, 'Yes', $user['role'] ?? 'unknown', 'Passed', $user['status'] ?? 'inactive');
+                log_login_debug($email, 'Yes', $user['role'] ?? 'unknown', 'Passed', $status ?: 'inactive');
                 header("Location: login.php?error=" . urlencode($block_reason));
                 exit();
             }
 
             // 6. After successful login, set session variables
+            $role = isset($user['role']) ? strtolower(trim($user['role'])) : '';
             $_SESSION['user_id']   = $user['id'];
             $_SESSION['email']     = $user['email'];
-            $_SESSION['role']      = $user['role'];
-            $_SESSION['name']      = $user['full_name'] ?? $user['name'] ?? '';
-            $_SESSION['full_name'] = $user['full_name'] ?? $user['name'] ?? '';
+            $_SESSION['role']      = $role;
+            $_SESSION['name']      = $user['full_name'];
+            $_SESSION['full_name'] = $user['full_name'];
 
             // 3. Check role values exactly and 4. use LOWER(role) before comparison
-            $role = isset($user['role']) ? strtolower(trim($user['role'])) : '';
             $valid_roles = ['student', 'coordinator', 'admin', 'hr', 'mentor', 'company', 'hod'];
 
             if (!in_array($role, $valid_roles, true)) {
-                log_login_debug($email, 'Yes', $role, 'Passed (Invalid Role)', $user['status'] ?? 'Active');
+                log_login_debug($email, 'Yes', $role, 'Passed (Invalid Role)', $status ?: 'Active');
                 header("Location: login.php?error=" . urlencode("Invalid role configuration. Please contact admin."));
                 exit();
             }
