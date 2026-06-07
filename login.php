@@ -6,14 +6,14 @@ include_once __DIR__ . '/includes/auth.php';
 
 // Helper function for temporary debug logs on failed logins
 if (!function_exists('log_login_debug')) {
-    function log_login_debug($email, $role_found, $password_verify_result, $active_status) {
+    function log_login_debug($email, $email_found, $role, $password_verify_result, $active_status) {
         $log_dir = __DIR__ . '/uploads/';
         if (!is_dir($log_dir)) {
             @mkdir($log_dir, 0777, true);
         }
         $log_file = $log_dir . 'login_debug.log';
         $timestamp = date('Y-m-d H:i:s');
-        $entry = "[$timestamp] Email: $email | Role Found: $role_found | Password Verify: $password_verify_result | Active Status: $active_status\n";
+        $entry = "[$timestamp] Email: $email | Email Found: $email_found | Role: $role | Password Verify: $password_verify_result | Active Status: $active_status\n";
         @file_put_contents($log_file, $entry, FILE_APPEND);
     }
 }
@@ -74,7 +74,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             if ($blocked) {
-                log_login_debug($email, $user['role'] ?? 'unknown', 'Passed', $user['status'] ?? 'inactive');
+                log_login_debug($email, 'Yes', $user['role'] ?? 'unknown', 'Passed', $user['status'] ?? 'inactive');
                 header("Location: login.php?error=" . urlencode($block_reason));
                 exit();
             }
@@ -91,7 +91,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $valid_roles = ['student', 'coordinator', 'admin', 'hr', 'mentor', 'company', 'hod'];
 
             if (!in_array($role, $valid_roles, true)) {
-                log_login_debug($email, $role, 'Passed (Invalid Role)', $user['status'] ?? 'Active');
+                log_login_debug($email, 'Yes', $role, 'Passed (Invalid Role)', $user['status'] ?? 'Active');
                 header("Location: login.php?error=" . urlencode("Invalid role configuration. Please contact admin."));
                 exit();
             }
@@ -118,13 +118,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit();
         } else {
             // Failed password verify
-            log_login_debug($email, $user['role'] ?? 'unknown', 'Failed', $user['status'] ?? 'Active');
+            log_login_debug($email, 'Yes', $user['role'] ?? 'unknown', 'Failed', $user['status'] ?? 'Active');
             header("Location: login.php?error=" . urlencode("Invalid email or password"));
             exit();
         }
     } else {
         // Email not found
-        log_login_debug($email, 'Not Found', 'N/A', 'N/A');
+        log_login_debug($email, 'No', 'N/A', 'N/A', 'N/A');
         header("Location: login.php?error=" . urlencode("Invalid email or password"));
         exit();
     }
