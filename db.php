@@ -1,23 +1,11 @@
 <?php
 
-if (isset($_SERVER['HTTP_HOST']) && ($_SERVER['HTTP_HOST'] == 'localhost' || strpos($_SERVER['HTTP_HOST'], '127.0.0.1') !== false)) {
-
-    // Local XAMPP
-    $host = "localhost";
-    $user = "root";
-    $pass = "";
-    $db   = "imp_db";
-    $port = 3306;
-
-} else {
-
-    // Live Render + Clever Cloud
-    $host = "by7xxebmaxfwobqrh1ne-mysql.services.clever-cloud.com";
-    $user = "ujebqn1hlk9qd98k";
-    $pass = "zqPIiSbk9EU6l3KHrvml";
-    $db   = "by7xxebmaxfwobqrh1ne";
-    $port = 3306;
-}
+// Live Render + Clever Cloud connection configuration
+$host = getenv('DB_HOST') ?: "by7xxebmaxfwobqrh1ne-mysql.services.clever-cloud.com";
+$user = getenv('DB_USER') ?: "ujebqn1hlk9qd98k";
+$pass = getenv('DB_PASSWORD') ?: "zqPIiSbk9EU6l3KHrvml";
+$db   = getenv('DB_NAME') ?: "by7xxebmaxfwobqrh1ne";
+$port = getenv('DB_PORT') ?: 3306;
 
 try {
     $conn = mysqli_connect($host, $user, $pass, $db, $port);
