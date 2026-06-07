@@ -1,1 +1,2 @@
-[2026-06-07 18:49:43] Email: test_user_login@example.com | Role Found: Not Found | Password Verify: N/A | Active Status: N/A
+[2026-06-07 19:11:35] Email: nonexistent_test_on_live@example.com | Email Found: No | Role: N/A | Password Verify: N/A | Active Status: N/A
+[2026-06-07 19:11:53] Email: test_student@example.com | Email Found: Yes | Role: student | Password Verify: Failed | Active Status: Active
