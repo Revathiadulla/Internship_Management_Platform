@@ -4,10 +4,24 @@ session_start();
 include 'db.php';
 include_once __DIR__ . '/includes/auth.php';
 
+// Helper function for temporary debug logs on failed logins
+if (!function_exists('log_login_debug')) {
+    function log_login_debug($email, $role_found, $password_verify_result, $active_status) {
+        $log_dir = __DIR__ . '/uploads/';
+        if (!is_dir($log_dir)) {
+            @mkdir($log_dir, 0777, true);
+        }
+        $log_file = $log_dir . 'login_debug.log';
+        $timestamp = date('Y-m-d H:i:s');
+        $entry = "[$timestamp] Email: $email | Role Found: $role_found | Password Verify: $password_verify_result | Active Status: $active_status\n";
+        @file_put_contents($log_file, $entry, FILE_APPEND);
+    }
+}
+
 // ── POST: process login ──
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email    = trim($_POST['email'] ?? '');
-    $password = $_POST['password'];
+    $password = $_POST['password'] ?? '';
 
     $stmt = $conn->prepare("SELECT * FROM users WHERE email = ?");
     $stmt->bind_param("s", $email);
@@ -17,58 +31,100 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (mysqli_num_rows($result) > 0) {
         $user = mysqli_fetch_assoc($result);
 
-        if (password_verify($password, $user['password'])) {
+        // 2. Check password hashing (support plain text temporarily and rehash after login)
+        $is_hashed = (strpos($user['password'], '$2y$') === 0 || strpos($user['password'], '$2a$') === 0 || strpos($user['password'], '$2b$') === 0);
+        $pass_ok = false;
+        $need_rehash = false;
+
+        if ($is_hashed) {
+            if (password_verify($password, $user['password'])) {
+                $pass_ok = true;
+            }
+        } else {
+            if ($password === $user['password']) {
+                $pass_ok = true;
+                $need_rehash = true;
+            }
+        }
+
+        if ($pass_ok) {
+            if ($need_rehash) {
+                $hashed_password = password_hash($password, PASSWORD_DEFAULT);
+                $update_stmt = $conn->prepare("UPDATE users SET password = ? WHERE id = ?");
+                $update_stmt->bind_param("si", $hashed_password, $user['id']);
+                $update_stmt->execute();
+                $update_stmt->close();
+            }
+
+            // 5. Check status/is_active column: only block if status is inactive/disabled
+            $blocked = false;
+            $block_reason = "Your account has been deactivated. Please contact support.";
+
             if (isset($user['status'])) {
-                $status = strtolower($user['status']);
-                if ($status === 'inactive') {
-                    header("Location: login.php?error=" . urlencode("Your account has been deactivated. Please contact support."));
-                    exit();
-                } elseif ($status === 'pending_approval') {
-                    header("Location: login.php?error=" . urlencode("Your account is pending admin approval. You will receive an email once approved."));
-                    exit();
-                } elseif ($status === 'rejected') {
-                    header("Location: login.php?error=" . urlencode("Your account registration has been rejected by Admin."));
-                    exit();
+                $status_lower = strtolower(trim($user['status']));
+                if ($status_lower === 'inactive' || $status_lower === 'disabled') {
+                    $blocked = true;
                 }
             }
+            if (isset($user['is_active'])) {
+                $is_active_val = strval($user['is_active']);
+                if ($is_active_val === '0' || strtolower($is_active_val) === 'inactive' || strtolower($is_active_val) === 'disabled') {
+                    $blocked = true;
+                }
+            }
+
+            if ($blocked) {
+                log_login_debug($email, $user['role'] ?? 'unknown', 'Passed', $user['status'] ?? 'inactive');
+                header("Location: login.php?error=" . urlencode($block_reason));
+                exit();
+            }
+
+            // 6. After successful login, set session variables
             $_SESSION['user_id']   = $user['id'];
-            $_SESSION['full_name'] = $user['full_name'];
             $_SESSION['email']     = $user['email'];
             $_SESSION['role']      = $user['role'];
+            $_SESSION['name']      = $user['full_name'] ?? $user['name'] ?? '';
+            $_SESSION['full_name'] = $user['full_name'] ?? $user['name'] ?? '';
 
-            // Role-based redirection
-            $role = strtolower(trim($user['role']));
-            
-            if ($role == "student") {
-                // Check if student has completed profile
-                $check_sql    = "SELECT id FROM student_profiles WHERE user_id = '{$user['id']}'";
-                $check_result = mysqli_query($conn, $check_sql);
-                if (mysqli_num_rows($check_result) > 0) {
-                    header("Location: student_dashboard.php");
-                } else {
-                    header("Location: student_profile_form.php");
-                }
-            } elseif ($role == "hr") {
-                header("Location: hr_dashboard.php");
-            } elseif ($role == "mentor") {
-                header("Location: mentor_dashboard.php");
-            } elseif ($role == "coordinator") {
+            // 3. Check role values exactly and 4. use LOWER(role) before comparison
+            $role = isset($user['role']) ? strtolower(trim($user['role'])) : '';
+            $valid_roles = ['student', 'coordinator', 'admin', 'hr', 'mentor', 'company', 'hod'];
+
+            if (!in_array($role, $valid_roles, true)) {
+                log_login_debug($email, $role, 'Passed (Invalid Role)', $user['status'] ?? 'Active');
+                header("Location: login.php?error=" . urlencode("Invalid role configuration. Please contact admin."));
+                exit();
+            }
+
+            // 7. Redirect based on role
+            if ($role === 'student') {
+                header("Location: student_dashboard.php");
+            } elseif ($role === 'coordinator') {
                 header("Location: coordinator_dashboard.php");
-            } elseif ($role == "company") {
+            } elseif ($role === 'admin') {
+                header("Location: admin_dashboard.php");
+            } elseif ($role === 'hr') {
+                header("Location: hr_dashboard.php");
+            } elseif ($role === 'mentor') {
+                header("Location: mentor_dashboard.php");
+            } elseif ($role === 'company') {
                 ensure_company_profile($conn, $user['id'], $user['full_name']);
                 header("Location: company_dashboard.php");
-            } elseif ($role == "admin") {
-                header("Location: admin_dashboard.php");
+            } elseif ($role === 'hod') {
+                header("Location: hod_dashboard.php");
             } else {
-                // Default fallback for unknown roles
-                header("Location: student_dashboard.php");
+                header("Location: login.php");
             }
             exit();
         } else {
+            // Failed password verify
+            log_login_debug($email, $user['role'] ?? 'unknown', 'Failed', $user['status'] ?? 'Active');
             header("Location: login.php?error=" . urlencode("Invalid email or password"));
             exit();
         }
     } else {
+        // Email not found
+        log_login_debug($email, 'Not Found', 'N/A', 'N/A');
         header("Location: login.php?error=" . urlencode("Invalid email or password"));
         exit();
     }
