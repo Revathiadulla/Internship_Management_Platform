@@ -782,12 +782,22 @@ mysqli_stmt_close($teams_stmt);
 $students_sql = "
     SELECT u.id, u.full_name, u.email, sp.college_name,
            a.internship_id, a.team_name as assigned_team,
-           i.project_subtype as applied_subtype
+           a.applied_subtype as applied_subtype,
+           ptm.project_team_id
     FROM users u
     JOIN internship_applications a ON u.id = a.user_id
     JOIN internships i ON a.internship_id = i.id
     LEFT JOIN student_profiles sp ON u.id = sp.user_id
-    WHERE u.role = 'student' AND i.coordinator_id = $coord_id
+    LEFT JOIN project_team_members ptm ON u.id = ptm.student_id
+    WHERE u.role = 'student' 
+      AND i.coordinator_id = $coord_id
+      AND COALESCE(LOWER(a.applied_subtype), '') = COALESCE(LOWER(i.project_subtype), '')
+      AND (COALESCE(LOWER(a.status), '') = 'selected' 
+           OR COALESCE(LOWER(a.final_selection_status), '') = 'selected' 
+           OR COALESCE(LOWER(a.hr_status), '') = 'selected')
+      AND COALESCE(LOWER(a.status), '') NOT IN ('applied', 'test completed', 'hr review', 'hod pending', 'hod approved', 'rejected')
+      AND COALESCE(LOWER(a.final_selection_status), '') NOT IN ('applied', 'test completed', 'hr review', 'hod pending', 'hod approved', 'rejected')
+      AND COALESCE(LOWER(a.hr_status), '') NOT IN ('applied', 'test completed', 'hr review', 'hod pending', 'hod approved', 'rejected')
     ORDER BY u.full_name ASC
 ";
 $students_res = mysqli_query($conn, $students_sql);
@@ -1499,6 +1509,7 @@ if ($team_msg_res) {
         const studentsData = <?php echo json_encode($students_list); ?>;
         const teamMessageLogs = <?php echo json_encode($team_message_logs); ?>;
         let currentlyAssignedStudentIds = [];
+        let editingTeamId = null;
 
         const modal = document.getElementById('team-modal');
         const modalTitle = document.getElementById('modal-title');
@@ -1709,14 +1720,28 @@ if ($team_msg_res) {
                 return;
             }
             
-            // Filter students who applied to THIS specific internship (internship_id match)
+            const projectSubtype = (selectedProject.project_subtype || '').trim().toLowerCase();
+            
+            // Filter students: must match internship_id, applied_subtype must match project subtype,
+            // and student must not already be assigned to another team
             const projectApplicants = studentsData.filter(st => {
-                return parseInt(st.internship_id) === parseInt(internshipId);
+                // Must match this internship
+                if (parseInt(st.internship_id) !== parseInt(internshipId)) return false;
+                
+                // Applied subtype must match (case-insensitive)
+                const stSubtype = (st.applied_subtype || '').trim().toLowerCase();
+                if (stSubtype !== projectSubtype) return false;
+                
+                // Exclude students already assigned to another team
+                const stTeamId = st.project_team_id ? parseInt(st.project_team_id) : null;
+                if (stTeamId !== null && stTeamId !== editingTeamId) return false;
+                
+                return true;
             });
             
             if (projectApplicants.length === 0) {
                 const subtypeName = selectedProject.project_subtype || 'this project';
-                container.innerHTML = `<p class="text-xs text-gray-400 italic">No students have applied for ${subtypeName} yet.</p>`;
+                container.innerHTML = `<p class="text-xs text-gray-400 italic">No selected students found for ${subtypeName}.</p>`;
                 return;
             }
             
@@ -1747,6 +1772,7 @@ if ($team_msg_res) {
 
         function openCreateModal() {
             currentlyAssignedStudentIds = [];
+            editingTeamId = null;
             modalTitle.textContent = "Create Project Team";
             formAction.value = "create_team";
             formOldTeamName.value = "";
@@ -1767,6 +1793,7 @@ if ($team_msg_res) {
 
         function openEditModal(team, assignedStudentIds) {
             currentlyAssignedStudentIds = assignedStudentIds;
+            editingTeamId = parseInt(team.id);
             modalTitle.textContent = "Edit Project Team";
             formAction.value = "edit_team";
             formOldTeamName.value = team.team_name;
