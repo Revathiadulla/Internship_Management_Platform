@@ -174,6 +174,8 @@ $overview['dropout_requests'] = (int) mysqli_fetch_assoc($res)['cnt'];
 $assigned_sql = "
     SELECT 
         tm.id as assign_id,
+        t.id as team_id,
+        t.internship_id,
         u.id as user_id,
         u.id as student_id,
         u.full_name,
@@ -315,8 +317,9 @@ page_shell_start('mentor_dashboard', 'Mentor Dashboard', 'Review assigned intern
                     <td class="py-2 px-4"><?= htmlspecialchars($row['app_status']) ?></td>
                     <td class="py-2 px-4"><?= $row['last_log_date'] ? date('M d, Y', strtotime($row['last_log_date'])) : '—' ?></td>
                     <td class="py-2 px-4">
+                        <a href="mentor_view_project.php?team_id=<?= intval($row['team_id'] ?? 0) ?>" class="px-3 py-1 bg-blue-600 text-white text-xs font-semibold rounded hover:bg-blue-700 transition inline-block">View Project</a>
                         <button type="button" onclick="openReportModal(<?= $row['user_id'] ?>, <?= $row['app_id'] ?>, '<?= htmlspecialchars(addslashes($row['full_name'])) ?>')" 
-                                class="px-3 py-1 bg-red-600 text-white text-xs font-semibold rounded hover:bg-red-700 transition">
+                                class="px-3 py-1 bg-red-600 text-white text-xs font-semibold rounded hover:bg-red-700 transition ml-2">
                             Report
                         </button>
                     </td>

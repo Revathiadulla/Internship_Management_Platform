@@ -37,7 +37,8 @@ $recent_apps = mysqli_query($conn, "SELECT a.id, a.status, a.verification_status
         COALESCE(sp.college_name, a.college_name, 'Not added') AS college,
         COALESCE(sp.skills, a.skills, a.relevant_skills, '') AS skills,
         COALESCE(jp.title, i.title, a.internship_name, 'Untitled Posting') AS assigned_project_title,
-        COALESCE(NULLIF(i.project_subtype, ''), '') AS applied_subtype,
+        -- Prefer the applied_subtype stored on the application record; fallback to internship.project_subtype
+        COALESCE(NULLIF(a.applied_subtype, ''), NULLIF(i.project_subtype, ''), '') AS applied_subtype,
         a.internship_name AS application_internship_name
     FROM internship_applications a
     LEFT JOIN job_postings jp ON a.job_posting_id = jp.id

@@ -87,7 +87,9 @@ if ($team_assign_res && ($team_assign_row = mysqli_fetch_assoc($team_assign_res)
 // Fetch student applications
 $app_sql = "SELECT a.id as app_id,
                    a.internship_id,
-                   COALESCE(i.title, a.internship_name) as title,
+                   -- Use applied_subtype for display when application hasn't been linked to an assigned project
+                   CASE WHEN COALESCE(a.assigned_project_id, 0) = 0 THEN COALESCE(NULLIF(a.applied_subtype, ''), '') ELSE COALESCE(i.title, a.internship_name) END as title,
+                   a.applied_subtype,
                    COALESCE(i.duration, '') as duration,
                    COALESCE(i.mode, '') as mode,
                    a.status, a.applied_date, a.test_status, a.test_score,

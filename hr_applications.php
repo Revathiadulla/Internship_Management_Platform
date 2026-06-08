@@ -106,8 +106,9 @@ if (in_array($verification_filter, $verification_options, true) && $verification
     $where_clauses[] = "a.verification_status = '" . mysqli_real_escape_string($conn, $verification_filter) . "'";
 }
 if ($title_filter !== '') {
-    $title_escaped   = mysqli_real_escape_string($conn, $title_filter);
-    $where_clauses[] = "COALESCE(i.title, a.internship_name) LIKE '%$title_escaped%'";
+  $title_escaped   = mysqli_real_escape_string($conn, $title_filter);
+  // Match either the linked posting title / internship_name or the applied_subtype when searching
+  $where_clauses[] = "(COALESCE(i.title, a.internship_name) LIKE '%$title_escaped%' OR a.applied_subtype LIKE '%$title_escaped%')";
 }
 if ($job_posting_filter > 0) {
     $where_clauses[] = "a.job_posting_id = $job_posting_filter";
@@ -177,7 +178,8 @@ $resume_url_select = $has_resume_url ? "sp.resume_url" : "NULL as resume_url";
 
 $app_sql = "SELECT a.id as app_id, a.user_id, a.status, a.applied_date, a.education_status,
                    a.test_score, a.test_result,
-                   COALESCE(i.title, a.internship_name) as title,
+                   -- Display applied_subtype before assignment; after assignment show the project/posting title
+                   CASE WHEN COALESCE(a.assigned_project_id, 0) = 0 THEN COALESCE(NULLIF(a.applied_subtype, ''), '') ELSE COALESCE(i.title, a.internship_name) END as title,
                    COALESCE(i.duration, '') as duration,
                    COALESCE(i.mode, '') as mode,
                    a.verification_status, a.hod_approval_status,

@@ -20,7 +20,9 @@ if (!$profile) {
 }
 
 $app_sql = "SELECT a.id AS app_id,
-                   COALESCE(i.title, a.internship_name) AS title,
+                         -- Show applied_subtype before assignment, otherwise show assigned/linked title
+                         CASE WHEN COALESCE(a.assigned_project_id, 0) = 0 THEN COALESCE(NULLIF(a.applied_subtype, ''), '') ELSE COALESCE(i.title, a.internship_name) END AS title,
+                         a.applied_subtype,
                    a.status,
                    a.verification_status,
                    a.applied_date,
