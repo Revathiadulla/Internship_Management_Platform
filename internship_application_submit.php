@@ -48,6 +48,15 @@ $prev_college    = mysqli_real_escape_string($conn, trim($_POST['prev_college_na
 
 require_once __DIR__ . "/includes/cloudinary_config.php";
 
+// Fetch existing profile details for original names and Aadhaar card file
+$profile_query = mysqli_query($conn, "SELECT * FROM student_profiles WHERE id = '$profile_id' AND user_id = '$user_id' LIMIT 1");
+$profile = mysqli_fetch_assoc($profile_query);
+
+$resume_orig_name = $profile ? ($profile['resume_original_name'] ?? '') : '';
+$pan_orig_name = $profile ? ($profile['pan_original_name'] ?? '') : '';
+$aadhaar_orig_name = $profile ? ($profile['aadhaar_original_name'] ?? '') : '';
+$aadhaar_card_file = $profile ? ($profile['aadhaar_file'] ?? '') : '';
+
 // ── Prevent Duplicate Applications ──
 $dup_sql = "SELECT id FROM internship_applications WHERE user_id = '$user_id' AND internship_id = '$internship_id' AND (internship_id > 0 OR internship_name = '" . mysqli_real_escape_string($conn, $internship_name) . "') LIMIT 1";
 $dup_result = mysqli_query($conn, $dup_sql);
@@ -65,7 +74,8 @@ $test_status = 'Pending';
 $resume_filename = '';
 if (isset($_FILES['resume_file']) && $_FILES['resume_file']['error'] === UPLOAD_ERR_OK) {
     $allowed_ext = ['pdf', 'doc', 'docx'];
-    $ext = strtolower(pathinfo($_FILES['resume_file']['name'], PATHINFO_EXTENSION));
+    $resume_orig_name = $_FILES['resume_file']['name'];
+    $ext = strtolower(pathinfo($resume_orig_name, PATHINFO_EXTENSION));
     if (!in_array($ext, $allowed_ext)) {
         die("Invalid resume file type. Only PDF and DOC/DOCX are allowed.");
     }
@@ -73,7 +83,7 @@ if (isset($_FILES['resume_file']) && $_FILES['resume_file']['error'] === UPLOAD_
         die("Resume file too large. Maximum size is 5MB.");
     }
     try {
-        $resume_filename = uploadToCloudinary($_FILES['resume_file']['tmp_name'], 'student_resumes', true);
+        $resume_filename = uploadToCloudinary($_FILES['resume_file']['tmp_name'], 'student_resumes', true, $resume_orig_name);
     } catch (Exception $e) {
         die("Resume upload failed: " . $e->getMessage());
     }
@@ -85,7 +95,8 @@ if (isset($_FILES['resume_file']) && $_FILES['resume_file']['error'] === UPLOAD_
 $pan_filename = '';
 if (isset($_FILES['pan_file']) && $_FILES['pan_file']['error'] === UPLOAD_ERR_OK) {
     $allowed_pan_ext = ['pdf', 'jpg', 'jpeg', 'png'];
-    $ext = strtolower(pathinfo($_FILES['pan_file']['name'], PATHINFO_EXTENSION));
+    $pan_orig_name = $_FILES['pan_file']['name'];
+    $ext = strtolower(pathinfo($pan_orig_name, PATHINFO_EXTENSION));
     if (!in_array($ext, $allowed_pan_ext)) {
         die("Invalid PAN file type. Only PDF, JPG or PNG are allowed.");
     }
@@ -93,7 +104,7 @@ if (isset($_FILES['pan_file']) && $_FILES['pan_file']['error'] === UPLOAD_ERR_OK
         die("PAN file too large. Maximum size is 2MB.");
     }
     try {
-        $pan_filename = uploadToCloudinary($_FILES['pan_file']['tmp_name'], 'pan', false);
+        $pan_filename = uploadToCloudinary($_FILES['pan_file']['tmp_name'], 'pan', false, $pan_orig_name);
     } catch (Exception $e) {
         die("PAN upload failed: " . $e->getMessage());
     }
@@ -112,8 +123,8 @@ $update_profile_sql = "UPDATE student_profiles SET
     hod_name       = '$hod_name',
     hod_phone      = '$hod_phone',
     hod_email      = '$hod_email'
-    " . ($resume_filename ? ", resume_file = '$resume_filename', resume_url = '$resume_filename'" : "") . "
-    " . ($pan_filename    ? ", pan_file    = '$pan_filename'"    : "") . "
+    " . ($resume_filename ? ", resume_file = '$resume_filename', resume_url = '$resume_filename', resume_original_name = '" . mysqli_real_escape_string($conn, $resume_orig_name) . "'" : "") . "
+    " . ($pan_filename    ? ", pan_file    = '$pan_filename', pan_original_name = '" . mysqli_real_escape_string($conn, $pan_orig_name) . "'"    : "") . "
     WHERE id = '$profile_id' AND user_id = '$user_id'";
 mysqli_query($conn, $update_profile_sql);
 
@@ -125,14 +136,19 @@ $insert_sql = "INSERT INTO internship_applications (
     education_status,
     college_name, department, year_of_study, hod_name, hod_email,
     graduation_year, prev_college_name,
-    aadhaar_number, pan_number, pan_masked, pan_file, resume_file
+    aadhaar_number, pan_number, pan_masked, pan_file, resume_file,
+    aadhaar_card_file, resume_original_name, pan_original_name, aadhaar_original_name
 ) VALUES (
     '$user_id', '$internship_id', '$profile_id', '$internship_name',
     '$app_status', '$test_status',
     '$education_status',
     '$college_name', '$department', '$year_of_study', '$hod_name', '$hod_email',
     '$graduation_year', '$prev_college',
-    '$aadhaar_number', '$pan_number', '$pan_masked', '$pan_filename', '$resume_filename'
+    '$aadhaar_number', '$pan_number', '$pan_masked', '$pan_filename', '$resume_filename',
+    '" . mysqli_real_escape_string($conn, $aadhaar_card_file) . "',
+    '" . mysqli_real_escape_string($conn, $resume_orig_name) . "',
+    '" . mysqli_real_escape_string($conn, $pan_orig_name) . "',
+    '" . mysqli_real_escape_string($conn, $aadhaar_orig_name) . "'
 )";
 
 if (mysqli_query($conn, $insert_sql)) {

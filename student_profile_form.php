@@ -352,7 +352,7 @@ if (empty($session_email) && $profile && isset($profile['email'])) {
                                     <p class="text-sm text-slate-500 mb-1">Selected file / link:</p>
                                     <a href="<?php echo htmlspecialchars(getDocumentViewUrl(get_resume_view_link($profile))); ?>" id="resume-link" target="_blank" rel="noopener noreferrer" data-resume-exists="<?php echo check_resume_exists($profile) ? 'true' : 'false'; ?>" class="inline-flex items-center gap-1 text-blue-600 hover:text-blue-700 hover:underline font-medium relative z-10" onclick="event.stopPropagation();">
                                         <span class="material-symbols-outlined text-[18px]">description</span>
-                                        <span id="resume-filename" class="truncate max-w-[200px]"><?php echo (empty($resume_file) && !empty($profile['resume_url'] ?? '')) ? htmlspecialchars($profile['resume_url']) : (empty($resume_file) ? 'filename.pdf' : basename($resume_file)); ?></span>
+                                        <span id="resume-filename" class="truncate max-w-[200px]"><?php echo !empty($profile['resume_original_name']) ? htmlspecialchars($profile['resume_original_name']) : ((empty($resume_file) && !empty($profile['resume_url'] ?? '')) ? htmlspecialchars($profile['resume_url']) : (empty($resume_file) ? 'filename.pdf' : basename($resume_file))); ?></span>
                                     </a>
                                 </div>
                             </div>
@@ -390,7 +390,7 @@ if (empty($session_email) && $profile && isset($profile['email'])) {
                                 <?php if (!empty($aadhaar_file)): ?>
                                 <p class="text-xs text-green-600 mt-1 flex items-center gap-1">
                                     <span class="material-symbols-outlined text-[14px]">check_circle</span>
-                                    Current file: <?php echo basename($aadhaar_file); ?>
+                                    Current file: <?php echo htmlspecialchars(!empty($profile['aadhaar_original_name']) ? $profile['aadhaar_original_name'] : basename($aadhaar_file)); ?>
                                 </p>
                                 <?php endif; ?>
                             </div>
@@ -413,7 +413,7 @@ if (empty($session_email) && $profile && isset($profile['email'])) {
                                 <?php if (!empty($pan_file)): ?>
                                 <p class="text-xs text-green-600 mt-1 flex items-center gap-1">
                                     <span class="material-symbols-outlined text-[14px]">check_circle</span>
-                                    Current file: <?php echo basename($pan_file); ?>
+                                    Current file: <?php echo htmlspecialchars(!empty($profile['pan_original_name']) ? $profile['pan_original_name'] : basename($pan_file)); ?>
                                 </p>
                                 <?php endif; ?>
                             </div>

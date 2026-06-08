@@ -24,15 +24,15 @@ $resume_name = $_FILES['resume']['name'];
 $resume_tmp = $_FILES['resume']['tmp_name'];
 
 try {
-    $new_resume = uploadToCloudinary($resume_tmp, 'student_resumes', true);
+    $new_resume = uploadToCloudinary($resume_tmp, 'student_resumes', true, $resume_name);
 } catch (Exception $e) {
     die("Resume upload failed: " . $e->getMessage());
 }
 
 $sql = "INSERT INTO applications
-(user_id, first_name, last_name, full_name, email, phone, college_name, course, year_of_study, skills, resume_file, aadhaar_number)
+(user_id, first_name, last_name, full_name, email, phone, college_name, course, year_of_study, skills, resume_file, resume_original_name, aadhaar_number)
 VALUES
-('$user_id', '$first_name', '$last_name', '$full_name', '$email', '$phone', '$college_name', '$course', '$year_of_study', '$skills', '$new_resume', '$aadhaar_number')";
+('$user_id', '$first_name', '$last_name', '$full_name', '$email', '$phone', '$college_name', '$course', '$year_of_study', '$skills', '$new_resume', '" . mysqli_real_escape_string($conn, $resume_name) . "', '$aadhaar_number')";
 
 if(mysqli_query($conn, $sql)){
 

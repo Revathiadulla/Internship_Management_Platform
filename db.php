@@ -279,6 +279,44 @@ if ($_col_check && mysqli_num_rows($_col_check) === 0) {
 }
 unset($_col_check);
 
+// Add original file name columns if missing
+$sp_orig_cols = [
+    'resume_original_name' => "ALTER TABLE student_profiles ADD COLUMN resume_original_name VARCHAR(255) NULL DEFAULT NULL",
+    'aadhaar_original_name' => "ALTER TABLE student_profiles ADD COLUMN aadhaar_original_name VARCHAR(255) NULL DEFAULT NULL",
+    'pan_original_name' => "ALTER TABLE student_profiles ADD COLUMN pan_original_name VARCHAR(255) NULL DEFAULT NULL"
+];
+foreach ($sp_orig_cols as $col => $sql) {
+    $_check = mysqli_query($conn, "SHOW COLUMNS FROM student_profiles LIKE '$col'");
+    if ($_check && mysqli_num_rows($_check) === 0) {
+        mysqli_query($conn, $sql);
+    }
+    unset($_check);
+}
+
+$ia_orig_cols = [
+    'resume_original_name' => "ALTER TABLE internship_applications ADD COLUMN resume_original_name VARCHAR(255) NULL DEFAULT NULL",
+    'aadhaar_original_name' => "ALTER TABLE internship_applications ADD COLUMN aadhaar_original_name VARCHAR(255) NULL DEFAULT NULL",
+    'pan_original_name' => "ALTER TABLE internship_applications ADD COLUMN pan_original_name VARCHAR(255) NULL DEFAULT NULL"
+];
+foreach ($ia_orig_cols as $col => $sql) {
+    $_check = mysqli_query($conn, "SHOW COLUMNS FROM internship_applications LIKE '$col'");
+    if ($_check && mysqli_num_rows($_check) === 0) {
+        mysqli_query($conn, $sql);
+    }
+    unset($_check);
+}
+
+$_has_apps = mysqli_query($conn, "SHOW TABLES LIKE 'applications'");
+if ($_has_apps && mysqli_num_rows($_has_apps) > 0) {
+    $_check = mysqli_query($conn, "SHOW COLUMNS FROM applications LIKE 'resume_original_name'");
+    if ($_check && mysqli_num_rows($_check) === 0) {
+        mysqli_query($conn, "ALTER TABLE applications ADD COLUMN resume_original_name VARCHAR(255) NULL DEFAULT NULL");
+    }
+    unset($_check);
+}
+unset($_has_apps);
+
+
 if (!function_exists('getDocumentViewUrl')) {
     function getDocumentViewUrl($url) {
         if (empty($url)) return '#';

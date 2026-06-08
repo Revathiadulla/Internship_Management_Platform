@@ -44,7 +44,7 @@ if (!empty($cloud_name) && !empty($api_key) && !empty($api_secret)) {
  * @return string The secure URL of the uploaded file.
  * @throws Exception If upload fails or configuration is missing.
  */
-function uploadToCloudinary($file_path, $folder, $is_raw = false) {
+function uploadToCloudinary($file_path, $folder, $is_raw = false, $original_filename = null) {
     $cloud_name = getenv('CLOUDINARY_CLOUD_NAME');
     $api_key    = getenv('CLOUDINARY_API_KEY');
     $api_secret = getenv('CLOUDINARY_API_SECRET');
@@ -59,17 +59,34 @@ function uploadToCloudinary($file_path, $folder, $is_raw = false) {
 
     try {
         $uploadApi = new UploadApi();
+        
+        $upload_file_path = $file_path;
+        $temp_created = false;
+        
+        if (!empty($original_filename)) {
+            // Clean original filename to prevent path traversal
+            $clean_name = preg_replace('/[^a-zA-Z0-9_.-]/', '_', $original_filename);
+            $temp_dir = sys_get_temp_dir();
+            $upload_file_path = $temp_dir . DIRECTORY_SEPARATOR . $clean_name;
+            if (copy($file_path, $upload_file_path)) {
+                $temp_created = true;
+            } else {
+                $upload_file_path = $file_path; // Fallback
+            }
+        }
+        
         $options = [
-            'folder' => $folder
+            'folder' => $folder,
+            'resource_type' => 'raw',
+            'use_filename' => true,
+            'unique_filename' => false
         ];
 
-        // Force resource_type to raw if requested or if it's a PDF/document
-        $ext = strtolower(pathinfo($file_path, PATHINFO_EXTENSION));
-        if ($is_raw || in_array($ext, ['pdf', 'doc', 'docx', 'txt', 'zip', 'rar'])) {
-            $options['resource_type'] = 'raw';
+        $response = $uploadApi->upload($upload_file_path, $options);
+        
+        if ($temp_created) {
+            @unlink($upload_file_path);
         }
-
-        $response = $uploadApi->upload($file_path, $options);
 
         if (isset($response['secure_url']) && !empty($response['secure_url'])) {
             return $response['secure_url'];

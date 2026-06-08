@@ -46,6 +46,10 @@ $new_resume = $existing_profile ? $existing_profile['resume_file'] : '';
 $new_aadhaar = $existing_profile ? $existing_profile['aadhaar_file'] : '';
 $new_pan = $existing_profile ? $existing_profile['pan_file'] : '';
 $resume_url = $existing_profile ? $existing_profile['resume_url'] : '';
+$resume_orig_name = $existing_profile ? $existing_profile['resume_original_name'] : '';
+$aadhaar_orig_name = $existing_profile ? $existing_profile['aadhaar_original_name'] : '';
+$pan_orig_name = $existing_profile ? $existing_profile['pan_original_name'] : '';
+
 
 // 1. Resume File Upload Validation & Processing
 if (isset($_FILES['resume']) && $_FILES['resume']['error'] === UPLOAD_ERR_OK) {
@@ -63,8 +67,9 @@ if (isset($_FILES['resume']) && $_FILES['resume']['error'] === UPLOAD_ERR_OK) {
     }
     
     try {
-        $new_resume = uploadToCloudinary($resume_tmp, 'student_resumes', true);
+        $new_resume = uploadToCloudinary($resume_tmp, 'student_resumes', true, $resume_name);
         $resume_url = $new_resume;
+        $resume_orig_name = $resume_name;
     } catch (Exception $e) {
         header("Location: student_profile_form.php?error=" . urlencode("Resume upload failed: " . $e->getMessage()));
         exit();
@@ -74,6 +79,7 @@ if (isset($_FILES['resume']) && $_FILES['resume']['error'] === UPLOAD_ERR_OK) {
     if (isset($_POST['resume_url']) && !empty(trim($_POST['resume_url']))) {
         $resume_url = mysqli_real_escape_string($conn, trim($_POST['resume_url']));
         $new_resume = $resume_url;
+        $resume_orig_name = basename($resume_url);
     }
 }
 
@@ -93,7 +99,8 @@ if (isset($_FILES['aadhaar_file']) && $_FILES['aadhaar_file']['error'] === UPLOA
     }
     
     try {
-        $new_aadhaar = uploadToCloudinary($aadhaar_tmp, 'aadhaar', false);
+        $new_aadhaar = uploadToCloudinary($aadhaar_tmp, 'aadhaar', false, $aadhaar_name);
+        $aadhaar_orig_name = $aadhaar_name;
     } catch (Exception $e) {
         header("Location: student_profile_form.php?error=" . urlencode("Aadhaar upload failed: " . $e->getMessage()));
         exit();
@@ -116,7 +123,8 @@ if (isset($_FILES['pan_file']) && $_FILES['pan_file']['error'] === UPLOAD_ERR_OK
     }
     
     try {
-        $new_pan = uploadToCloudinary($pan_tmp, 'pan', false);
+        $new_pan = uploadToCloudinary($pan_tmp, 'pan', false, $pan_name);
+        $pan_orig_name = $pan_name;
     } catch (Exception $e) {
         header("Location: student_profile_form.php?error=" . urlencode("PAN upload failed: " . $e->getMessage()));
         exit();
@@ -149,11 +157,10 @@ if (isset($_FILES['pan_file']) && $_FILES['pan_file']['error'] === UPLOAD_ERR_OK
         // Save or Update Profile in Database
 if ($existing_profile) {
     // Update using prepared statement
-    // DEBUG: placeholder_count=23, bind_type_count=23, bind_variable_count=23
-    $stmt = $conn->prepare("UPDATE student_profiles SET full_name=?, email=?, phone=?, dob=?, gender=?, college_name=?, course=?, year_of_study=?, skills=?, resume_file=?, resume_url=?, aadhaar_number=?, pan_number=?, aadhaar_file=?, pan_file=?, hod_name=?, hod_phone=?, hod_email=?, education_status=?, department=?, graduation_year=?, previous_college=? WHERE user_id=?");
+    $stmt = $conn->prepare("UPDATE student_profiles SET full_name=?, email=?, phone=?, dob=?, gender=?, college_name=?, course=?, year_of_study=?, skills=?, resume_file=?, resume_url=?, aadhaar_number=?, pan_number=?, aadhaar_file=?, pan_file=?, hod_name=?, hod_phone=?, hod_email=?, education_status=?, department=?, graduation_year=?, previous_college=?, resume_original_name=?, aadhaar_original_name=?, pan_original_name=? WHERE user_id=?");
     $stmt->bind_param(
-        "ssssssssssssssssssssssi",
-        $full_name, $email, $phone, $dob, $gender, $college_name, $course, $year_of_study, $skills, $new_resume, $resume_url, $aadhaar_number, $pan_number, $new_aadhaar, $new_pan, $hod_name, $hod_phone, $hod_email, $education_status, $department, $graduation_year, $previous_college, $user_id
+        "sssssssssssssssssssssssssi",
+        $full_name, $email, $phone, $dob, $gender, $college_name, $course, $year_of_study, $skills, $new_resume, $resume_url, $aadhaar_number, $pan_number, $new_aadhaar, $new_pan, $hod_name, $hod_phone, $hod_email, $education_status, $department, $graduation_year, $previous_college, $resume_orig_name, $aadhaar_orig_name, $pan_orig_name, $user_id
     );
     if ($stmt->execute()) {
         if ($upload_skipped) {
@@ -170,16 +177,16 @@ if ($existing_profile) {
     }
 } else {
     // Insert new profile using prepared statement
-    // DEBUG: placeholder_count=23, bind_type_count=23, bind_variable_count=23
-    $stmt = $conn->prepare("INSERT INTO student_profiles (user_id, full_name, email, phone, dob, gender, college_name, course, year_of_study, skills, resume_file, resume_url, aadhaar_number, pan_number, aadhaar_file, pan_file, hod_name, hod_phone, hod_email, education_status, department, graduation_year, previous_college) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
-                        $stmt->bind_param(
-                            "issssssssssssssssssssss",
-                            $user_id, $full_name, $email, $phone, $dob, $gender,
-                            $college_name, $course, $year_of_study, $skills,
-                            $new_resume, $resume_url, $aadhaar_number, $pan_number,
-                            $new_aadhaar, $new_pan, $hod_name, $hod_phone, $hod_email,
-                            $education_status, $department, $graduation_year, $previous_college
-                        );
+    $stmt = $conn->prepare("INSERT INTO student_profiles (user_id, full_name, email, phone, dob, gender, college_name, course, year_of_study, skills, resume_file, resume_url, aadhaar_number, pan_number, aadhaar_file, pan_file, hod_name, hod_phone, hod_email, education_status, department, graduation_year, previous_college, resume_original_name, aadhaar_original_name, pan_original_name) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+    $stmt->bind_param(
+        "isssssssssssssssssssssssss",
+        $user_id, $full_name, $email, $phone, $dob, $gender,
+        $college_name, $course, $year_of_study, $skills,
+        $new_resume, $resume_url, $aadhaar_number, $pan_number,
+        $new_aadhaar, $new_pan, $hod_name, $hod_phone, $hod_email,
+        $education_status, $department, $graduation_year, $previous_college,
+        $resume_orig_name, $aadhaar_orig_name, $pan_orig_name
+    );
     if ($stmt->execute()) {
         if ($upload_skipped) {
             header("Location: student_dashboard.php?warning=" . urlencode("Profile saved, but file upload was skipped."));

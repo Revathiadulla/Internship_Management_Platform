@@ -10,6 +10,8 @@ $query = "SELECT a.id as app_id, a.user_id, a.status, a.applied_date, a.test_sco
                  COALESCE(i.title, a.internship_name) as title,
                  sp.full_name, sp.college_name, sp.resume_file, sp.resume_url,
                  sp.aadhaar_file, sp.pan_file,
+                 sp.resume_original_name, sp.aadhaar_original_name, sp.pan_original_name,
+                 a.resume_original_name AS app_resume_orig, a.aadhaar_original_name AS app_aadhaar_orig, a.pan_original_name AS app_pan_orig,
                  a.aadhaar_status, a.pan_status, a.hod_status,
                  u_hr.full_name AS hr_verifier
           FROM internship_applications a
@@ -109,6 +111,10 @@ $result = mysqli_query($conn, $query);
                     } elseif ($resume !== '') {
                         $view_href = getDocumentViewUrl("resume_serve.php?file=" . urlencode(basename($resume)) . "&mode=view");
                     }
+                    
+                    $resume_orig_name = $app['app_resume_orig'] ?: $app['resume_original_name'] ?: '';
+                    $aadhaar_orig_name = $app['app_aadhaar_orig'] ?: $app['aadhaar_original_name'] ?: '';
+                    $pan_orig_name = $app['app_pan_orig'] ?: $app['pan_original_name'] ?: '';
                 ?>
                   <tr class="hover:bg-slate-50/50 transition">
                     <td class="py-4 px-6">
@@ -140,8 +146,8 @@ $result = mysqli_query($conn, $query);
                     <td class="py-4 px-6">
                       <div class="flex flex-wrap items-center justify-center gap-2">
                         <?php if ($resume !== '' || $resume_url !== ''): ?>
-                          <a href="<?php echo htmlspecialchars(getDocumentViewUrl($view_href)); ?>" target="_blank" rel="noopener noreferrer" class="px-2 py-1 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded text-xs font-semibold transition" title="View Resume">
-                            Resume
+                          <a href="<?php echo htmlspecialchars(getDocumentViewUrl($view_href)); ?>" target="_blank" rel="noopener noreferrer" class="px-2 py-1 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded text-xs font-semibold transition" title="View Resume: <?php echo htmlspecialchars($resume_orig_name ?: basename($resume ?: $resume_url)); ?>">
+                            <?php echo htmlspecialchars($resume_orig_name ?: 'Resume'); ?>
                           </a>
                         <?php endif; ?>
                         <?php if (!empty($app['aadhaar_file'])): 
@@ -151,8 +157,8 @@ $result = mysqli_query($conn, $query);
                           }
                           $aadhaar_view_href = getDocumentViewUrl($aadhaar_href);
                         ?>
-                          <a href="<?php echo htmlspecialchars($aadhaar_view_href); ?>" target="_blank" rel="noopener noreferrer" class="px-2 py-1 text-amber-700 bg-amber-50 hover:bg-amber-100 rounded text-xs font-semibold transition" title="View Aadhaar">
-                            Aadhaar
+                          <a href="<?php echo htmlspecialchars($aadhaar_view_href); ?>" target="_blank" rel="noopener noreferrer" class="px-2 py-1 text-amber-700 bg-amber-50 hover:bg-amber-100 rounded text-xs font-semibold transition" title="View Aadhaar: <?php echo htmlspecialchars($aadhaar_orig_name ?: basename($app['aadhaar_file'])); ?>">
+                            <?php echo htmlspecialchars($aadhaar_orig_name ?: 'Aadhaar'); ?>
                           </a>
                         <?php endif; ?>
                         <?php if (!empty($app['pan_file'])): 
@@ -162,8 +168,8 @@ $result = mysqli_query($conn, $query);
                           }
                           $pan_view_href = getDocumentViewUrl($pan_href);
                         ?>
-                          <a href="<?php echo htmlspecialchars($pan_view_href); ?>" target="_blank" rel="noopener noreferrer" class="px-2 py-1 text-cyan-700 bg-cyan-50 hover:bg-cyan-100 rounded text-xs font-semibold transition" title="View PAN">
-                            PAN
+                          <a href="<?php echo htmlspecialchars($pan_view_href); ?>" target="_blank" rel="noopener noreferrer" class="px-2 py-1 text-cyan-700 bg-cyan-50 hover:bg-cyan-100 rounded text-xs font-semibold transition" title="View PAN: <?php echo htmlspecialchars($pan_orig_name ?: basename($app['pan_file'])); ?>">
+                            <?php echo htmlspecialchars($pan_orig_name ?: 'PAN'); ?>
                           </a>
                         <?php endif; ?>
                         

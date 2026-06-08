@@ -97,6 +97,9 @@ $sql = "SELECT
             sp.dob,
             sp.gender,
             sp.resume_file            AS sp_resume,
+            sp.resume_original_name   AS sp_resume_orig,
+            sp.aadhaar_original_name  AS sp_aadhaar_orig,
+            sp.pan_original_name      AS sp_pan_orig,
             $resume_url_select,
             sp.aadhaar_file,
             sp.pan_file,
@@ -105,6 +108,9 @@ $sql = "SELECT
             a.aadhaar_number          AS app_aadhaar,
             a.pan_number              AS app_pan,
             a.pan_file                AS app_pan_file,
+            a.resume_original_name    AS app_resume_orig,
+            a.pan_original_name       AS app_pan_orig,
+            a.aadhaar_original_name   AS app_aadhaar_orig,
             sp.hod_email              AS sp_hod_email,
             sp.hod_name               AS sp_hod_name,
             a.aadhaar_status,
@@ -255,6 +261,13 @@ if ($pan_uploaded) {
     }
 }
 
+$aadhaar_orig_filename = $d['app_aadhaar_orig'] ?: $d['sp_aadhaar_orig'] ?: '';
+$aadhaar_label = $aadhaar_orig_filename !== '' ? $aadhaar_orig_filename : ($db_aadhaar !== '' ? basename($db_aadhaar) : 'View Aadhaar File');
+
+$pan_orig_filename = $d['app_pan_orig'] ?: $d['sp_pan_orig'] ?: '';
+$pan_label = $pan_orig_filename !== '' ? $pan_orig_filename : ($db_pan !== '' ? basename($db_pan) : 'View PAN File');
+
+
 // Prefer student_profiles data first, then users, then application snapshot.
 $full_name  = $d['sp_full_name']    ?: $d['user_full_name']    ?: $d['app_full_name']    ?: '—';
 $email      = $d['sp_email']        ?: $d['user_email']        ?: $d['app_email']        ?: '—';
@@ -306,14 +319,16 @@ if ($resume_url !== '' && (strpos($resume_url, 'http://') === 0 || strpos($resum
 if ($is_remote) {
     $has_resume = true;
     $resume_ext = 'url';
-    $resume_label = $resume_link;
+    $orig_filename = $d['app_resume_orig'] ?: $d['sp_resume_orig'] ?: '';
+    $resume_label = $orig_filename !== '' ? $orig_filename : $resume_link;
     $view_href = getDocumentViewUrl($resume_link);
     $download_href = $resume_link;
 } else {
     $resume_safe        = $resume !== '' ? urlencode(basename($resume)) : '';
     $resume_ext         = $resume !== '' ? strtolower(pathinfo($resume, PATHINFO_EXTENSION)) : '';
     $has_resume         = $resume_safe !== '' && in_array($resume_ext, ['pdf', 'doc', 'docx'], true);
-    $resume_label       = $resume !== '' ? basename($resume) : 'No resume uploaded';
+    $orig_filename = $d['app_resume_orig'] ?: $d['sp_resume_orig'] ?: '';
+    $resume_label       = $orig_filename !== '' ? $orig_filename : ($resume !== '' ? basename($resume) : 'No resume uploaded');
     $view_href = getDocumentViewUrl("resume_serve.php?file=" . $resume_safe . "&mode=view");
     $download_href = "resume_serve.php?file=" . $resume_safe . "&mode=download";
 }
@@ -835,7 +850,7 @@ $status_colors = [
                   <p class="text-xs uppercase tracking-[0.24em] text-slate-400 mb-2">Aadhaar Document</p>
                   <?php if ($aadhaar_file_url !== null): ?>
                     <a href="<?php echo htmlspecialchars(getDocumentViewUrl($aadhaar_file_url)); ?>" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-750 font-bold">
-                      <span class="material-symbols-outlined text-[16px]">visibility</span> View Aadhaar File
+                      <span class="material-symbols-outlined text-[16px]">visibility</span> <?php echo htmlspecialchars($aadhaar_label); ?>
                     </a>
                   <?php elseif ($aadhaar_uploaded): ?>
                     <p class="text-xs text-red-500 font-semibold">Aadhaar document not found.</p>
@@ -856,7 +871,7 @@ $status_colors = [
                   <p class="text-xs uppercase tracking-[0.24em] text-slate-400 mb-2">PAN Document</p>
                   <?php if ($pan_file_url !== null): ?>
                     <a href="<?php echo htmlspecialchars(getDocumentViewUrl($pan_file_url)); ?>" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-750 font-bold">
-                      <span class="material-symbols-outlined text-[16px]">visibility</span> View PAN File
+                      <span class="material-symbols-outlined text-[16px]">visibility</span> <?php echo htmlspecialchars($pan_label); ?>
                     </a>
                   <?php elseif ($pan_uploaded): ?>
                     <p class="text-xs text-red-500 font-semibold">PAN document not found.</p>
