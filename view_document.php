@@ -23,6 +23,12 @@ if ($raw_file === '') {
     exit('Missing file parameter.');
 }
 
+// Redirect immediately if the file is a remote URL (Cloudinary URL)
+if (strpos($raw_file, 'http://') === 0 || strpos($raw_file, 'https://') === 0) {
+    header("Location: " . $raw_file);
+    exit();
+}
+
 // Strip any path components
 $filename = basename($raw_file);
 

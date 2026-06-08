@@ -33,31 +33,9 @@ $department = $department === '' ? null : $department;
 $graduation_year = $graduation_year === '' ? null : $graduation_year;
 $previous_college = $previous_college === '' ? null : $previous_college;
 
-// Ensure upload directories exist and are writable (if not, we skip uploads gracefully)
-$baseUploadDir = __DIR__ . '/uploads/';
-$uploads_writable = true;
+require_once "includes/cloudinary_config.php";
 
-$upload_dirs = [
-    'aadhaar' => $baseUploadDir . 'aadhaar/',
-    'pan' => $baseUploadDir . 'pan/',
-    'resumes' => $baseUploadDir . 'resumes/',
-    'profile' => $baseUploadDir . 'profile/'
-];
-
-foreach ($upload_dirs as $name => $dir) {
-    if (!is_dir($dir)) {
-        if (!@mkdir($dir, 0775, true)) {
-            $uploads_writable = false;
-            break;
-        }
-    }
-    if (!is_writable($dir)) {
-        $uploads_writable = false;
-        break;
-    }
-}
-
-$upload_skipped = !$uploads_writable;
+$upload_skipped = false;
 
 // Fetch existing profile data to preserve old files if new ones aren't uploaded
 $check_sql = "SELECT * FROM student_profiles WHERE user_id = '$user_id' LIMIT 1";
@@ -67,122 +45,81 @@ $existing_profile = mysqli_fetch_assoc($check_result);
 $new_resume = $existing_profile ? $existing_profile['resume_file'] : '';
 $new_aadhaar = $existing_profile ? $existing_profile['aadhaar_file'] : '';
 $new_pan = $existing_profile ? $existing_profile['pan_file'] : '';
+$resume_url = $existing_profile ? $existing_profile['resume_url'] : '';
 
 // 1. Resume File Upload Validation & Processing
-$resume_url = isset($_POST['resume_url']) ? mysqli_real_escape_string($conn, trim($_POST['resume_url'])) : '';
-
 if (isset($_FILES['resume']) && $_FILES['resume']['error'] === UPLOAD_ERR_OK) {
-    if (!$uploads_writable) {
-        $upload_skipped = true;
-    } else {
-        $resume_name = $_FILES['resume']['name'];
-        $resume_tmp = $_FILES['resume']['tmp_name'];
-        $resume_ext = strtolower(pathinfo($resume_name, PATHINFO_EXTENSION));
-        
-        if (!in_array($resume_ext, ['pdf', 'doc', 'docx'])) {
-            header("Location: student_profile_form.php?error=" . urlencode("Invalid resume file format. Allowed: PDF, DOC, DOCX."));
-            exit();
-        }
-        if ($_FILES['resume']['size'] > 5 * 1024 * 1024) {
-            header("Location: student_profile_form.php?error=" . urlencode("Resume file size exceeds the 5MB limit."));
-            exit();
-        }
-        
-        $clean_resume_name = preg_replace("/[^a-zA-Z0-9\._-]/", "", $resume_name);
-        $unique_resume = time() . "_resume_" . $clean_resume_name;
-        $resumes_dir = $baseUploadDir . 'resumes/';
-        
-        if (move_uploaded_file($resume_tmp, $resumes_dir . $unique_resume)) {
-            $new_resume = 'uploads/resumes/' . $unique_resume;
-            if ($existing_profile && !empty($existing_profile['resume_file'])) {
-                $old_file = $existing_profile['resume_file'];
-                if (strpos($old_file, 'uploads/') !== 0) {
-                    @unlink(sys_get_temp_dir() . "/imp_uploads/" . $old_file);
-                } else {
-                    @unlink(__DIR__ . '/' . $old_file);
-                }
-            }
-        } else {
-            $upload_skipped = true;
-        }
+    $resume_name = $_FILES['resume']['name'];
+    $resume_tmp = $_FILES['resume']['tmp_name'];
+    $resume_ext = strtolower(pathinfo($resume_name, PATHINFO_EXTENSION));
+    
+    if (!in_array($resume_ext, ['pdf', 'doc', 'docx'])) {
+        header("Location: student_profile_form.php?error=" . urlencode("Invalid resume file format. Allowed: PDF, DOC, DOCX."));
+        exit();
+    }
+    if ($_FILES['resume']['size'] > 5 * 1024 * 1024) {
+        header("Location: student_profile_form.php?error=" . urlencode("Resume file size exceeds the 5MB limit."));
+        exit();
+    }
+    
+    try {
+        $new_resume = uploadToCloudinary($resume_tmp, 'student_resumes', true);
+        $resume_url = $new_resume;
+    } catch (Exception $e) {
+        header("Location: student_profile_form.php?error=" . urlencode("Resume upload failed: " . $e->getMessage()));
+        exit();
+    }
+} else {
+    // If user provided a manual resume_url in post, use it
+    if (isset($_POST['resume_url']) && !empty(trim($_POST['resume_url']))) {
+        $resume_url = mysqli_real_escape_string($conn, trim($_POST['resume_url']));
+        $new_resume = $resume_url;
     }
 }
 
 // 2. Aadhaar File Upload Validation & Processing
 if (isset($_FILES['aadhaar_file']) && $_FILES['aadhaar_file']['error'] === UPLOAD_ERR_OK) {
-    if (!$uploads_writable) {
-        $upload_skipped = true;
-    } else {
-        $aadhaar_name = $_FILES['aadhaar_file']['name'];
-        $aadhaar_tmp = $_FILES['aadhaar_file']['tmp_name'];
-        $aadhaar_ext = strtolower(pathinfo($aadhaar_name, PATHINFO_EXTENSION));
-        
-        if (!in_array($aadhaar_ext, ['pdf', 'jpg', 'jpeg', 'png'])) {
-            header("Location: student_profile_form.php?error=" . urlencode("Invalid Aadhaar file format. Allowed: PDF, JPG, JPEG, PNG."));
-            exit();
-        }
-        if ($_FILES['aadhaar_file']['size'] > 5 * 1024 * 1024) {
-            header("Location: student_profile_form.php?error=" . urlencode("Aadhaar file size exceeds the 5MB limit."));
-            exit();
-        }
-        
-        $clean_aadhaar_name = preg_replace("/[^a-zA-Z0-9\._-]/", "", $aadhaar_name);
-        $unique_aadhaar = time() . "_aadhaar_" . $clean_aadhaar_name;
-        $aadhaar_dir = $baseUploadDir . 'aadhaar/';
-        
-        if (move_uploaded_file($aadhaar_tmp, $aadhaar_dir . $unique_aadhaar)) {
-            $new_aadhaar = 'uploads/aadhaar/' . $unique_aadhaar;
-            if ($existing_profile && !empty($existing_profile['aadhaar_file'])) {
-                $old_file = $existing_profile['aadhaar_file'];
-                if (strpos($old_file, 'uploads/') !== 0) {
-                    @unlink(__DIR__ . '/uploads/secure/' . $old_file);
-                    @unlink(sys_get_temp_dir() . "/imp_uploads/" . $old_file);
-                } else {
-                    @unlink(__DIR__ . '/' . $old_file);
-                }
-            }
-        } else {
-            $upload_skipped = true;
-        }
+    $aadhaar_name = $_FILES['aadhaar_file']['name'];
+    $aadhaar_tmp = $_FILES['aadhaar_file']['tmp_name'];
+    $aadhaar_ext = strtolower(pathinfo($aadhaar_name, PATHINFO_EXTENSION));
+    
+    if (!in_array($aadhaar_ext, ['pdf', 'jpg', 'jpeg', 'png'])) {
+        header("Location: student_profile_form.php?error=" . urlencode("Invalid Aadhaar file format. Allowed: PDF, JPG, JPEG, PNG."));
+        exit();
+    }
+    if ($_FILES['aadhaar_file']['size'] > 5 * 1024 * 1024) {
+        header("Location: student_profile_form.php?error=" . urlencode("Aadhaar file size exceeds the 5MB limit."));
+        exit();
+    }
+    
+    try {
+        $new_aadhaar = uploadToCloudinary($aadhaar_tmp, 'aadhaar', false);
+    } catch (Exception $e) {
+        header("Location: student_profile_form.php?error=" . urlencode("Aadhaar upload failed: " . $e->getMessage()));
+        exit();
     }
 }
 
 // 3. PAN File Upload Validation & Processing
 if (isset($_FILES['pan_file']) && $_FILES['pan_file']['error'] === UPLOAD_ERR_OK) {
-    if (!$uploads_writable) {
-        $upload_skipped = true;
-    } else {
-        $pan_name = $_FILES['pan_file']['name'];
-        $pan_tmp = $_FILES['pan_file']['tmp_name'];
-        $pan_ext = strtolower(pathinfo($pan_name, PATHINFO_EXTENSION));
-        
-        if (!in_array($pan_ext, ['pdf', 'jpg', 'jpeg', 'png'])) {
-            header("Location: student_profile_form.php?error=" . urlencode("Invalid PAN file format. Allowed: PDF, JPG, JPEG, PNG."));
-            exit();
-        }
-        if ($_FILES['pan_file']['size'] > 5 * 1024 * 1024) {
-            header("Location: student_profile_form.php?error=" . urlencode("PAN file size exceeds the 5MB limit."));
-            exit();
-        }
-        
-        $clean_pan_name = preg_replace("/[^a-zA-Z0-9\._-]/", "", $pan_name);
-        $unique_pan = time() . "_pan_" . $clean_pan_name;
-        $pan_dir = $baseUploadDir . 'pan/';
-        
-        if (move_uploaded_file($pan_tmp, $pan_dir . $unique_pan)) {
-            $new_pan = 'uploads/pan/' . $unique_pan;
-            if ($existing_profile && !empty($existing_profile['pan_file'])) {
-                $old_file = $existing_profile['pan_file'];
-                if (strpos($old_file, 'uploads/') !== 0) {
-                    @unlink(__DIR__ . '/uploads/secure/' . $old_file);
-                    @unlink(sys_get_temp_dir() . "/imp_uploads/" . $old_file);
-                } else {
-                    @unlink(__DIR__ . '/' . $old_file);
-                }
-            }
-        } else {
-            $upload_skipped = true;
-        }
+    $pan_name = $_FILES['pan_file']['name'];
+    $pan_tmp = $_FILES['pan_file']['tmp_name'];
+    $pan_ext = strtolower(pathinfo($pan_name, PATHINFO_EXTENSION));
+    
+    if (!in_array($pan_ext, ['pdf', 'jpg', 'jpeg', 'png'])) {
+        header("Location: student_profile_form.php?error=" . urlencode("Invalid PAN file format. Allowed: PDF, JPG, JPEG, PNG."));
+        exit();
+    }
+    if ($_FILES['pan_file']['size'] > 5 * 1024 * 1024) {
+        header("Location: student_profile_form.php?error=" . urlencode("PAN file size exceeds the 5MB limit."));
+        exit();
+    }
+    
+    try {
+        $new_pan = uploadToCloudinary($pan_tmp, 'pan', false);
+    } catch (Exception $e) {
+        header("Location: student_profile_form.php?error=" . urlencode("PAN upload failed: " . $e->getMessage()));
+        exit();
     }
 }
 

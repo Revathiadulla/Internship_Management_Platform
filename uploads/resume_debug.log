@@ -3538,3 +3538,26 @@
 [2026-06-07 19:10:41] Database connection opened and shutdown handler registered.
 [2026-06-07 19:11:27] Database connection opened and shutdown handler registered.
 [2026-06-07 19:11:44] Database connection opened and shutdown handler registered.
+[2026-06-07 20:21:54] Database connection opened and shutdown handler registered.
+[2026-06-07 20:22:02] resolve_resume_file_path check for filename 'test_resolve_aadhaar_1780856522.pdf':
+- Database path/filename: test_resolve_aadhaar_1780856522.pdf
+- Checked paths: C:\xampp\htdocs\IMP/uploads/resumes/test_resolve_aadhaar_1780856522.pdf, C:\xampp\htdocs\IMP/uploads/secure/test_resolve_aadhaar_1780856522.pdf, C:\xampp\htdocs\IMP/uploads/aadhaar/test_resolve_aadhaar_1780856522.pdf
+- Resolved path: C:\xampp\htdocs\IMP\uploads\aadhaar\test_resolve_aadhaar_1780856522.pdf
+[2026-06-07 20:22:02] resolve_resume_file_path check for filename 'test_resolve_pan_1780856522.pdf':
+- Database path/filename: test_resolve_pan_1780856522.pdf
+- Checked paths: C:\xampp\htdocs\IMP/uploads/resumes/test_resolve_pan_1780856522.pdf, C:\xampp\htdocs\IMP/uploads/secure/test_resolve_pan_1780856522.pdf, C:\xampp\htdocs\IMP/uploads/aadhaar/test_resolve_pan_1780856522.pdf, C:\xampp\htdocs\IMP/uploads/pan/test_resolve_pan_1780856522.pdf
+- Resolved path: C:\xampp\htdocs\IMP\uploads\pan\test_resolve_pan_1780856522.pdf
+[2026-06-07 20:22:02] resolve_resume_file_path check for filename 'test_resolve_resumes_1780856522.pdf':
+- Database path/filename: test_resolve_resumes_1780856522.pdf
+- Checked paths: C:\xampp\htdocs\IMP/uploads/resumes/test_resolve_resumes_1780856522.pdf
+- Resolved path: C:\xampp\htdocs\IMP\uploads\resumes\test_resolve_resumes_1780856522.pdf
+[2026-06-07 20:22:02] resolve_resume_file_path check for filename 'test_resolve_profile_1780856522.pdf':
+- Database path/filename: test_resolve_profile_1780856522.pdf
+- Checked paths: C:\xampp\htdocs\IMP/uploads/resumes/test_resolve_profile_1780856522.pdf, C:\xampp\htdocs\IMP/uploads/secure/test_resolve_profile_1780856522.pdf, C:\xampp\htdocs\IMP/uploads/aadhaar/test_resolve_profile_1780856522.pdf, C:\xampp\htdocs\IMP/uploads/pan/test_resolve_profile_1780856522.pdf, C:\xampp\htdocs\IMP/uploads/profile/test_resolve_profile_1780856522.pdf
+- Resolved path: C:\xampp\htdocs\IMP\uploads\profile\test_resolve_profile_1780856522.pdf
+[2026-06-07 20:28:09] Database connection opened and shutdown handler registered.
+[2026-06-07 20:28:16] resolve_resume_file_path check for filename 'test_dummy_resolution.pdf':
+- Database path/filename: test_dummy_resolution.pdf
+- Checked paths: C:\xampp\htdocs\IMP/uploads/resumes/test_dummy_resolution.pdf
+- Resolved path: C:\xampp\htdocs\IMP\uploads\resumes\test_dummy_resolution.pdf
+[2026-06-08 04:08:54] Database connection opened and shutdown handler registered.

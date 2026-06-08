@@ -612,7 +612,10 @@ $header_photo = $header_user['profile_photo'] ?? '';
 
           if (app.pan_file && app.pan_file.trim() !== '') {
             document.getElementById('link-pan').classList.remove('hidden');
-            document.getElementById('link-pan').setAttribute('href', baseUploadPath + app.pan_file);
+            let pLink = (app.pan_file.startsWith('http://') || app.pan_file.startsWith('https://'))
+                        ? app.pan_file
+                        : baseUploadPath + app.pan_file;
+            document.getElementById('link-pan').setAttribute('href', pLink);
             document.getElementById('no-pan').classList.add('hidden');
           } else {
             document.getElementById('link-pan').classList.add('hidden');
@@ -621,7 +624,10 @@ $header_photo = $header_user['profile_photo'] ?? '';
 
           if (app.aadhaar_card_file && app.aadhaar_card_file.trim() !== '') {
             document.getElementById('link-aadhaar').classList.remove('hidden');
-            document.getElementById('link-aadhaar').setAttribute('href', baseUploadPath + app.aadhaar_card_file);
+            let aLink = (app.aadhaar_card_file.startsWith('http://') || app.aadhaar_card_file.startsWith('https://'))
+                        ? app.aadhaar_card_file
+                        : baseUploadPath + app.aadhaar_card_file;
+            document.getElementById('link-aadhaar').setAttribute('href', aLink);
             document.getElementById('no-aadhaar').classList.add('hidden');
           } else {
             document.getElementById('link-aadhaar').classList.add('hidden');

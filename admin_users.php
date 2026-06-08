@@ -863,26 +863,32 @@ $header_photo = $header_user['profile_photo'] ?? '';
       
       let aadhaarHtml = '';
       if (prof.aadhaar_file) {
+        let aLink = (prof.aadhaar_file.startsWith('http://') || prof.aadhaar_file.startsWith('https://'))
+                    ? prof.aadhaar_file
+                    : baseUploadPath + prof.aadhaar_file;
         aadhaarHtml = `
           <div class="flex justify-between items-center bg-slate-50 p-3 rounded-lg border border-slate-100">
             <div class="flex items-center gap-2">
               <span class="material-symbols-outlined text-green-500">description</span>
               <span class="font-semibold text-gray-800 text-xs">Aadhaar Document</span>
             </div>
-            <a href="${baseUploadPath + prof.aadhaar_file}" target="_blank" class="text-blue-600 hover:text-blue-800 text-xs font-bold">View File</a>
+            <a href="${aLink}" target="_blank" class="text-blue-600 hover:text-blue-800 text-xs font-bold">View File</a>
           </div>
         `;
       }
       
       let panHtml = '';
       if (prof.pan_file) {
+        let pLink = (prof.pan_file.startsWith('http://') || prof.pan_file.startsWith('https://'))
+                    ? prof.pan_file
+                    : baseUploadPath + prof.pan_file;
         panHtml = `
           <div class="flex justify-between items-center bg-slate-50 p-3 rounded-lg border border-slate-100">
             <div class="flex items-center gap-2">
               <span class="material-symbols-outlined text-amber-500">description</span>
               <span class="font-semibold text-gray-800 text-xs">PAN Card Document</span>
             </div>
-            <a href="${baseUploadPath + prof.pan_file}" target="_blank" class="text-blue-600 hover:text-blue-800 text-xs font-bold">View File</a>
+            <a href="${pLink}" target="_blank" class="text-blue-600 hover:text-blue-800 text-xs font-bold">View File</a>
           </div>
         `;
       }

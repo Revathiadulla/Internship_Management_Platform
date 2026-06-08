@@ -192,7 +192,9 @@ $aadhaar_file_url = null;
 $db_aadhaar = !empty($d['aadhaar_file']) ? trim($d['aadhaar_file']) : '';
 $aadhaar_uploaded = ($db_aadhaar !== '');
 if ($aadhaar_uploaded) {
-    if (strpos($db_aadhaar, 'uploads/') === 0) {
+    if (strpos($db_aadhaar, 'http://') === 0 || strpos($db_aadhaar, 'https://') === 0) {
+        $aadhaar_file_url = $db_aadhaar;
+    } elseif (strpos($db_aadhaar, 'uploads/') === 0) {
         $disk_path = __DIR__ . '/' . $db_aadhaar;
         if (is_file($disk_path)) {
             $aadhaar_file_url = $base_url . $db_aadhaar;
@@ -224,7 +226,9 @@ $pan_file_url = null;
 $db_pan = !empty($d['pan_file']) ? trim($d['pan_file']) : (!empty($d['app_pan_file']) ? trim($d['app_pan_file']) : '');
 $pan_uploaded = ($db_pan !== '');
 if ($pan_uploaded) {
-    if (strpos($db_pan, 'uploads/') === 0) {
+    if (strpos($db_pan, 'http://') === 0 || strpos($db_pan, 'https://') === 0) {
+        $pan_file_url = $db_pan;
+    } elseif (strpos($db_pan, 'uploads/') === 0) {
         $disk_path = __DIR__ . '/' . $db_pan;
         if (is_file($disk_path)) {
             $pan_file_url = $base_url . $db_pan;

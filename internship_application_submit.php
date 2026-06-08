@@ -46,6 +46,8 @@ $hod_email     = mysqli_real_escape_string($conn, trim($_POST['hod_email']     ?
 $graduation_year = mysqli_real_escape_string($conn, trim($_POST['graduation_year']   ?? ''));
 $prev_college    = mysqli_real_escape_string($conn, trim($_POST['prev_college_name'] ?? ''));
 
+require_once __DIR__ . "/includes/cloudinary_config.php";
+
 // ── Prevent Duplicate Applications ──
 $dup_sql = "SELECT id FROM internship_applications WHERE user_id = '$user_id' AND internship_id = '$internship_id' AND (internship_id > 0 OR internship_name = '" . mysqli_real_escape_string($conn, $internship_name) . "') LIMIT 1";
 $dup_result = mysqli_query($conn, $dup_sql);
@@ -70,14 +72,13 @@ if (isset($_FILES['resume_file']) && $_FILES['resume_file']['error'] === UPLOAD_
     if ($_FILES['resume_file']['size'] > 5 * 1024 * 1024) {
         die("Resume file too large. Maximum size is 5MB.");
     }
-    $safe_name   = 'resume_' . $user_id . '_' . time() . '.' . $ext;
-    $upload_dir  = __DIR__ . '/uploads/';
-    if (!is_dir($upload_dir)) mkdir($upload_dir, 0755, true);
-    if (move_uploaded_file($_FILES['resume_file']['tmp_name'], $upload_dir . $safe_name)) {
-        $resume_filename = $safe_name;
+    try {
+        $resume_filename = uploadToCloudinary($_FILES['resume_file']['tmp_name'], 'student_resumes', true);
+    } catch (Exception $e) {
+        die("Resume upload failed: " . $e->getMessage());
     }
 } elseif (!empty($_POST['existing_resume'])) {
-    $resume_filename = mysqli_real_escape_string($conn, basename($_POST['existing_resume']));
+    $resume_filename = mysqli_real_escape_string($conn, $_POST['existing_resume']);
 }
 
 // ── Handle PAN card upload ──
@@ -91,19 +92,13 @@ if (isset($_FILES['pan_file']) && $_FILES['pan_file']['error'] === UPLOAD_ERR_OK
     if ($_FILES['pan_file']['size'] > 2 * 1024 * 1024) {
         die("PAN file too large. Maximum size is 2MB.");
     }
-    $safe_name  = 'pan_' . $user_id . '_' . time() . '.' . $ext;
-    $pan_dir = __DIR__ . '/uploads/pan/';
-    if (!is_dir($pan_dir)) mkdir($pan_dir, 0777, true);
-    if (move_uploaded_file($_FILES['pan_file']['tmp_name'], $pan_dir . $safe_name)) {
-        $pan_filename = 'uploads/pan/' . $safe_name;
+    try {
+        $pan_filename = uploadToCloudinary($_FILES['pan_file']['tmp_name'], 'pan', false);
+    } catch (Exception $e) {
+        die("PAN upload failed: " . $e->getMessage());
     }
 } elseif (!empty($_POST['existing_pan'])) {
-    $existing_val = trim($_POST['existing_pan']);
-    if (preg_match('/^uploads\/pan\/[a-zA-Z0-9\._-]+$/', $existing_val)) {
-        $pan_filename = mysqli_real_escape_string($conn, $existing_val);
-    } else {
-        $pan_filename = mysqli_real_escape_string($conn, basename($existing_val));
-    }
+    $pan_filename = mysqli_real_escape_string($conn, $_POST['existing_pan']);
 }
 
 // ── Update student profile ──
@@ -117,7 +112,7 @@ $update_profile_sql = "UPDATE student_profiles SET
     hod_name       = '$hod_name',
     hod_phone      = '$hod_phone',
     hod_email      = '$hod_email'
-    " . ($resume_filename ? ", resume_file = '$resume_filename'" : "") . "
+    " . ($resume_filename ? ", resume_file = '$resume_filename', resume_url = '$resume_filename'" : "") . "
     " . ($pan_filename    ? ", pan_file    = '$pan_filename'"    : "") . "
     WHERE id = '$profile_id' AND user_id = '$user_id'";
 mysqli_query($conn, $update_profile_sql);

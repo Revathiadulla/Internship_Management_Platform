@@ -162,6 +162,7 @@ $new_cols = [
     "preferred_duration"  => "VARCHAR(100) DEFAULT NULL",
     "reason_for_applying" => "TEXT DEFAULT NULL",
     "relevant_skills"     => "TEXT DEFAULT NULL",
+    "certificate_path"    => "VARCHAR(255) DEFAULT NULL",
 ];
 foreach ($new_cols as $col => $definition) {
     $chk = mysqli_query($conn, "SHOW COLUMNS FROM internship_applications LIKE '$col'");

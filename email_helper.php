@@ -212,7 +212,29 @@ function sendEmail($to, $subjectOrName, $messageOrSubject = null, $message = nul
             'textContent' => strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $body))
         ];
 
-        // TODO: attachment support can be added later
+        $attachments = [];
+        if (!empty($GLOBALS['mail_options_attachments'])) {
+            foreach ($GLOBALS['mail_options_attachments'] as $att) {
+                $path = $att['path'] ?? '';
+                $name = $att['name'] ?? basename($path);
+                if (strpos($path, 'http://') === 0 || strpos($path, 'https://') === 0) {
+                    $attachments[] = [
+                        'url' => $path,
+                        'name' => $name
+                    ];
+                } elseif (!empty($path) && file_exists($path)) {
+                    $content = base64_encode(file_get_contents($path));
+                    $attachments[] = [
+                        'content' => $content,
+                        'name' => $name
+                    ];
+                }
+            }
+        }
+
+        if (!empty($attachments)) {
+            $payload['attachment'] = $attachments;
+        }
 
         $ch = curl_init('https://api.brevo.com/v3/smtp/email');
         curl_setopt($ch, CURLOPT_POST, true);

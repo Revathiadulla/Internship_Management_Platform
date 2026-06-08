@@ -144,13 +144,23 @@ $result = mysqli_query($conn, $query);
                             Resume
                           </a>
                         <?php endif; ?>
-                        <?php if (!empty($app['aadhaar_file'])): ?>
-                          <a href="view_document.php?file=<?php echo urlencode(basename($app['aadhaar_file'])); ?>" target="_blank" class="px-2 py-1 text-amber-700 bg-amber-50 hover:bg-amber-100 rounded text-xs font-semibold transition" title="View Aadhaar">
+                        <?php if (!empty($app['aadhaar_file'])): 
+                          $aadhaar_href = "view_document.php?file=" . urlencode(basename($app['aadhaar_file']));
+                          if (strpos($app['aadhaar_file'], 'http://') === 0 || strpos($app['aadhaar_file'], 'https://') === 0) {
+                              $aadhaar_href = $app['aadhaar_file'];
+                          }
+                        ?>
+                          <a href="<?php echo $aadhaar_href; ?>" target="_blank" class="px-2 py-1 text-amber-700 bg-amber-50 hover:bg-amber-100 rounded text-xs font-semibold transition" title="View Aadhaar">
                             Aadhaar
                           </a>
                         <?php endif; ?>
-                        <?php if (!empty($app['pan_file'])): ?>
-                          <a href="view_document.php?file=<?php echo urlencode(basename($app['pan_file'])); ?>" target="_blank" class="px-2 py-1 text-cyan-700 bg-cyan-50 hover:bg-cyan-100 rounded text-xs font-semibold transition" title="View PAN">
+                        <?php if (!empty($app['pan_file'])): 
+                          $pan_href = "view_document.php?file=" . urlencode(basename($app['pan_file']));
+                          if (strpos($app['pan_file'], 'http://') === 0 || strpos($app['pan_file'], 'https://') === 0) {
+                              $pan_href = $app['pan_file'];
+                          }
+                        ?>
+                          <a href="<?php echo $pan_href; ?>" target="_blank" class="px-2 py-1 text-cyan-700 bg-cyan-50 hover:bg-cyan-100 rounded text-xs font-semibold transition" title="View PAN">
                             PAN
                           </a>
                         <?php endif; ?>

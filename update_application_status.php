@@ -334,20 +334,32 @@ if (mysqli_query($conn, $update_sql)) {
             $pdf->SetTextColor(100, 100, 100);
             $pdf->Cell(0, 10, 'This is a system-generated confirmation letter. No signature is required.', 0, 1, 'C');
             
-            // Save PDF
+            // Save PDF temporarily
             $pdf_filename = 'Confirmation_Letter_' . $app_id . '.pdf';
-            $pdf_path = 'uploads/offer_letters/' . $pdf_filename;
-            $full_pdf_path = __DIR__ . '/' . $pdf_path;
+            $temp_pdf_path = sys_get_temp_dir() . DIRECTORY_SEPARATOR . $pdf_filename;
             
-            $pdf->Output('F', $full_pdf_path);
+            $pdf->Output('F', $temp_pdf_path);
+            
+            // Upload to Cloudinary
+            require_once __DIR__ . '/includes/cloudinary_config.php';
+            try {
+                $secure_url = uploadToCloudinary($temp_pdf_path, 'offer_letters', true);
+            } catch (Exception $e) {
+                @unlink($temp_pdf_path);
+                echo json_encode(['success' => false, 'message' => 'Failed to upload confirmation letter: ' . $e->getMessage()]);
+                exit();
+            }
+            
+            // Delete temp file
+            @unlink($temp_pdf_path);
             
             // Update DB
-            $esc_pdf_path = mysqli_real_escape_string($conn, $pdf_path);
+            $esc_pdf_path = mysqli_real_escape_string($conn, $secure_url);
             mysqli_query($conn, "UPDATE internship_applications SET confirmation_letter_path = '$esc_pdf_path', confirmation_letter_sent_at = NOW() WHERE id = $app_id");
             
             // Attach to email
             $GLOBALS['mail_options_attachments'] = [
-                ['path' => $full_pdf_path, 'name' => $pdf_filename]
+                ['path' => $secure_url, 'name' => $pdf_filename]
             ];
             break;
         case 'Rejected':

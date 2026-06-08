@@ -11,6 +11,13 @@ if (!isset($_GET['file']) || empty($_GET['file'])) {
 }
 
 $raw_file = trim($_GET['file']);
+
+// Redirect immediately if the file is a remote URL (Cloudinary URL)
+if (strpos($raw_file, 'http://') === 0 || strpos($raw_file, 'https://') === 0) {
+    header("Location: " . $raw_file);
+    exit();
+}
+
 $file = basename($raw_file);
 $filepath = null;
 

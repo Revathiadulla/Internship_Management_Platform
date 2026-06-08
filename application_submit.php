@@ -18,19 +18,16 @@ $year_of_study = $_POST['year_of_study'];
 $skills = $_POST['skills'];
 $aadhaar_number = $_POST['aadhaar_number'];
 
+require_once "includes/cloudinary_config.php";
+
 $resume_name = $_FILES['resume']['name'];
 $resume_tmp = $_FILES['resume']['tmp_name'];
 
-$folder = "uploads/";
-
-// Ensure uploads folder exists
-if (!is_dir($folder)) {
-    mkdir($folder, 0755, true);
+try {
+    $new_resume = uploadToCloudinary($resume_tmp, 'student_resumes', true);
+} catch (Exception $e) {
+    die("Resume upload failed: " . $e->getMessage());
 }
-
-$new_resume = time() . "_" . $resume_name;
-
-move_uploaded_file($resume_tmp, $folder . $new_resume);
 
 $sql = "INSERT INTO applications
 (user_id, first_name, last_name, full_name, email, phone, college_name, course, year_of_study, skills, resume_file, aadhaar_number)

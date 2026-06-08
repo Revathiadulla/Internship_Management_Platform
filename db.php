@@ -140,7 +140,8 @@ $app_new_cols = [
     'team_id' => "INT DEFAULT NULL",
     'mentor_id' => "INT DEFAULT NULL",
     'confirmation_letter_path' => "VARCHAR(255) DEFAULT NULL",
-    'confirmation_letter_sent_at' => "TIMESTAMP NULL DEFAULT NULL"
+    'confirmation_letter_sent_at' => "TIMESTAMP NULL DEFAULT NULL",
+    'certificate_path' => "VARCHAR(255) DEFAULT NULL"
 ];
 foreach ($app_new_cols as $_col => $_def) {
     $_col_check = mysqli_query($conn, "SHOW COLUMNS FROM internship_applications LIKE '$_col'");

@@ -173,9 +173,9 @@ $unread_count = intval($unread_row['c'] ?? 0);
         </div>
       </div>
       <div class="flex items-center gap-3">
-        <button onclick="window.print()" class="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-lg shadow-sm transition-all">
+        <a href="generate_certificate.php?user_id=<?php echo $user_id; ?>" target="_blank" class="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-lg shadow-sm transition-all">
           <span class="material-symbols-outlined text-[18px]">download</span> Download PDF
-        </button>
+        </a>
         <button onclick="shareLinkedIn()" class="flex items-center gap-2 px-4 py-2 bg-[#0077b5] hover:bg-[#006097] text-white text-sm font-bold rounded-lg shadow-sm transition-all">
           <span class="material-symbols-outlined text-[18px]">share</span> Share
         </button>
@@ -331,9 +331,9 @@ $unread_count = intval($unread_row['c'] ?? 0);
           <!-- Actions -->
           <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3">
             <h3 class="font-bold text-slate-800 text-sm mb-1">Certificate Actions</h3>
-            <button onclick="window.print()" class="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl shadow-md shadow-blue-500/20 transition-all">
+            <a href="generate_certificate.php?user_id=<?php echo $user_id; ?>" target="_blank" class="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl shadow-md shadow-blue-500/20 transition-all">
               <span class="material-symbols-outlined text-[18px]">download</span> Download PDF
-            </button>
+            </a>
             <button onclick="shareLinkedIn()" class="w-full flex items-center justify-center gap-2 px-4 py-3 bg-[#0077b5] hover:bg-[#006097] text-white font-bold text-sm rounded-xl transition-all">
               <span class="material-symbols-outlined text-[18px]">share</span> Share on LinkedIn
             </button>
