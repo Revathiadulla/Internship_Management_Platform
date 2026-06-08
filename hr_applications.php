@@ -186,7 +186,10 @@ $app_sql = "SELECT a.id as app_id, a.user_id, a.status, a.applied_date, a.educat
                    sp.aadhaar_file, sp.pan_file,
                    a.aadhaar_verification_status, a.pan_verification_status,
                    a.aadhaar_status, a.pan_status, a.hod_status, a.final_status,
-                   sp.student_type
+                   sp.student_type,
+                   i.project_type, i.project_subtype,
+                   a.preferred_domain, a.internship_name,
+                   a.internship_duration, a.preferred_duration
             FROM internship_applications a
             LEFT JOIN internships i       ON a.internship_id = i.id AND a.internship_id > 0
             LEFT JOIN student_profiles sp ON a.user_id = sp.user_id
@@ -371,10 +374,55 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
                       </div>
                     </div>
                   </td>
-                  <!-- Internship Applied -->
                   <td class="py-4 px-6">
-                    <p class="font-medium text-slate-800"><?php echo htmlspecialchars($app['status'] === 'Selected' ? $app['title'] : 'Awaiting Selection'); ?></p>
-                    <p class="text-xs text-slate-400"><?php echo htmlspecialchars($app['duration']); ?> • <?php echo htmlspecialchars($app['mode']); ?></p>
+                    <?php
+                    // Resolve applied subtype
+                    $proj_type = !empty($app['project_type']) ? trim($app['project_type']) : '';
+                    $proj_subtype = !empty($app['project_subtype']) ? trim($app['project_subtype']) : '';
+
+                    if (empty($proj_subtype) || in_array(strtolower($proj_subtype), ['assigned project', 'team project'])) {
+                        if (!empty($app['preferred_domain'])) {
+                            $proj_subtype = trim($app['preferred_domain']);
+                        }
+                    }
+                    if (empty($proj_subtype) || in_array(strtolower($proj_subtype), ['assigned project', 'team project'])) {
+                        if (!empty($app['internship_name'])) {
+                            $proj_subtype = trim($app['internship_name']);
+                        }
+                    }
+                    if (!empty($proj_subtype)) {
+                        $proj_subtype = preg_replace('/(\s+Internship|\s+Intern|\s+Trainee)$/i', '', $proj_subtype);
+                    }
+
+                    $forbidden_vals = ['awaiting selection', 'assigned project', 'team project', 'imp', 'internship management platform'];
+                    if (empty($proj_subtype) || in_array(strtolower($proj_subtype), $forbidden_vals)) {
+                        $proj_subtype = '';
+                    }
+
+                    $display_subtype = '';
+                    if (!empty($proj_type) && !in_array(strtolower($proj_type), $forbidden_vals)) {
+                        if (!empty($proj_subtype) && strtolower($proj_type) !== strtolower($proj_subtype)) {
+                            $display_subtype = $proj_type . ' - ' . $proj_subtype;
+                        } else {
+                            $display_subtype = !empty($proj_subtype) ? $proj_subtype : $proj_type;
+                        }
+                    } else {
+                        $display_subtype = !empty($proj_subtype) ? $proj_subtype : 'General';
+                    }
+                    ?>
+                    <p class="font-medium text-slate-800"><?php echo htmlspecialchars($display_subtype); ?></p>
+                    <p class="text-xs text-slate-400">
+                      <?php 
+                      $disp_dur = !empty($app['duration']) ? trim($app['duration']) : (!empty($app['internship_duration']) ? trim($app['internship_duration']) : (!empty($app['preferred_duration']) ? trim($app['preferred_duration']) : ''));
+                      $disp_mode = !empty($app['mode']) ? trim($app['mode']) : '';
+                      
+                      if ($disp_dur !== '' && $disp_mode !== '') {
+                          echo htmlspecialchars($disp_dur . ' • ' . $disp_mode);
+                      } else {
+                          echo htmlspecialchars($disp_dur !== '' ? $disp_dur : ($disp_mode !== '' ? $disp_mode : 'As per requirement'));
+                      }
+                      ?>
+                    </p>
                   </td>
                   <!-- Applied Date -->
                   <td class="py-4 px-6 text-slate-500 font-medium">
