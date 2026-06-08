@@ -88,15 +88,9 @@ function uploadToCloudinary($file_path, $folder, $is_raw = false) {
  * @param string $url The original file URL.
  * @return string The viewer URL or original URL.
  */
-function getDocumentViewUrl($url) {
-    if (empty($url)) {
-        return '#';
+if (!function_exists('getDocumentViewUrl')) {
+    function getDocumentViewUrl($url) {
+        if (empty($url)) return '#';
+        return "https://docs.google.com/gview?embedded=true&url=" . urlencode($url);
     }
-    
-    $ext = strtolower(pathinfo(parse_url($url, PHP_URL_PATH) ?? '', PATHINFO_EXTENSION));
-    if ($ext === 'pdf' || strpos($url, '/raw/upload/') !== false || preg_match('/\.pdf/i', $url)) {
-        return 'https://docs.google.com/gview?embedded=true&url=' . urlencode($url);
-    }
-    
-    return $url;
 }

@@ -685,7 +685,7 @@ if (isset($_GET['warning'])) {
               <span class="text-slate-700 truncate"><?php echo htmlspecialchars($profile['skills'] ?? '—'); ?></span>
             </div>
             <?php if (!empty($profile['resume_file']) || !empty($profile['resume_url'])): ?>
-            <a href="<?php echo get_resume_view_link($profile); ?>" target="_blank" data-resume-exists="<?php echo check_resume_exists($profile) ? 'true' : 'false'; ?>"
+            <a href="<?php echo htmlspecialchars(getDocumentViewUrl(get_resume_view_link($profile))); ?>" target="_blank" rel="noopener noreferrer" data-resume-exists="<?php echo check_resume_exists($profile) ? 'true' : 'false'; ?>"
                class="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 transition-colors text-slate-600 group">
               <span class="material-symbols-outlined text-red-400 text-[18px]">picture_as_pdf</span>
               <span class="truncate flex-1 text-xs font-medium"><?php echo !empty($profile['resume_file']) ? basename($profile['resume_file']) : 'Resume Link'; ?></span>

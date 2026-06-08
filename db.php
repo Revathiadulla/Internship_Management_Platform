@@ -279,6 +279,13 @@ if ($_col_check && mysqli_num_rows($_col_check) === 0) {
 }
 unset($_col_check);
 
+if (!function_exists('getDocumentViewUrl')) {
+    function getDocumentViewUrl($url) {
+        if (empty($url)) return '#';
+        return "https://docs.google.com/gview?embedded=true&url=" . urlencode($url);
+    }
+}
+
 function get_resume_view_link($profile) {
     if (!$profile) {
         return '#';

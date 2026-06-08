@@ -350,7 +350,7 @@ if (empty($session_email) && $profile && isset($profile['email'])) {
                                 </label>
                                 <div id="resume-preview" class="<?php echo (empty($resume_file) && empty($profile['resume_url'] ?? '')) ? 'hidden' : ''; ?> mt-4 pt-4 border-t border-slate-100">
                                     <p class="text-sm text-slate-500 mb-1">Selected file / link:</p>
-                                    <a href="<?php echo get_resume_view_link($profile); ?>" id="resume-link" target="_blank" data-resume-exists="<?php echo check_resume_exists($profile) ? 'true' : 'false'; ?>" class="inline-flex items-center gap-1 text-blue-600 hover:text-blue-700 hover:underline font-medium relative z-10" onclick="event.stopPropagation();">
+                                    <a href="<?php echo htmlspecialchars(getDocumentViewUrl(get_resume_view_link($profile))); ?>" id="resume-link" target="_blank" rel="noopener noreferrer" data-resume-exists="<?php echo check_resume_exists($profile) ? 'true' : 'false'; ?>" class="inline-flex items-center gap-1 text-blue-600 hover:text-blue-700 hover:underline font-medium relative z-10" onclick="event.stopPropagation();">
                                         <span class="material-symbols-outlined text-[18px]">description</span>
                                         <span id="resume-filename" class="truncate max-w-[200px]"><?php echo (empty($resume_file) && !empty($profile['resume_url'] ?? '')) ? htmlspecialchars($profile['resume_url']) : (empty($resume_file) ? 'filename.pdf' : basename($resume_file)); ?></span>
                                     </a>
