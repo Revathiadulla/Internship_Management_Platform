@@ -320,7 +320,7 @@ unset($_has_apps);
 if (!function_exists('getDocumentViewUrl')) {
     function getDocumentViewUrl($url) {
         if (empty($url)) return '#';
-        return "view_document.php?url=" . urlencode($url);
+        return $url;
     }
 }
 

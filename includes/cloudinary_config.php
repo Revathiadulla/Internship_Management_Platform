@@ -108,6 +108,6 @@ function uploadToCloudinary($file_path, $folder, $is_raw = false, $original_file
 if (!function_exists('getDocumentViewUrl')) {
     function getDocumentViewUrl($url) {
         if (empty($url)) return '#';
-        return "view_document.php?url=" . urlencode($url);
+        return $url;
     }
 }

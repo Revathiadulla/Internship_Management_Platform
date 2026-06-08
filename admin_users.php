@@ -842,8 +842,7 @@ $header_photo = $header_user['profile_photo'] ?? '';
       
       function getJsDocViewUrl(url) {
         if (!url) return '#';
-        url = url.trim();
-        return 'view_document.php?url=' + encodeURIComponent(url);
+        return url.trim();
       }
       
       let resumeHtml = '';

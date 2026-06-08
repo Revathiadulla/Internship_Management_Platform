@@ -56,9 +56,6 @@ if (!$intern) {
 // If certificate_path is already generated and populated with a Cloudinary URL, redirect directly
 if (!empty($intern['certificate_path']) && (strpos($intern['certificate_path'], 'http://') === 0 || strpos($intern['certificate_path'], 'https://') === 0)) {
     $target_url = $intern['certificate_path'];
-    if ($mode === 'view') {
-        $target_url = 'view_document.php?url=' . urlencode($target_url);
-    }
     header("Location: " . $target_url);
     exit();
 }
@@ -241,10 +238,7 @@ $app_id = intval($intern['app_id']);
 $update_sql = "UPDATE internship_applications SET certificate_path = '$esc_url' WHERE id = $app_id";
 mysqli_query($conn, $update_sql);
 
-// Redirect to Cloudinary URL or Google Docs Viewer
+// Redirect to Cloudinary URL
 $target_url = $secure_url;
-if ($mode === 'view') {
-    $target_url = 'view_document.php?url=' . urlencode($target_url);
-}
 header("Location: " . $target_url);
 exit();
