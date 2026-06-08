@@ -683,10 +683,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $status_to_update = $row['status'];
     if ($is_passed) {
         $status_to_update = 'HR Review';
-    } elseif ($attempt_no >= $max_attempts) {
-        $status_to_update = 'Rejected';
+    } else {
+        // Failed attempt
+        if ($attempt_no >= $max_attempts) {
+            $status_to_update = 'Rejected';
+        } else {
+            $status_to_update = 'Test Failed';
+        }
     }
-    $test_status_to_set = $is_passed ? 'Completed' : 'Failed';
+    $test_status_to_set = $is_passed ? 'Passed' : 'Failed';
     $test_result = $is_passed ? 'Passed' : 'Failed';
     $test_attempts_value = $attempt_no;
 
@@ -697,6 +702,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $upd->bind_param('sissiii', $status_to_update, $percentage_int, $test_status_to_set, $test_result, $test_attempts_value, $max_attempts, $app_id);
     $upd->execute();
     $upd->close();
+
+    // If final rejection after exhausting attempts, mark final_selection_status
+    if (!$is_passed && $attempt_no >= $max_attempts) {
+        @mysqli_query($conn, "UPDATE internship_applications SET final_selection_status = 'Rejected' WHERE id = " . intval($app_id));
+    }
 
     // Save attempt history
     $ins_history = $conn->prepare("INSERT INTO test_attempt_history (application_id, student_id, internship_id, test_id, attempt_no, score, total_questions, percentage) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");

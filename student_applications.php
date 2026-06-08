@@ -314,9 +314,11 @@ $has_active = mysqli_num_rows($active_result) > 0;
                     }
                     $attempts_remaining = max(0, $max_attempts - $test_attempts);
                     $has_max_attempts = ($test_attempts >= $max_attempts);
-                    $show_start_test = ($current_status === 'Applied' && $test_status !== 'Completed' && !$is_deadline_expired && !$has_max_attempts);
-                    $show_test_expired = ($current_status === 'Applied' && $test_status !== 'Completed' && $is_deadline_expired);
-                    $show_view_result = ($test_status === 'Completed');
+                    $next_attempt_no = min($test_attempts + 1, $max_attempts);
+                    $status_allows_test = in_array($current_status, ['Applied', 'Test Failed']);
+                    $show_start_test = ($status_allows_test && strtolower($test_status) !== 'completed' && strtolower($test_status) !== 'passed' && !$is_deadline_expired && !$has_max_attempts);
+                    $show_test_expired = ($status_allows_test && strtolower($test_status) !== 'completed' && strtolower($test_status) !== 'passed' && $is_deadline_expired);
+                    $show_view_result = (strtolower($test_status) === 'completed' || strtolower($test_status) === 'passed');
                 ?>
                   <div class="p-6 hover:bg-slate-50/50 transition-all duration-200 group">
                     <div class="flex flex-col lg:flex-row lg:items-center gap-6">
@@ -356,8 +358,8 @@ $has_active = mysqli_num_rows($active_result) > 0;
                               <?php endif; ?>
                             </div>
                             
-                            <!-- Test Deadline Warning (Only for Applied status with pending test) -->
-                            <?php if ($current_status === 'Applied' && $test_status !== 'Completed'): ?>
+                            <!-- Test Deadline Warning (Only for Applied/Test Failed status with pending test) -->
+                            <?php if (in_array($current_status, ['Applied', 'Test Failed']) && strtolower($test_status) !== 'completed' && strtolower($test_status) !== 'passed'): ?>
                               <div class="mt-3 p-3 <?php echo $is_deadline_expired ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'; ?> border rounded-lg">
                                 <div class="flex items-start gap-2">
                                   <span class="material-symbols-outlined text-[18px] <?php echo $is_deadline_expired ? 'text-red-600' : 'text-amber-600'; ?>">
@@ -399,10 +401,10 @@ $has_active = mysqli_num_rows($active_result) > 0;
                           </p>
                           
                           <!-- Test Status Badge -->
-                          <?php if ($current_status === 'Applied'): ?>
+                          <?php if (in_array($current_status, ['Applied', 'Test Failed'])): ?>
                             <div class="mt-3">
                               <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Test Status</p>
-                              <?php if ($test_status === 'Completed'): ?>
+                              <?php if (strtolower($test_status) === 'completed' || strtolower($test_status) === 'passed'): ?>
                                 <span class="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-bold">
                                   <span class="material-symbols-outlined text-[14px]">check_circle</span>
                                   Completed
@@ -412,11 +414,19 @@ $has_active = mysqli_num_rows($active_result) > 0;
                                   <span class="material-symbols-outlined text-[14px]">cancel</span>
                                   Expired
                                 </span>
+                              <?php elseif ($current_status === 'Test Failed'): ?>
+                                <span class="inline-flex items-center gap-1 px-2.5 py-1 bg-red-50 text-red-700 border border-red-200 rounded-lg text-xs font-bold">
+                                  <span class="material-symbols-outlined text-[14px]">cancel</span>
+                                  Test Failed
+                                </span>
                               <?php else: ?>
                                 <span class="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg text-xs font-bold">
                                   <span class="material-symbols-outlined text-[14px]">pending</span>
                                   Pending
                                 </span>
+                              <?php endif; ?>
+                              <?php if ($current_status === 'Test Failed' && !$has_max_attempts): ?>
+                                <p class="text-xs text-slate-500 mt-2">Attempt <?php echo $next_attempt_no; ?> of <?php echo $max_attempts; ?> — <?php echo $attempts_remaining; ?> remaining</p>
                               <?php endif; ?>
                             </div>
                           <?php endif; ?>
