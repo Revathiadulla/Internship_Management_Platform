@@ -57,7 +57,7 @@ if (!$intern) {
 if (!empty($intern['certificate_path']) && (strpos($intern['certificate_path'], 'http://') === 0 || strpos($intern['certificate_path'], 'https://') === 0)) {
     $target_url = $intern['certificate_path'];
     if ($mode === 'view') {
-        $target_url = 'https://docs.google.com/gview?embedded=true&url=' . urlencode($target_url);
+        $target_url = 'view_document.php?url=' . urlencode($target_url);
     }
     header("Location: " . $target_url);
     exit();
@@ -244,7 +244,7 @@ mysqli_query($conn, $update_sql);
 // Redirect to Cloudinary URL or Google Docs Viewer
 $target_url = $secure_url;
 if ($mode === 'view') {
-    $target_url = 'https://docs.google.com/gview?embedded=true&url=' . urlencode($target_url);
+    $target_url = 'view_document.php?url=' . urlencode($target_url);
 }
 header("Location: " . $target_url);
 exit();

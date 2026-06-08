@@ -320,7 +320,7 @@ unset($_has_apps);
 if (!function_exists('getDocumentViewUrl')) {
     function getDocumentViewUrl($url) {
         if (empty($url)) return '#';
-        return "https://docs.google.com/gview?embedded=true&url=" . urlencode($url);
+        return "view_document.php?url=" . urlencode($url);
     }
 }
 

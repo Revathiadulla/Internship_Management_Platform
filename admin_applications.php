@@ -590,10 +590,7 @@ $header_photo = $header_user['profile_photo'] ?? '';
           function getJsDocViewUrl(url) {
             if (!url) return '#';
             url = url.trim();
-            if (url.toLowerCase().endsWith('.pdf') || url.includes('/raw/upload/') || /\.pdf/i.test(url)) {
-              return 'https://docs.google.com/gview?embedded=true&url=' + encodeURIComponent(url);
-            }
-            return url;
+            return 'view_document.php?url=' + encodeURIComponent(url);
           }
           
           if (app.resume_url && (app.resume_url.startsWith('http://') || app.resume_url.startsWith('https://'))) {
