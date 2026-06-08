@@ -481,6 +481,78 @@ try {
         }
     }
 
+    // FIX: Ensure test_questions.id is AUTO_INCREMENT PRIMARY KEY
+    $_test_q_id_check = mysqli_query($conn, "SHOW COLUMNS FROM test_questions LIKE 'id'");
+    if ($_test_q_id_check && $_test_q_id_row = mysqli_fetch_assoc($_test_q_id_check)) {
+        $hasAutoIncrement = (stripos($_test_q_id_row['Extra'] ?? '', 'auto_increment') !== false);
+        if (!$hasAutoIncrement) {
+            $hasPK = false;
+            $_pk_check = mysqli_query($conn, "SHOW KEYS FROM test_questions WHERE Key_name = 'PRIMARY' AND Column_name = 'id'");
+            if ($_pk_check && mysqli_num_rows($_pk_check) > 0) {
+                $hasPK = true;
+            }
+            if (!$hasPK) {
+                @mysqli_query($conn, "ALTER TABLE test_questions DROP PRIMARY KEY");
+                @mysqli_query($conn, "ALTER TABLE test_questions ADD PRIMARY KEY (id)");
+            }
+            @mysqli_query($conn, "ALTER TABLE test_questions MODIFY id INT NOT NULL AUTO_INCREMENT");
+        }
+    }
+
+    // FIX: Ensure subtype_tests.id is AUTO_INCREMENT PRIMARY KEY
+    $_subtype_t_id_check = mysqli_query($conn, "SHOW COLUMNS FROM subtype_tests LIKE 'id'");
+    if ($_subtype_t_id_check && $_subtype_t_id_row = mysqli_fetch_assoc($_subtype_t_id_check)) {
+        $hasAutoIncrement = (stripos($_subtype_t_id_row['Extra'] ?? '', 'auto_increment') !== false);
+        if (!$hasAutoIncrement) {
+            $hasPK = false;
+            $_pk_check = mysqli_query($conn, "SHOW KEYS FROM subtype_tests WHERE Key_name = 'PRIMARY' AND Column_name = 'id'");
+            if ($_pk_check && mysqli_num_rows($_pk_check) > 0) {
+                $hasPK = true;
+            }
+            if (!$hasPK) {
+                @mysqli_query($conn, "ALTER TABLE subtype_tests DROP PRIMARY KEY");
+                @mysqli_query($conn, "ALTER TABLE subtype_tests ADD PRIMARY KEY (id)");
+            }
+            @mysqli_query($conn, "ALTER TABLE subtype_tests MODIFY id INT NOT NULL AUTO_INCREMENT");
+        }
+    }
+
+    // FIX: Ensure subtype_test_questions.id is AUTO_INCREMENT PRIMARY KEY
+    $_subtype_tq_id_check = mysqli_query($conn, "SHOW COLUMNS FROM subtype_test_questions LIKE 'id'");
+    if ($_subtype_tq_id_check && $_subtype_tq_id_row = mysqli_fetch_assoc($_subtype_tq_id_check)) {
+        $hasAutoIncrement = (stripos($_subtype_tq_id_row['Extra'] ?? '', 'auto_increment') !== false);
+        if (!$hasAutoIncrement) {
+            $hasPK = false;
+            $_pk_check = mysqli_query($conn, "SHOW KEYS FROM subtype_test_questions WHERE Key_name = 'PRIMARY' AND Column_name = 'id'");
+            if ($_pk_check && mysqli_num_rows($_pk_check) > 0) {
+                $hasPK = true;
+            }
+            if (!$hasPK) {
+                @mysqli_query($conn, "ALTER TABLE subtype_test_questions DROP PRIMARY KEY");
+                @mysqli_query($conn, "ALTER TABLE subtype_test_questions ADD PRIMARY KEY (id)");
+            }
+            @mysqli_query($conn, "ALTER TABLE subtype_test_questions MODIFY id INT NOT NULL AUTO_INCREMENT");
+        }
+    }
+
+    // FIX: Ensure question_bank.id is AUTO_INCREMENT PRIMARY KEY
+    $_qb_id_check = mysqli_query($conn, "SHOW COLUMNS FROM question_bank LIKE 'id'");
+    if ($_qb_id_check && $_qb_id_row = mysqli_fetch_assoc($_qb_id_check)) {
+        $hasAutoIncrement = (stripos($_qb_id_row['Extra'] ?? '', 'auto_increment') !== false);
+        if (!$hasAutoIncrement) {
+            $hasPK = false;
+            $_pk_check = mysqli_query($conn, "SHOW KEYS FROM question_bank WHERE Key_name = 'PRIMARY' AND Column_name = 'id'");
+            if ($_pk_check && mysqli_num_rows($_pk_check) > 0) {
+                $hasPK = true;
+            }
+            if (!$hasPK) {
+                @mysqli_query($conn, "ALTER TABLE question_bank DROP PRIMARY KEY");
+                @mysqli_query($conn, "ALTER TABLE question_bank ADD PRIMARY KEY (id)");
+            }
+            @mysqli_query($conn, "ALTER TABLE question_bank MODIFY id INT NOT NULL AUTO_INCREMENT");
+        }
+    }
+
     // Create notifications table if missing
     $create_notifications = "CREATE TABLE IF NOT EXISTS notifications (
         id INT AUTO_INCREMENT PRIMARY KEY,
