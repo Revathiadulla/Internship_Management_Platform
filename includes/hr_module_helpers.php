@@ -123,15 +123,30 @@ function ensure_module_schema(mysqli $conn): void {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )");
 
+    // Check hr_notes schema compatibility and recreate if legacy
+    $_notes_table_check = mysqli_query($conn, "SHOW TABLES LIKE 'hr_notes'");
+    if ($_notes_table_check && mysqli_num_rows($_notes_table_check) > 0) {
+        $_col_check = mysqli_query($conn, "SHOW COLUMNS FROM hr_notes LIKE 'student_id'");
+        if (!$_col_check || mysqli_num_rows($_col_check) === 0) {
+            mysqli_query($conn, "DROP TABLE IF EXISTS hr_notes");
+        }
+        if ($_col_check) {
+            unset($_col_check);
+        }
+    }
+    if ($_notes_table_check) {
+        unset($_notes_table_check);
+    }
+
     mysqli_query($conn, "CREATE TABLE IF NOT EXISTS hr_notes (
         id INT AUTO_INCREMENT PRIMARY KEY,
         application_id INT NOT NULL,
-        user_id INT NOT NULL,
-        author_name VARCHAR(100) NOT NULL,
+        student_id INT NOT NULL,
+        hr_id INT NOT NULL,
         note_text TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (application_id) REFERENCES internship_applications(id) ON DELETE CASCADE
-    )");
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
 
     // Clean old stages and seed new 6 simplified stages
     mysqli_query($conn, "DELETE FROM workflow_stages");

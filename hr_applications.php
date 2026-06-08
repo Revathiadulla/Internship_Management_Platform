@@ -188,6 +188,7 @@ $app_sql = "SELECT a.id as app_id, a.user_id, a.status, a.applied_date, a.educat
                    a.aadhaar_status, a.pan_status, a.hod_status, a.final_status,
                    sp.student_type,
                    i.project_type, i.project_subtype,
+                   a.applied_subtype,
                    a.preferred_domain, a.internship_name,
                    a.internship_duration, a.preferred_duration
             FROM internship_applications a
@@ -377,37 +378,36 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
                   <td class="py-4 px-6">
                     <?php
                     // Resolve applied subtype
-                    $proj_type = !empty($app['project_type']) ? trim($app['project_type']) : '';
-                    $proj_subtype = !empty($app['project_subtype']) ? trim($app['project_subtype']) : '';
-
-                    if (empty($proj_subtype) || in_array(strtolower($proj_subtype), ['assigned project', 'team project'])) {
-                        if (!empty($app['preferred_domain'])) {
-                            $proj_subtype = trim($app['preferred_domain']);
-                        }
-                    }
-                    if (empty($proj_subtype) || in_array(strtolower($proj_subtype), ['assigned project', 'team project'])) {
-                        if (!empty($app['internship_name'])) {
-                            $proj_subtype = trim($app['internship_name']);
-                        }
-                    }
-                    if (!empty($proj_subtype)) {
-                        $proj_subtype = preg_replace('/(\s+Internship|\s+Intern|\s+Trainee)$/i', '', $proj_subtype);
-                    }
-
                     $forbidden_vals = ['awaiting selection', 'assigned project', 'team project', 'imp', 'internship management platform'];
-                    if (empty($proj_subtype) || in_array(strtolower($proj_subtype), $forbidden_vals)) {
-                        $proj_subtype = '';
+
+                    $subtype = '';
+                    if (!empty($app['applied_subtype']) && !in_array(strtolower(trim($app['applied_subtype'])), $forbidden_vals)) {
+                        $subtype = trim($app['applied_subtype']);
+                    }
+                    if (empty($subtype) && !empty($app['preferred_domain']) && !in_array(strtolower(trim($app['preferred_domain'])), $forbidden_vals)) {
+                        $subtype = trim($app['preferred_domain']);
+                    }
+                    if (empty($subtype) && !empty($app['internship_name']) && !in_array(strtolower(trim($app['internship_name'])), $forbidden_vals)) {
+                        $subtype = trim($app['internship_name']);
+                    }
+                    if (empty($subtype) && !empty($app['project_subtype']) && !in_array(strtolower(trim($app['project_subtype'])), $forbidden_vals)) {
+                        $subtype = trim($app['project_subtype']);
+                    }
+
+                    if (!empty($subtype)) {
+                        $subtype = preg_replace('/(\s+Internship|\s+Intern|\s+Trainee)$/i', '', $subtype);
+                    }
+
+                    $proj_type = '';
+                    if (!empty($app['project_type']) && !in_array(strtolower(trim($app['project_type'])), $forbidden_vals)) {
+                        $proj_type = trim($app['project_type']);
                     }
 
                     $display_subtype = '';
-                    if (!empty($proj_type) && !in_array(strtolower($proj_type), $forbidden_vals)) {
-                        if (!empty($proj_subtype) && strtolower($proj_type) !== strtolower($proj_subtype)) {
-                            $display_subtype = $proj_type . ' - ' . $proj_subtype;
-                        } else {
-                            $display_subtype = !empty($proj_subtype) ? $proj_subtype : $proj_type;
-                        }
+                    if (!empty($proj_type) && !empty($subtype) && strtolower($proj_type) !== strtolower($subtype)) {
+                        $display_subtype = $proj_type . ' - ' . $subtype;
                     } else {
-                        $display_subtype = !empty($proj_subtype) ? $proj_subtype : 'General';
+                        $display_subtype = !empty($subtype) ? $subtype : (!empty($proj_type) ? $proj_type : 'General');
                     }
                     ?>
                     <p class="font-medium text-slate-800"><?php echo htmlspecialchars($display_subtype); ?></p>

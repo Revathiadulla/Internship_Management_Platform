@@ -145,32 +145,47 @@ $result = mysqli_query($conn, $query);
                     </td>
                     <td class="py-4 px-6">
                       <div class="flex flex-wrap items-center justify-center gap-2">
-                        <?php if ($resume !== '' || $resume_url !== ''): ?>
-                          <a href="<?php echo htmlspecialchars(getDocumentViewUrl($view_href)); ?>" target="_blank" rel="noopener noreferrer" class="px-2 py-1 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded text-xs font-semibold transition" title="View Resume: <?php echo htmlspecialchars($resume_orig_name ?: basename($resume ?: $resume_url)); ?>">
-                            <?php echo htmlspecialchars($resume_orig_name ?: 'Resume'); ?>
-                          </a>
+                        <?php if ($resume !== '' || $resume_url !== ''): 
+                            $res_resolved = getDocumentUrl(!empty($resume_url) ? $resume_url : $resume);
+                            if ($res_resolved === 'unavailable'): ?>
+                              <span class="px-2 py-1 text-red-700 bg-red-50 rounded text-xs font-semibold" title="Document unavailable. Please ask student to update/reupload document.">Resume (N/A)</span>
+                            <?php else: 
+                                $res_view_link = (strpos($res_resolved, 'http://') === 0 || strpos($res_resolved, 'https://') === 0) 
+                                    ? $res_resolved 
+                                    : "resume_serve.php?file=" . urlencode(basename($res_resolved)) . "&mode=view";
+                            ?>
+                              <a href="<?php echo htmlspecialchars($res_view_link); ?>" target="_blank" rel="noopener noreferrer" class="px-2 py-1 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded text-xs font-semibold transition" title="View Resume: <?php echo htmlspecialchars($resume_orig_name ?: basename($resume ?: $resume_url)); ?>">
+                                <?php echo htmlspecialchars($resume_orig_name ?: 'Resume'); ?>
+                              </a>
+                            <?php endif; ?>
                         <?php endif; ?>
                         <?php if (!empty($app['aadhaar_file'])): 
-                          $aadhaar_href = "view_document.php?file=" . urlencode(basename($app['aadhaar_file']));
-                          if (strpos($app['aadhaar_file'], 'http://') === 0 || strpos($app['aadhaar_file'], 'https://') === 0) {
-                              $aadhaar_href = $app['aadhaar_file'];
-                          }
-                          $aadhaar_view_href = getDocumentViewUrl($aadhaar_href);
-                        ?>
-                          <a href="<?php echo htmlspecialchars($aadhaar_view_href); ?>" target="_blank" rel="noopener noreferrer" class="px-2 py-1 text-amber-700 bg-amber-50 hover:bg-amber-100 rounded text-xs font-semibold transition" title="View Aadhaar: <?php echo htmlspecialchars($aadhaar_orig_name ?: basename($app['aadhaar_file'])); ?>">
-                            <?php echo htmlspecialchars($aadhaar_orig_name ?: 'Aadhaar'); ?>
-                          </a>
+                            $aadhaar_resolved = getDocumentUrl($app['aadhaar_file']);
+                            if ($aadhaar_resolved === 'unavailable'): ?>
+                              <span class="px-2 py-1 text-red-700 bg-red-50 rounded text-xs font-semibold" title="Document unavailable. Please ask student to update/reupload document.">Aadhaar (N/A)</span>
+                            <?php else:
+                                $aadhaar_view_link = (strpos($aadhaar_resolved, 'http://') === 0 || strpos($aadhaar_resolved, 'https://') === 0)
+                                    ? $aadhaar_resolved
+                                    : "view_document.php?file=" . urlencode(basename($aadhaar_resolved));
+                            ?>
+                              <a href="<?php echo htmlspecialchars($aadhaar_view_link); ?>" target="_blank" rel="noopener noreferrer" class="px-2 py-1 text-amber-700 bg-amber-50 hover:bg-amber-100 rounded text-xs font-semibold transition" title="View Aadhaar: <?php echo htmlspecialchars($aadhaar_orig_name ?: basename($app['aadhaar_file'])); ?>">
+                                <?php echo htmlspecialchars($aadhaar_orig_name ?: 'Aadhaar'); ?>
+                              </a>
+                            <?php endif; ?>
                         <?php endif; ?>
                         <?php if (!empty($app['pan_file'])): 
-                          $pan_href = "view_document.php?file=" . urlencode(basename($app['pan_file']));
-                          if (strpos($app['pan_file'], 'http://') === 0 || strpos($app['pan_file'], 'https://') === 0) {
-                              $pan_href = $app['pan_file'];
-                          }
-                          $pan_view_href = getDocumentViewUrl($pan_href);
-                        ?>
-                          <a href="<?php echo htmlspecialchars($pan_view_href); ?>" target="_blank" rel="noopener noreferrer" class="px-2 py-1 text-cyan-700 bg-cyan-50 hover:bg-cyan-100 rounded text-xs font-semibold transition" title="View PAN: <?php echo htmlspecialchars($pan_orig_name ?: basename($app['pan_file'])); ?>">
-                            <?php echo htmlspecialchars($pan_orig_name ?: 'PAN'); ?>
-                          </a>
+                            $pan_resolved = getDocumentUrl($app['pan_file']);
+                            if ($pan_resolved === 'unavailable'): ?>
+                              <span class="px-2 py-1 text-red-700 bg-red-50 rounded text-xs font-semibold" title="Document unavailable. Please ask student to update/reupload document.">PAN (N/A)</span>
+                            <?php else:
+                                $pan_view_link = (strpos($pan_resolved, 'http://') === 0 || strpos($pan_resolved, 'https://') === 0)
+                                    ? $pan_resolved
+                                    : "view_document.php?file=" . urlencode(basename($pan_resolved));
+                            ?>
+                              <a href="<?php echo htmlspecialchars($pan_view_link); ?>" target="_blank" rel="noopener noreferrer" class="px-2 py-1 text-cyan-700 bg-cyan-50 hover:bg-cyan-100 rounded text-xs font-semibold transition" title="View PAN: <?php echo htmlspecialchars($pan_orig_name ?: basename($app['pan_file'])); ?>">
+                                <?php echo htmlspecialchars($pan_orig_name ?: 'PAN'); ?>
+                              </a>
+                            <?php endif; ?>
                         <?php endif; ?>
                         
                         <a href="hod_update_application.php?app_id=<?php echo $app['app_id']; ?>&action=approve" class="px-2.5 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded transition">

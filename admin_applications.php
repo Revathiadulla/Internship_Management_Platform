@@ -587,64 +587,66 @@ $header_photo = $header_user['profile_photo'] ?? '';
           // Documents
           const baseUploadPath = 'view_doc.php?file=';
           
-          function getJsDocViewUrl(url) {
-            if (!url) return '#';
-            return url.trim();
+          function updateJsDocElement(linkId, noId, rawUrl) {
+            const linkEl = document.getElementById(linkId);
+            const noEl = document.getElementById(noId);
+            if (!linkEl || !noEl) return;
+            
+            if (!rawUrl || rawUrl.trim() === '') {
+              linkEl.classList.add('hidden');
+              noEl.classList.remove('hidden');
+              noEl.textContent = 'Not Uploaded';
+              noEl.className = 'text-gray-400 font-semibold italic text-[10px]';
+              return;
+            }
+            
+            const u = rawUrl.trim();
+            const isLegacyBroken = u.includes('/image/upload/') && /\.pdf$/i.test(u);
+            const isLocalPath = !u.startsWith('http://') && !u.startsWith('https://') && !u.startsWith('resume_serve.php') && !u.startsWith('view_doc.php');
+            const isProduction = !['localhost', '127.0.0.1'].includes(window.location.hostname);
+            
+            if (isLegacyBroken || (isLocalPath && isProduction)) {
+              linkEl.classList.add('hidden');
+              noEl.classList.remove('hidden');
+              noEl.textContent = 'Document unavailable. Please ask student to update/reupload document.';
+              noEl.className = 'text-red-600 font-semibold text-[9px] max-w-[200px] leading-tight';
+            } else {
+              linkEl.classList.remove('hidden');
+              linkEl.setAttribute('href', u);
+              linkEl.setAttribute('target', '_blank');
+              linkEl.setAttribute('rel', 'noopener noreferrer');
+              noEl.classList.add('hidden');
+            }
           }
           
+          let resumeLink = '';
           if (app.resume_url && (app.resume_url.startsWith('http://') || app.resume_url.startsWith('https://'))) {
-            document.getElementById('link-resume').classList.remove('hidden');
-            document.getElementById('link-resume').setAttribute('href', getJsDocViewUrl(app.resume_url));
-            document.getElementById('link-resume').setAttribute('target', '_blank');
-            document.getElementById('link-resume').setAttribute('rel', 'noopener noreferrer');
-            document.getElementById('no-resume').classList.add('hidden');
+            resumeLink = app.resume_url;
           } else if (app.resume_file && (app.resume_file.startsWith('http://') || app.resume_file.startsWith('https://'))) {
-            document.getElementById('link-resume').classList.remove('hidden');
-            document.getElementById('link-resume').setAttribute('href', getJsDocViewUrl(app.resume_file));
-            document.getElementById('link-resume').setAttribute('target', '_blank');
-            document.getElementById('link-resume').setAttribute('rel', 'noopener noreferrer');
-            document.getElementById('no-resume').classList.add('hidden');
+            resumeLink = app.resume_file;
           } else if (app.resume_file && app.resume_file.trim() !== '') {
-            document.getElementById('link-resume').classList.remove('hidden');
-            document.getElementById('link-resume').setAttribute('href', getJsDocViewUrl('resume_serve.php?file=' + encodeURIComponent(app.resume_file) + '&mode=view'));
-            document.getElementById('link-resume').setAttribute('target', '_blank');
-            document.getElementById('link-resume').setAttribute('rel', 'noopener noreferrer');
-            document.getElementById('no-resume').classList.add('hidden');
-          } else {
-            document.getElementById('link-resume').classList.add('hidden');
-            document.getElementById('no-resume').classList.remove('hidden');
+            resumeLink = 'resume_serve.php?file=' + encodeURIComponent(app.resume_file) + '&mode=view';
           }
+          updateJsDocElement('link-resume', 'no-resume', resumeLink);
           if (document.getElementById('link-resume')) {
             document.getElementById('link-resume').setAttribute('data-resume-exists', app.resume_exists ? 'true' : 'false');
           }
 
+          let panLink = '';
           if (app.pan_file && app.pan_file.trim() !== '') {
-            document.getElementById('link-pan').classList.remove('hidden');
-            let pLink = (app.pan_file.startsWith('http://') || app.pan_file.startsWith('https://'))
-                        ? app.pan_file
-                        : baseUploadPath + app.pan_file;
-            document.getElementById('link-pan').setAttribute('href', getJsDocViewUrl(pLink));
-            document.getElementById('link-pan').setAttribute('target', '_blank');
-            document.getElementById('link-pan').setAttribute('rel', 'noopener noreferrer');
-            document.getElementById('no-pan').classList.add('hidden');
-          } else {
-            document.getElementById('link-pan').classList.add('hidden');
-            document.getElementById('no-pan').classList.remove('hidden');
+            panLink = (app.pan_file.startsWith('http://') || app.pan_file.startsWith('https://'))
+                      ? app.pan_file
+                      : baseUploadPath + app.pan_file;
           }
+          updateJsDocElement('link-pan', 'no-pan', panLink);
 
+          let aadhaarLink = '';
           if (app.aadhaar_card_file && app.aadhaar_card_file.trim() !== '') {
-            document.getElementById('link-aadhaar').classList.remove('hidden');
-            let aLink = (app.aadhaar_card_file.startsWith('http://') || app.aadhaar_card_file.startsWith('https://'))
-                        ? app.aadhaar_card_file
-                        : baseUploadPath + app.aadhaar_card_file;
-            document.getElementById('link-aadhaar').setAttribute('href', getJsDocViewUrl(aLink));
-            document.getElementById('link-aadhaar').setAttribute('target', '_blank');
-            document.getElementById('link-aadhaar').setAttribute('rel', 'noopener noreferrer');
-            document.getElementById('no-aadhaar').classList.add('hidden');
-          } else {
-            document.getElementById('link-aadhaar').classList.add('hidden');
-            document.getElementById('no-aadhaar').classList.remove('hidden');
+            aadhaarLink = (app.aadhaar_card_file.startsWith('http://') || app.aadhaar_card_file.startsWith('https://'))
+                          ? app.aadhaar_card_file
+                          : baseUploadPath + app.aadhaar_card_file;
           }
+          updateJsDocElement('link-aadhaar', 'no-aadhaar', aadhaarLink);
 
           // Setup Right-Side Status Cards
           document.getElementById('text-app-status').textContent = app.status;

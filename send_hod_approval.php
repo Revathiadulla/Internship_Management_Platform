@@ -45,7 +45,7 @@ if (empty($hod_email)) {
 
 // Generate token and store it
 $token = generate_hod_token();
-$update = $conn->prepare('UPDATE internship_applications SET hod_token = ?, hod_approval_status = ?, hod_approved_at = NULL WHERE id = ?');
+$update = $conn->prepare('UPDATE internship_applications SET hod_token = ?, hod_approval_status = ?, hod_status = \'pending\', hod_approved_at = NULL WHERE id = ?');
 $status = 'Pending';
 $update->bind_param('ssi', $token, $status, $app_id);
 $update->execute();

@@ -43,7 +43,7 @@ $total_notifications = intval(mysqli_fetch_assoc(mysqli_query($conn, "SELECT ((S
 $status_exists_res = mysqli_query($conn, "SHOW COLUMNS FROM internships LIKE 'status'");
 $status_exists = ($status_exists_res && mysqli_num_rows($status_exists_res) > 0);
 if ($status_exists) {
-    $active_internships = intval(mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as c FROM internships WHERE status='Active'"))['c'] ?? 0);
+    $active_internships = intval(mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as c FROM internships WHERE LOWER(status) IN ('approved', 'active', 'published') AND is_deleted = 0 AND status != 'Inactive'"))['c'] ?? 0);
 } else {
     $active_internships = $total_internships;
 }

@@ -29,7 +29,7 @@ if ($action === 'get_subtypes') {
         echo json_encode([]);
         exit();
     }
-    $stmt = $conn->prepare("SELECT id, subtype_name, skills, mode, duration FROM project_subtypes WHERE project_type_id = ? AND status = 'Active' ORDER BY subtype_name ASC");
+    $stmt = $conn->prepare("SELECT id, subtype_name, project_type_id, skills, mode, duration FROM project_subtypes WHERE project_type_id = ? AND status = 'Active' ORDER BY subtype_name ASC");
     $stmt->bind_param('i', $type_id);
     $stmt->execute();
     $res = $stmt->get_result();

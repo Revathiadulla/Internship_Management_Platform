@@ -97,9 +97,14 @@ function uploadToCloudinary($file_path, $folder, $is_raw = false, $original_file
             }
         }
         
+        $res_type = 'auto';
+        if (in_array($ext, ['pdf', 'doc', 'docx'])) {
+            $res_type = 'raw';
+        }
+
         $options = [
             'folder' => $folder,
-            'resource_type' => 'raw',
+            'resource_type' => $res_type,
             'use_filename' => true,
             'unique_filename' => false
         ];

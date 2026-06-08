@@ -15,6 +15,7 @@ $extended_cols = [
     'hod_approval_status'    => "ALTER TABLE internship_applications ADD COLUMN hod_approval_status VARCHAR(50) NOT NULL DEFAULT 'Not Required'",
     'final_selection_status' => "ALTER TABLE internship_applications ADD COLUMN final_selection_status VARCHAR(50) NOT NULL DEFAULT 'Pending'",
     'hod_approved_at'        => "ALTER TABLE internship_applications ADD COLUMN hod_approved_at DATETIME NULL",
+    'hod_rejected_at'        => "ALTER TABLE internship_applications ADD COLUMN hod_rejected_at DATETIME NULL",
     'hr_reviewed_at'         => "ALTER TABLE internship_applications ADD COLUMN hr_reviewed_at DATETIME NULL",
     'hod_token'              => "ALTER TABLE internship_applications ADD COLUMN hod_token VARCHAR(64) NULL",
     'assigned_project_id'    => "ALTER TABLE internship_applications ADD COLUMN assigned_project_id INT DEFAULT NULL",
@@ -642,6 +643,43 @@ try {
         FOREIGN KEY (project_type_id) REFERENCES project_types(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
     mysqli_query($conn, $create_coord_assignments);
+
+    // Ensure project_type_id and project_subtype_id columns exist in internships
+    $check_type_id = mysqli_query($conn, "SHOW COLUMNS FROM internships LIKE 'project_type_id'");
+    if ($check_type_id && mysqli_num_rows($check_type_id) === 0) {
+        mysqli_query($conn, "ALTER TABLE internships ADD COLUMN project_type_id INT NULL");
+    }
+    $check_subtype_id = mysqli_query($conn, "SHOW COLUMNS FROM internships LIKE 'project_subtype_id'");
+    if ($check_subtype_id && mysqli_num_rows($check_subtype_id) === 0) {
+        mysqli_query($conn, "ALTER TABLE internships ADD COLUMN project_subtype_id INT NULL");
+    }
+    // Migrate existing internships
+    mysqli_query($conn, "UPDATE internships i JOIN project_types pt ON TRIM(i.project_type) = TRIM(pt.type_name) SET i.project_type_id = pt.id WHERE i.project_type_id IS NULL");
+    mysqli_query($conn, "UPDATE internships i JOIN project_subtypes ps ON i.project_type_id = ps.project_type_id AND TRIM(i.project_subtype) = TRIM(ps.subtype_name) SET i.project_subtype_id = ps.id WHERE i.project_subtype_id IS NULL");
+
+    // Check hr_notes schema compatibility and recreate if legacy
+    $_notes_table_check = mysqli_query($conn, "SHOW TABLES LIKE 'hr_notes'");
+    if ($_notes_table_check && mysqli_num_rows($_notes_table_check) > 0) {
+        $_col_check = mysqli_query($conn, "SHOW COLUMNS FROM hr_notes LIKE 'student_id'");
+        if (!$_col_check || mysqli_num_rows($_col_check) === 0) {
+            mysqli_query($conn, "DROP TABLE IF EXISTS hr_notes");
+        }
+        if ($_col_check) {
+            unset($_col_check);
+        }
+    }
+    if ($_notes_table_check) {
+        unset($_notes_table_check);
+    }
+
+    mysqli_query($conn, "CREATE TABLE IF NOT EXISTS hr_notes (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        application_id INT NOT NULL,
+        student_id INT NOT NULL,
+        hr_id INT NOT NULL,
+        note_text TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 } catch (Throwable $e) {
     // Fail silently
 }

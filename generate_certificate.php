@@ -53,11 +53,13 @@ if (!$intern) {
     die("No started/active internship found for this student.");
 }
 
-// If certificate_path is already generated and populated with a Cloudinary URL, redirect directly
-if (!empty($intern['certificate_path']) && (strpos($intern['certificate_path'], 'http://') === 0 || strpos($intern['certificate_path'], 'https://') === 0)) {
-    $target_url = $intern['certificate_path'];
-    header("Location: " . $target_url);
-    exit();
+// If certificate_path is already generated and populated with a valid Cloudinary URL, redirect directly
+if (!empty($intern['certificate_path'])) {
+    $resolved_cert_url = getDocumentUrl($intern['certificate_path']);
+    if ($resolved_cert_url !== 'unavailable' && (strpos($resolved_cert_url, 'http://') === 0 || strpos($resolved_cert_url, 'https://') === 0)) {
+        header("Location: " . $resolved_cert_url);
+        exit();
+    }
 }
 
 // Compute certificate details

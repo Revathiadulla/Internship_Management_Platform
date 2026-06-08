@@ -389,6 +389,7 @@ if (!empty($profile['year_of_study'])) {
                 <input type="hidden" name="internship_name"  value="<?php echo htmlspecialchars($internship_name); ?>">
                 <input type="hidden" name="profile_id"       value="<?php echo (int)$profile['id']; ?>">
                 <input type="hidden" name="education_status" value="<?php echo htmlspecialchars($education_status); ?>">
+                <input type="hidden" name="applied_subtype"  value="<?php echo htmlspecialchars($internship['project_subtype'] ?? ($internship['domain'] ?? '')); ?>">
                 
                 <!-- Common personal fields -->
                 <input type="hidden" name="full_name"        value="<?php echo htmlspecialchars($profile['full_name']); ?>">

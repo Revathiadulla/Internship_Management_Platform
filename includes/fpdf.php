@@ -1150,8 +1150,18 @@ protected function _loadjsonfont($path)
 	$info = json_decode($json, true);
 	if($info===null)
 		$this->Error('Invalid JSON file: '.$path);
+	
+	// Normalize keys to lowercase to support various JSON font formats
+	$normalized = array();
+	foreach ($info as $key => $val) {
+		$normalized[strtolower($key)] = $val;
+	}
+	$info = $normalized;
+
 	if(!isset($info['name']))
 		$this->Error('Invalid font definition file: '.$path);
+	
+	$cw = array();
 	foreach($info['cw'] as $c=>$w)
 		$cw[chr($c)] = $w;
 	$info['cw'] = $cw;

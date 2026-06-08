@@ -16,28 +16,78 @@ if ($app_id <= 0) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'add_note') {
     header('Content-Type: application/json');
     $note_text = isset($_POST['note_text']) ? trim($_POST['note_text']) : '';
-    $user_id = current_user_id();
+    $hr_id = current_user_id();
     
     if ($app_id <= 0 || empty($note_text)) {
         echo json_encode(['success' => false, 'message' => 'Note text cannot be empty']);
         exit();
     }
     
-    // Get updater's name
-    $name_stmt = $conn->prepare("SELECT full_name FROM student_profiles WHERE user_id = ? LIMIT 1");
-    $name_stmt->bind_param("i", $user_id);
-    $name_stmt->execute();
-    $name_res = $name_stmt->get_result();
-    $name_row = $name_res->fetch_assoc();
-    $author_name = $name_row ? $name_row['full_name'] : 'HR';
+    // Get student_id from application
+    $student_stmt = $conn->prepare("SELECT user_id FROM internship_applications WHERE id = ? LIMIT 1");
+    if (!$student_stmt) {
+        error_log("Failed to prepare student_id query: " . $conn->error);
+        echo json_encode(['success' => false, 'message' => 'Database error: failed to prepare query']);
+        exit();
+    }
+    $student_stmt->bind_param("i", $app_id);
+    $student_stmt->execute();
+    $student_res = $student_stmt->get_result()->fetch_assoc();
+    $student_id = $student_res ? intval($student_res['user_id']) : 0;
+    $student_stmt->close();
     
-    $note_stmt = $conn->prepare("INSERT INTO hr_notes (application_id, user_id, author_name, note_text) VALUES (?, ?, ?, ?)");
-    $note_stmt->bind_param("iiss", $app_id, $user_id, $author_name, $note_text);
+    if ($student_id <= 0) {
+        echo json_encode(['success' => false, 'message' => 'Invalid student associated with this application']);
+        exit();
+    }
+    
+    // Insert note
+    $note_stmt = $conn->prepare("INSERT INTO hr_notes (application_id, student_id, hr_id, note_text) VALUES (?, ?, ?, ?)");
+    if (!$note_stmt) {
+        error_log("Failed to prepare note insert query: " . $conn->error);
+        echo json_encode(['success' => false, 'message' => 'Database error: failed to prepare insertion']);
+        exit();
+    }
+    $note_stmt->bind_param("iiis", $app_id, $student_id, $hr_id, $note_text);
     
     if ($note_stmt->execute()) {
-        echo json_encode(['success' => true, 'message' => 'Note added successfully']);
+        $note_stmt->close();
+        
+        // Fetch updated notes list
+        $notes_q_stmt = $conn->prepare("
+            SELECT n.note_text, n.created_at, u.full_name AS author_name
+            FROM hr_notes n
+            LEFT JOIN users u ON n.hr_id = u.id
+            WHERE n.application_id = ?
+            ORDER BY n.created_at DESC
+        ");
+        if (!$notes_q_stmt) {
+            error_log("Failed to prepare updated notes selection query: " . $conn->error);
+            echo json_encode(['success' => true, 'message' => 'Note saved, but failed to fetch updated list', 'notes' => []]);
+            exit();
+        }
+        $notes_q_stmt->bind_param("i", $app_id);
+        $notes_q_stmt->execute();
+        $notes_res = $notes_q_stmt->get_result();
+        $updated_notes = [];
+        while ($row = $notes_res->fetch_assoc()) {
+            $updated_notes[] = [
+                'note_text' => $row['note_text'],
+                'author_name' => $row['author_name'] ?: 'Unknown HR',
+                'created_at' => date('M d, Y H:i', strtotime($row['created_at']))
+            ];
+        }
+        $notes_q_stmt->close();
+        
+        echo json_encode([
+            'success' => true, 
+            'message' => 'Note saved successfully',
+            'notes' => $updated_notes
+        ]);
     } else {
-        echo json_encode(['success' => false, 'message' => 'Failed to add note']);
+        error_log("Failed to save note: " . $note_stmt->error);
+        echo json_encode(['success' => false, 'message' => 'Database error: ' . $note_stmt->error]);
+        $note_stmt->close();
     }
     exit();
 }
@@ -199,31 +249,13 @@ $aadhaar_file_url = null;
 $db_aadhaar = !empty($d['aadhaar_file']) ? trim($d['aadhaar_file']) : '';
 $aadhaar_uploaded = ($db_aadhaar !== '');
 if ($aadhaar_uploaded) {
-    if (strpos($db_aadhaar, 'http://') === 0 || strpos($db_aadhaar, 'https://') === 0) {
-        $aadhaar_file_url = $db_aadhaar;
-    } elseif (strpos($db_aadhaar, 'uploads/') === 0) {
-        $disk_path = __DIR__ . '/' . $db_aadhaar;
-        if (is_file($disk_path)) {
-            $aadhaar_file_url = $base_url . $db_aadhaar;
-        }
+    $resolved_aadhaar = getDocumentUrl($db_aadhaar);
+    if ($resolved_aadhaar === 'unavailable') {
+        $aadhaar_file_url = 'unavailable';
+    } elseif (strpos($resolved_aadhaar, 'http://') === 0 || strpos($resolved_aadhaar, 'https://') === 0) {
+        $aadhaar_file_url = $resolved_aadhaar;
     } else {
-        $search_dirs = [
-            __DIR__ . '/uploads/secure/',
-            __DIR__ . '/uploads/aadhaar/',
-            __DIR__ . '/uploads/',
-        ];
-        foreach ($search_dirs as $dir) {
-            $candidate = $dir . $db_aadhaar;
-            if (is_file($candidate)) {
-                if (strpos($candidate, 'uploads/secure/') !== false) {
-                    $aadhaar_file_url = $base_url . 'view_document.php?file=' . urlencode($db_aadhaar);
-                } else {
-                    $folder_name = basename(dirname($candidate));
-                    $aadhaar_file_url = $base_url . 'uploads/' . $folder_name . '/' . $db_aadhaar;
-                }
-                break;
-            }
-        }
+        $aadhaar_file_url = $base_url . 'view_document.php?file=' . urlencode(basename($resolved_aadhaar));
     }
 }
 
@@ -233,31 +265,13 @@ $pan_file_url = null;
 $db_pan = !empty($d['pan_file']) ? trim($d['pan_file']) : (!empty($d['app_pan_file']) ? trim($d['app_pan_file']) : '');
 $pan_uploaded = ($db_pan !== '');
 if ($pan_uploaded) {
-    if (strpos($db_pan, 'http://') === 0 || strpos($db_pan, 'https://') === 0) {
-        $pan_file_url = $db_pan;
-    } elseif (strpos($db_pan, 'uploads/') === 0) {
-        $disk_path = __DIR__ . '/' . $db_pan;
-        if (is_file($disk_path)) {
-            $pan_file_url = $base_url . $db_pan;
-        }
+    $resolved_pan = getDocumentUrl($db_pan);
+    if ($resolved_pan === 'unavailable') {
+        $pan_file_url = 'unavailable';
+    } elseif (strpos($resolved_pan, 'http://') === 0 || strpos($resolved_pan, 'https://') === 0) {
+        $pan_file_url = $resolved_pan;
     } else {
-        $search_dirs = [
-            __DIR__ . '/uploads/secure/',
-            __DIR__ . '/uploads/pan/',
-            __DIR__ . '/uploads/',
-        ];
-        foreach ($search_dirs as $dir) {
-            $candidate = $dir . $db_pan;
-            if (is_file($candidate)) {
-                if (strpos($candidate, 'uploads/secure/') !== false) {
-                    $pan_file_url = $base_url . 'view_document.php?file=' . urlencode($db_pan);
-                } else {
-                    $folder_name = basename(dirname($candidate));
-                    $pan_file_url = $base_url . 'uploads/' . $folder_name . '/' . $db_pan;
-                }
-                break;
-            }
-        }
+        $pan_file_url = $base_url . 'view_document.php?file=' . urlencode(basename($resolved_pan));
     }
 }
 
@@ -304,6 +318,7 @@ $verification       = $d['verification_status'] ?: 'Pending';
 $current_status     = $d['status'] ?: '—';
 $resume             = $d['sp_resume'] ?: $d['app_resume'] ?: '';
 $resume_url         = !empty($d['sp_resume_url']) ? trim($d['sp_resume_url']) : '';
+$raw_resume         = !empty($resume_url) ? $resume_url : $resume;
 
 $is_remote = false;
 $resume_link = '#';
@@ -350,7 +365,7 @@ if ($history_result) {
 }
 
 // Fetch HR notes
-$notes_sql = "SELECT * FROM hr_notes WHERE application_id = $app_id ORDER BY created_at DESC";
+$notes_sql = "SELECT n.*, u.full_name AS author_name FROM hr_notes n LEFT JOIN users u ON n.hr_id = u.id WHERE n.application_id = $app_id ORDER BY n.created_at DESC";
 $notes_result = mysqli_query($conn, $notes_sql);
 $notes_rows = [];
 if ($notes_result) {
@@ -789,18 +804,25 @@ $status_colors = [
                 <h2 class="mt-2 text-xl font-semibold text-slate-900">Candidate resume</h2>
               </div>
               <?php if ($has_resume): ?>
-                <div class="flex flex-wrap gap-2">
-                  <a href="<?php echo htmlspecialchars($view_href); ?>" target="_blank" rel="noopener noreferrer" data-resume-exists="<?php echo $exists ? 'true' : 'false'; ?>" class="inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-all">
-                    <span class="material-symbols-outlined">visibility</span>
-                    View resume
-                  </a>
-                  <?php if (!$is_remote): ?>
-                  <a href="<?php echo $download_href; ?>" data-resume-exists="<?php echo $exists ? 'true' : 'false'; ?>" class="inline-flex items-center gap-2 rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 transition-all">
-                    <span class="material-symbols-outlined">download</span>
-                    Download resume
-                  </a>
-                  <?php endif; ?>
-                </div>
+                <?php if (getDocumentUrl($raw_resume) === 'unavailable'): ?>
+                  <span class="inline-flex items-center gap-2 rounded-full border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700">
+                    <span class="material-symbols-outlined text-[18px]">warning</span>
+                    Document unavailable. Please ask student to update/reupload document.
+                  </span>
+                <?php else: ?>
+                  <div class="flex flex-wrap gap-2">
+                    <a href="<?php echo htmlspecialchars($view_href); ?>" target="_blank" rel="noopener noreferrer" data-resume-exists="<?php echo $exists ? 'true' : 'false'; ?>" class="inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-all">
+                      <span class="material-symbols-outlined">visibility</span>
+                      View resume
+                    </a>
+                    <?php if (!$is_remote): ?>
+                    <a href="<?php echo $download_href; ?>" data-resume-exists="<?php echo $exists ? 'true' : 'false'; ?>" class="inline-flex items-center gap-2 rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 transition-all">
+                      <span class="material-symbols-outlined">download</span>
+                      Download resume
+                    </a>
+                    <?php endif; ?>
+                  </div>
+                <?php endif; ?>
               <?php else: ?>
                 <span class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-500">
                   <span class="material-symbols-outlined">description</span>
@@ -987,9 +1009,9 @@ $status_colors = [
                           Send for HOD Approval
                         </a>
                       <?php elseif ($is_passed_out): ?>
-                        <button type="button" onclick="if(confirm('Are you sure you want to confirm selection of this candidate?')) performTransition('Selected');" class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 transition-all shadow-sm cursor-pointer">
+                        <button type="button" onclick="if(confirm('Are you sure you want to select this candidate?')) performTransition('Selected');" class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 transition-all shadow-sm cursor-pointer">
                           <span class="material-symbols-outlined text-base">verified</span>
-                          Confirm Selection
+                          Select Candidate
                         </button>
                       <?php endif; ?>
                     <?php endif; ?>
@@ -997,9 +1019,9 @@ $status_colors = [
 
                   <?php if ($current_status === 'HOD Approved'): ?>
                     <?php if ($can_approve): ?>
-                      <button type="button" onclick="if(confirm('Are you sure you want to confirm selection of this candidate?')) performTransition('Selected');" class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 transition-all shadow-sm cursor-pointer">
+                      <button type="button" onclick="if(confirm('Are you sure you want to select this candidate?')) performTransition('Selected');" class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 transition-all shadow-sm cursor-pointer">
                         <span class="material-symbols-outlined text-base">verified</span>
-                        Confirm Selection
+                        Select Candidate
                       </button>
                     <?php endif; ?>
                   <?php endif; ?>
@@ -1060,22 +1082,24 @@ $status_colors = [
             </form>
             
             <div class="mt-6 border-t border-slate-100 pt-5">
-              <p class="text-xs uppercase tracking-[0.24em] text-slate-400 mb-4">Note History (<?php echo count($notes_rows); ?>)</p>
-              <?php if (empty($notes_rows)): ?>
-                <p class="text-xs text-slate-400 italic">No notes added yet for this applicant.</p>
-              <?php else: ?>
-                <div class="space-y-4 max-h-[300px] overflow-y-auto pr-1">
-                  <?php foreach ($notes_rows as $note): ?>
-                    <div class="rounded-2xl bg-slate-50 border border-slate-100 p-3.5 text-xs">
-                      <div class="flex items-center justify-between text-slate-400 font-medium mb-1">
-                        <span class="font-semibold text-slate-700"><?php echo htmlspecialchars($note['author_name']); ?></span>
-                        <span><?php echo date('M d, Y H:i', strtotime($note['created_at'])); ?></span>
+              <p class="text-xs uppercase tracking-[0.24em] text-slate-400 mb-4">Note History (<span id="notes-count-badge"><?php echo count($notes_rows); ?></span>)</p>
+              <div id="notes-list-container">
+                <?php if (empty($notes_rows)): ?>
+                  <p class="text-xs text-slate-400 italic" id="no-notes-placeholder">No notes added yet for this applicant.</p>
+                <?php else: ?>
+                  <div class="space-y-4 max-h-[300px] overflow-y-auto pr-1">
+                    <?php foreach ($notes_rows as $note): ?>
+                      <div class="rounded-2xl bg-slate-50 border border-slate-100 p-3.5 text-xs">
+                        <div class="flex items-center justify-between text-slate-400 font-medium mb-1">
+                          <span class="font-semibold text-slate-700"><?php echo htmlspecialchars($note['author_name']); ?></span>
+                          <span><?php echo date('M d, Y H:i', strtotime($note['created_at'])); ?></span>
+                        </div>
+                        <p class="text-slate-600 leading-relaxed"><?php echo nl2br(htmlspecialchars($note['note_text'])); ?></p>
                       </div>
-                      <p class="text-slate-600 leading-relaxed"><?php echo nl2br(htmlspecialchars($note['note_text'])); ?></p>
-                    </div>
-                  <?php endforeach; ?>
-                </div>
-              <?php endif; ?>
+                    <?php endforeach; ?>
+                  </div>
+                <?php endif; ?>
+              </div>
             </div>
           </div>
 
@@ -1217,6 +1241,14 @@ $status_colors = [
     if (noteForm) {
       noteForm.addEventListener('submit', async function(e) {
         e.preventDefault();
+        const textarea = this.querySelector('textarea[name="note_text"]');
+        if (!textarea) return;
+        const noteText = textarea.value.trim();
+        if (noteText === '') {
+          showToast('error', 'Error', 'Note text cannot be empty');
+          return;
+        }
+
         const formData = new FormData(this);
         try {
           const response = await fetch(window.location.href, {
@@ -1226,7 +1258,48 @@ $status_colors = [
           const result = await response.json();
           if (result.success) {
             showToast('success', 'Success', result.message);
-            setTimeout(() => location.reload(), 1200);
+            textarea.value = '';
+            
+            // Helper for HTML escaping
+            const escapeHTML = (str) => {
+              return String(str || '').replace(/[&<>'"]/g, 
+                tag => ({
+                  '&': '&amp;',
+                  '<': '&lt;',
+                  '>': '&gt;',
+                  "'": '&#39;',
+                  '"': '&quot;'
+                }[tag] || tag)
+              );
+            };
+            
+            const nl2br = (str) => {
+              return escapeHTML(str).replace(/\n/g, '<br>');
+            };
+
+            const container = document.getElementById('notes-list-container');
+            const countBadge = document.getElementById('notes-count-badge');
+            if (container && countBadge && result.notes) {
+              countBadge.textContent = result.notes.length;
+              if (result.notes.length === 0) {
+                container.innerHTML = '<p class="text-xs text-slate-400 italic" id="no-notes-placeholder">No notes added yet for this applicant.</p>';
+              } else {
+                let html = '<div class="space-y-4 max-h-[300px] overflow-y-auto pr-1">';
+                result.notes.forEach(note => {
+                  html += `
+                    <div class="rounded-2xl bg-slate-50 border border-slate-100 p-3.5 text-xs">
+                      <div class="flex items-center justify-between text-slate-400 font-medium mb-1">
+                        <span class="font-semibold text-slate-700">${escapeHTML(note.author_name)}</span>
+                        <span>${escapeHTML(note.created_at)}</span>
+                      </div>
+                      <p class="text-slate-600 leading-relaxed">${nl2br(note.note_text)}</p>
+                    </div>
+                  `;
+                });
+                html += '</div>';
+                container.innerHTML = html;
+              }
+            }
           } else {
             showToast('error', 'Error', result.message);
           }

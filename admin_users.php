@@ -840,30 +840,50 @@ $header_photo = $header_user['profile_photo'] ?? '';
       const prof = data.profile || {};
       const baseUploadPath = 'view_doc.php?file=';
       
-      function getJsDocViewUrl(url) {
-        if (!url) return '#';
-        return url.trim();
+      function renderJsDocRow(title, url, icon, color, resumeExistsAttr = '') {
+        if (!url || url === '#') {
+          return '';
+        }
+        const u = url.trim();
+        const isLegacyBroken = u.includes('/image/upload/') && /\.pdf$/i.test(u);
+        const isLocalPath = !u.startsWith('http://') && !u.startsWith('https://') && !u.startsWith('resume_serve.php') && !u.startsWith('view_doc.php');
+        const isProduction = !['localhost', '127.0.0.1'].includes(window.location.hostname);
+        
+        if (isLegacyBroken || (isLocalPath && isProduction)) {
+          return `
+            <div class="flex flex-col gap-1 bg-red-50 p-3 rounded-lg border border-red-100">
+              <div class="flex items-center gap-2">
+                <span class="material-symbols-outlined text-red-500">${icon}</span>
+                <span class="font-semibold text-gray-800 text-xs">${title}</span>
+              </div>
+              <span class="text-[11px] text-red-600 font-semibold">Document unavailable. Please ask student to update/reupload document.</span>
+            </div>
+          `;
+        }
+        
+        return `
+          <div class="flex justify-between items-center bg-slate-50 p-3 rounded-lg border border-slate-100">
+            <div class="flex items-center gap-2">
+              <span class="material-symbols-outlined text-${color}-500">${icon}</span>
+              <span class="font-semibold text-gray-800 text-xs">${title}</span>
+            </div>
+            <a href="${u}" target="_blank" rel="noopener noreferrer" ${resumeExistsAttr} class="text-blue-600 hover:text-blue-800 text-xs font-bold">View File</a>
+          </div>
+        `;
       }
       
       let resumeHtml = '';
       if (prof.resume_file || prof.resume_url) {
         let rLink = '#';
         if (prof.resume_url && (prof.resume_url.startsWith('http://') || prof.resume_url.startsWith('https://'))) {
-          rLink = getJsDocViewUrl(prof.resume_url);
+          rLink = prof.resume_url;
         } else if (prof.resume_file && (prof.resume_file.startsWith('http://') || prof.resume_file.startsWith('https://'))) {
-          rLink = getJsDocViewUrl(prof.resume_file);
+          rLink = prof.resume_file;
         } else if (prof.resume_file) {
-          rLink = getJsDocViewUrl('resume_serve.php?file=' + encodeURIComponent(prof.resume_file) + '&mode=view');
+          rLink = 'resume_serve.php?file=' + encodeURIComponent(prof.resume_file) + '&mode=view';
         }
-        resumeHtml = `
-          <div class="flex justify-between items-center bg-slate-50 p-3 rounded-lg border border-slate-100">
-            <div class="flex items-center gap-2">
-              <span class="material-symbols-outlined text-red-500">picture_as_pdf</span>
-              <span class="font-semibold text-gray-800 text-xs">Student Resume</span>
-            </div>
-            <a href="${rLink}" target="_blank" rel="noopener noreferrer" data-resume-exists="${prof.resume_exists ? 'true' : 'false'}" class="text-blue-600 hover:text-blue-800 text-xs font-bold">View PDF</a>
-          </div>
-        `;
+        const resumeExistsAttr = `data-resume-exists="${prof.resume_exists ? 'true' : 'false'}"`;
+        resumeHtml = renderJsDocRow('Student Resume', rLink, 'picture_as_pdf', 'red', resumeExistsAttr);
       }
       
       let aadhaarHtml = '';
@@ -871,15 +891,7 @@ $header_photo = $header_user['profile_photo'] ?? '';
         let aLink = (prof.aadhaar_file.startsWith('http://') || prof.aadhaar_file.startsWith('https://'))
                     ? prof.aadhaar_file
                     : baseUploadPath + prof.aadhaar_file;
-        aadhaarHtml = `
-          <div class="flex justify-between items-center bg-slate-50 p-3 rounded-lg border border-slate-100">
-            <div class="flex items-center gap-2">
-              <span class="material-symbols-outlined text-green-500">description</span>
-              <span class="font-semibold text-gray-800 text-xs">Aadhaar Document</span>
-            </div>
-            <a href="${getJsDocViewUrl(aLink)}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 text-xs font-bold">View File</a>
-          </div>
-        `;
+        aadhaarHtml = renderJsDocRow('Aadhaar Document', aLink, 'description', 'green');
       }
       
       let panHtml = '';
@@ -887,15 +899,7 @@ $header_photo = $header_user['profile_photo'] ?? '';
         let pLink = (prof.pan_file.startsWith('http://') || prof.pan_file.startsWith('https://'))
                     ? prof.pan_file
                     : baseUploadPath + prof.pan_file;
-        panHtml = `
-          <div class="flex justify-between items-center bg-slate-50 p-3 rounded-lg border border-slate-100">
-            <div class="flex items-center gap-2">
-              <span class="material-symbols-outlined text-amber-500">description</span>
-              <span class="font-semibold text-gray-800 text-xs">PAN Card Document</span>
-            </div>
-            <a href="${getJsDocViewUrl(pLink)}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 text-xs font-bold">View File</a>
-          </div>
-        `;
+        panHtml = renderJsDocRow('PAN Card Document', pLink, 'description', 'amber');
       }
 
       const docsSection = (resumeHtml || aadhaarHtml || panHtml) ? `

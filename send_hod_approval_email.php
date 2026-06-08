@@ -50,7 +50,7 @@ $expires_at = date('Y-m-d H:i:s', strtotime('+7 days'));
 
 // Store token in the application row
 $status = 'Pending';
-$update = $conn->prepare('UPDATE internship_applications SET hod_token = ?, hod_approval_status = ?, hod_approved_at = NULL WHERE id = ?');
+$update = $conn->prepare('UPDATE internship_applications SET hod_token = ?, hod_approval_status = ?, hod_status = \'pending\', hod_approved_at = NULL WHERE id = ?');
 $update->bind_param('ssi', $token, $status, $app_id);
 $update->execute();
 $update->close();

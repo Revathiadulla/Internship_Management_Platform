@@ -21,7 +21,7 @@ function renderStatusTimeline($application_id, $conn) {
     $app = mysqli_fetch_assoc($app_result);
     $current_status = $app['status'];
     $education_status = !empty($app['education_status']) ? $app['education_status'] : (!empty($app['profile_edu_status']) ? $app['profile_edu_status'] : 'Pursuing');
-    $is_pursuing = (strtolower($education_status) === 'pursuing');
+    $is_pursuing = (strtolower($education_status) === 'pursuing' || strtolower($education_status) === 'currently pursuing');
     
     $applied_date = $app['applied_date'];
     $test_status = $app['test_status'] ?? 'Pending';
@@ -88,36 +88,70 @@ function renderStatusTimeline($application_id, $conn) {
         'bg' => 'bg-lime-500'
     ];
 
-    // Determine states (is_completed, is_current) for each step
-    $is_applied_current = ($current_status === 'Applied' && $test_status !== 'Completed');
-    $is_test_current    = ($current_status === 'Test Completed' || ($current_status === 'Applied' && $test_status === 'Completed'));
-    $is_hr_current      = in_array($current_status, ['HR Round', 'HR Review']);
-    $is_hod_current     = in_array($current_status, ['HOD Approval Pending']);
-    $is_selected_current = ($current_status === 'Selected' && !$has_letter) || ($current_status === 'HOD Approved');
-    $is_letter_current  = ($has_letter || $current_status === 'Active Intern');
+    // Determine the current step dynamically based on status (case-insensitive)
+    $status_lc = strtolower($current_status);
+    $test_lc = strtolower($test_status);
+    $current_step_id = 'applied';
 
-    foreach ($steps as &$step) {
-        $step['is_completed'] = false;
-        $step['is_current'] = false;
+    if ($status_lc === 'applied') {
+        if ($test_lc === 'completed') {
+            $current_step_id = 'test_completed';
+        } else {
+            $current_step_id = 'applied';
+        }
+    } elseif ($status_lc === 'test completed') {
+        $current_step_id = 'test_completed';
+    } elseif (in_array($status_lc, ['hr round', 'hr review'])) {
+        $current_step_id = 'hr_review';
+    } elseif ($status_lc === 'hod approval pending') {
+        $current_step_id = $is_pursuing ? 'hod_approval' : 'selected_by_hr';
+    } elseif (in_array($status_lc, ['hod approved', 'hod_approved'])) {
+        $current_step_id = 'selected_by_hr';
+    } elseif ($status_lc === 'selected') {
+        if ($has_letter) {
+            $current_step_id = 'confirmation_letter_completed';
+        } else {
+            $current_step_id = 'confirmation_letter';
+        }
+    } elseif (in_array($status_lc, ['active intern', 'active_intern', 'internship started', 'started'])) {
+        $current_step_id = 'confirmation_letter_completed';
+    }
 
-        if ($step['id'] === 'applied') {
-            $step['is_current'] = $is_applied_current;
-            $step['is_completed'] = !$step['is_current'];
-        } elseif ($step['id'] === 'test_completed') {
-            $step['is_current'] = $is_test_current;
-            $step['is_completed'] = ($test_status === 'Completed' || in_array($current_status, ['Test Completed', 'HR Round', 'HR Review', 'HOD Approval Pending', 'HOD Approved', 'Selected', 'Active Intern'])) && !$step['is_current'];
-        } elseif ($step['id'] === 'hr_review') {
-            $step['is_current'] = $is_hr_current;
-            $step['is_completed'] = in_array($current_status, ['HOD Approval Pending', 'HOD Approved', 'Selected', 'Active Intern']) && !$step['is_current'];
-        } elseif ($step['id'] === 'hod_approval') {
-            $step['is_current'] = $is_hod_current;
-            $step['is_completed'] = in_array($current_status, ['HOD Approved', 'Selected', 'Active Intern']) && !$step['is_current'];
-        } elseif ($step['id'] === 'selected_by_hr') {
-            $step['is_current'] = $is_selected_current;
-            $step['is_completed'] = (in_array($current_status, ['Active Intern']) || ($current_status === 'Selected' && $has_letter)) && !$step['is_current'];
-        } elseif ($step['id'] === 'confirmation_letter') {
-            $step['is_current'] = false; // Terminal step
-            $step['is_completed'] = ($has_letter || $current_status === 'Active Intern');
+    // Find the index of the current step in the steps array
+    $current_index = -1;
+    foreach ($steps as $index => $step) {
+        if ($step['id'] === $current_step_id) {
+            $current_index = $index;
+            break;
+        }
+    }
+
+    foreach ($steps as $index => &$step) {
+        if ($current_step_id === 'confirmation_letter_completed') {
+            $step['is_completed'] = true;
+            $step['is_current'] = false;
+        } else {
+            if ($current_index !== -1) {
+                if ($index < $current_index) {
+                    $step['is_completed'] = true;
+                    $step['is_current'] = false;
+                } elseif ($index === $current_index) {
+                    $step['is_completed'] = false;
+                    $step['is_current'] = true;
+                } else {
+                    $step['is_completed'] = false;
+                    $step['is_current'] = false;
+                }
+            } else {
+                // Fallback: Default to first step being current
+                if ($index === 0) {
+                    $step['is_completed'] = false;
+                    $step['is_current'] = true;
+                } else {
+                    $step['is_completed'] = false;
+                    $step['is_current'] = false;
+                }
+            }
         }
     }
     unset($step);
@@ -152,10 +186,14 @@ function renderStatusTimeline($application_id, $conn) {
     $display_status = $current_status;
     if ($current_status === 'HR Round') {
         $display_status = 'HR Review';
-    } elseif ($current_status === 'Active Intern') {
+    } elseif ($current_status === 'Active Intern' || ($current_status === 'Selected' && $has_letter)) {
         $display_status = 'Confirmation Letter Sent';
     }
+    
     $header_icon = $status_config[$current_status]['icon'] ?? 'info';
+    if (($current_status === 'Selected' && $has_letter) || $current_status === 'Active Intern') {
+        $header_icon = 'mail';
+    }
     
     ?>
     <div class="bg-gradient-to-br from-white to-slate-50 rounded-2xl border border-slate-200 shadow-lg overflow-hidden">

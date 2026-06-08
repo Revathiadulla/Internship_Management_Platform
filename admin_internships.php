@@ -293,7 +293,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['ajax']) && $_GET['ajax'
 
 // Calculate counters
 $cnt_pending = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as c FROM internships WHERE status = 'Pending Approval' AND is_deleted = 0 AND status != 'Inactive'"))['c'] ?? 0;
-$cnt_active = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as c FROM internships WHERE status = 'Active' AND is_deleted = 0 AND status != 'Inactive'"))['c'] ?? 0;
+$cnt_active = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as c FROM internships WHERE LOWER(status) IN ('approved', 'active', 'published') AND is_deleted = 0 AND status != 'Inactive'"))['c'] ?? 0;
 $cnt_completed = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as c FROM internships WHERE status = 'Completed' AND is_deleted = 0 AND status != 'Inactive'"))['c'] ?? 0;
 $cnt_archived = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as c FROM internships WHERE status = 'Archived' AND is_deleted = 0 AND status != 'Inactive'"))['c'] ?? 0;
 $cnt_rejected = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as c FROM internships WHERE status = 'Rejected' AND is_deleted = 0 AND status != 'Inactive'"))['c'] ?? 0;
@@ -317,9 +317,13 @@ if (!empty($search)) {
 }
 
 if (!empty($status_filter)) {
-    $where_clauses[] = "i.status = ?";
-    $params[] = $status_filter;
-    $types .= "s";
+    if (strtolower($status_filter) === 'active') {
+        $where_clauses[] = "LOWER(i.status) IN ('approved', 'active', 'published')";
+    } else {
+        $where_clauses[] = "i.status = ?";
+        $params[] = $status_filter;
+        $types .= "s";
+    }
 }
 
 if (!empty($mode_filter)) {
@@ -595,6 +599,8 @@ $header_photo = $header_user['profile_photo'] ?? '';
               $status_colors = [
                 'pending approval' => 'bg-orange-50 text-orange-700 border-orange-200',
                 'active' => 'bg-green-50 text-green-700 border-green-200',
+                'approved' => 'bg-green-50 text-green-700 border-green-200',
+                'published' => 'bg-green-50 text-green-700 border-green-200',
                 'completed' => 'bg-slate-50 text-slate-700 border-slate-200',
                 'archived' => 'bg-gray-50 text-gray-700 border-gray-200',
                 'rejected' => 'bg-red-50 text-red-700 border-red-200'

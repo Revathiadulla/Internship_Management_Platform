@@ -380,26 +380,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $skills = $technology_stack; // sync skills with technology stack
     
     $description = trim($_POST['description']);
-    $project_type = trim($_POST['project_type']);
-    $project_subtype = trim($_POST['project_subtype']);
+    $project_type_id = intval($_POST['project_type_id'] ?? 0);
+    $project_subtype_id = intval($_POST['project_subtype_id'] ?? 0);
     $difficulty_level = trim($_POST['difficulty_level']);
     $openings = intval($_POST['openings']);
     $start_date = !empty($_POST['start_date']) ? $_POST['start_date'] : null;
     $end_date = !empty($_POST['end_date']) ? $_POST['end_date'] : null;
 
+    $project_type = '';
+    $project_subtype = '';
     $valid_category = false;
-    if (!empty($project_type) && !empty($project_subtype)) {
-        $type_check = mysqli_prepare($conn, "SELECT id FROM project_types WHERE type_name = ? AND status = 'Active' LIMIT 1");
-        mysqli_stmt_bind_param($type_check, "s", $project_type);
+    
+    if ($project_type_id > 0 && $project_subtype_id > 0) {
+        $type_check = mysqli_prepare($conn, "SELECT type_name FROM project_types WHERE id = ? AND status = 'Active' LIMIT 1");
+        mysqli_stmt_bind_param($type_check, "i", $project_type_id);
         mysqli_stmt_execute($type_check);
-        mysqli_stmt_bind_result($type_check, $selected_type_id);
+        mysqli_stmt_bind_result($type_check, $project_type);
         if (mysqli_stmt_fetch($type_check)) {
             mysqli_stmt_close($type_check);
-            $subtype_check = mysqli_prepare($conn, "SELECT id FROM project_subtypes WHERE project_type_id = ? AND subtype_name = ? AND status = 'Active' LIMIT 1");
-            mysqli_stmt_bind_param($subtype_check, "is", $selected_type_id, $project_subtype);
+            
+            $subtype_check = mysqli_prepare($conn, "SELECT subtype_name FROM project_subtypes WHERE project_type_id = ? AND id = ? AND status = 'Active' LIMIT 1");
+            mysqli_stmt_bind_param($subtype_check, "ii", $project_type_id, $project_subtype_id);
             mysqli_stmt_execute($subtype_check);
-            mysqli_stmt_store_result($subtype_check);
-            if (mysqli_stmt_num_rows($subtype_check) > 0) {
+            mysqli_stmt_bind_result($subtype_check, $project_subtype);
+            if (mysqli_stmt_fetch($subtype_check)) {
                 $valid_category = true;
             }
             mysqli_stmt_close($subtype_check);
@@ -408,14 +412,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         }
     }
 
-        if (empty($title) || empty($project_title) || empty($duration) || empty($mode) || empty($technology_stack) || empty($description) || empty($project_type) || empty($project_subtype) || empty($difficulty_level)) {
+    if (empty($title) || empty($project_title) || empty($duration) || empty($mode) || empty($technology_stack) || empty($description) || $project_type_id <= 0 || $project_subtype_id <= 0 || empty($difficulty_level)) {
         $error_msg = "Please fill in all required fields.";
     } elseif (!$valid_category) {
         $error_msg = "Selected project type and subtype combination is invalid.";
     } else {
         $coord_id = intval($_SESSION['user_id']);
-        $stmt = mysqli_prepare($conn, "INSERT INTO internships (title, duration, mode, skills, status, approval_status, description, project_type, project_subtype, project_title, task_title, technology_stack, difficulty_level, openings, start_date, end_date, coordinator_id, submission_date) VALUES (?, ?, ?, ?, 'Pending Approval', 'Pending Approval', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURDATE())");
-        mysqli_stmt_bind_param($stmt, "sssssssssssissi", $title, $duration, $mode, $skills, $description, $project_type, $project_subtype, $project_title, $task_title, $technology_stack, $difficulty_level, $openings, $start_date, $end_date, $coord_id);
+        $stmt = mysqli_prepare($conn, "INSERT INTO internships (title, duration, mode, skills, status, approval_status, description, project_type, project_subtype, project_type_id, project_subtype_id, project_title, task_title, technology_stack, difficulty_level, openings, start_date, end_date, coordinator_id, submission_date) VALUES (?, ?, ?, ?, 'Pending Approval', 'Pending Approval', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURDATE())");
+        mysqli_stmt_bind_param($stmt, "sssssssiisssisssi", $title, $duration, $mode, $skills, $description, $project_type, $project_subtype, $project_type_id, $project_subtype_id, $project_title, $task_title, $technology_stack, $difficulty_level, $openings, $start_date, $end_date, $coord_id);
         
         if (mysqli_stmt_execute($stmt)) {
             $new_id = mysqli_insert_id($conn);
@@ -461,26 +465,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $skills = $technology_stack; // sync skills with technology stack
     
     $description = trim($_POST['description']);
-    $project_type = trim($_POST['project_type']);
-    $project_subtype = trim($_POST['project_subtype']);
+    $project_type_id = intval($_POST['project_type_id'] ?? 0);
+    $project_subtype_id = intval($_POST['project_subtype_id'] ?? 0);
     $difficulty_level = trim($_POST['difficulty_level']);
     $openings = intval($_POST['openings']);
     $start_date = !empty($_POST['start_date']) ? $_POST['start_date'] : null;
     $end_date = !empty($_POST['end_date']) ? $_POST['end_date'] : null;
 
+    $project_type = '';
+    $project_subtype = '';
     $valid_category = false;
-    if (!empty($project_type) && !empty($project_subtype)) {
-        $type_check = mysqli_prepare($conn, "SELECT id FROM project_types WHERE type_name = ? AND status = 'Active' LIMIT 1");
-        mysqli_stmt_bind_param($type_check, "s", $project_type);
+    
+    if ($project_type_id > 0 && $project_subtype_id > 0) {
+        $type_check = mysqli_prepare($conn, "SELECT type_name FROM project_types WHERE id = ? AND status = 'Active' LIMIT 1");
+        mysqli_stmt_bind_param($type_check, "i", $project_type_id);
         mysqli_stmt_execute($type_check);
-        mysqli_stmt_bind_result($type_check, $selected_type_id);
+        mysqli_stmt_bind_result($type_check, $project_type);
         if (mysqli_stmt_fetch($type_check)) {
             mysqli_stmt_close($type_check);
-            $subtype_check = mysqli_prepare($conn, "SELECT id FROM project_subtypes WHERE project_type_id = ? AND subtype_name = ? AND status = 'Active' LIMIT 1");
-            mysqli_stmt_bind_param($subtype_check, "is", $selected_type_id, $project_subtype);
+            
+            $subtype_check = mysqli_prepare($conn, "SELECT subtype_name FROM project_subtypes WHERE project_type_id = ? AND id = ? AND status = 'Active' LIMIT 1");
+            mysqli_stmt_bind_param($subtype_check, "ii", $project_type_id, $project_subtype_id);
             mysqli_stmt_execute($subtype_check);
-            mysqli_stmt_store_result($subtype_check);
-            if (mysqli_stmt_num_rows($subtype_check) > 0) {
+            mysqli_stmt_bind_result($subtype_check, $project_subtype);
+            if (mysqli_stmt_fetch($subtype_check)) {
                 $valid_category = true;
             }
             mysqli_stmt_close($subtype_check);
@@ -489,7 +497,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         }
     }
 
-        if (empty($title) || empty($project_title) || empty($duration) || empty($mode) || empty($technology_stack) || empty($description) || empty($project_type) || empty($project_subtype) || empty($difficulty_level)) {
+    if (empty($title) || empty($project_title) || empty($duration) || empty($mode) || empty($technology_stack) || empty($description) || $project_type_id <= 0 || $project_subtype_id <= 0 || empty($difficulty_level)) {
         $error_msg = "Please fill in all required fields.";
     } elseif (!$valid_category) {
         $error_msg = "Selected project type and subtype combination is invalid.";
@@ -500,8 +508,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $date_changed = ($old_row && $old_row['start_date'] !== $start_date);
         $duration_changed = ($old_row && $old_row['duration'] !== $duration);
 
-        $stmt = mysqli_prepare($conn, "UPDATE internships SET title = ?, duration = ?, mode = ?, skills = ?, description = ?, project_type = ?, project_subtype = ?, project_title = ?, task_title = ?, technology_stack = ?, difficulty_level = ?, openings = ?, start_date = ?, end_date = ? WHERE id = ?");
-        mysqli_stmt_bind_param($stmt, "sssssssssssissi", $title, $duration, $mode, $skills, $description, $project_type, $project_subtype, $project_title, $task_title, $technology_stack, $difficulty_level, $openings, $start_date, $end_date, $id);
+        $stmt = mysqli_prepare($conn, "UPDATE internships SET title = ?, duration = ?, mode = ?, skills = ?, description = ?, project_type = ?, project_subtype = ?, project_type_id = ?, project_subtype_id = ?, project_title = ?, task_title = ?, technology_stack = ?, difficulty_level = ?, openings = ?, start_date = ?, end_date = ? WHERE id = ?");
+        mysqli_stmt_bind_param($stmt, "sssssssiisssisssi", $title, $duration, $mode, $skills, $description, $project_type, $project_subtype, $project_type_id, $project_subtype_id, $project_title, $task_title, $technology_stack, $difficulty_level, $openings, $start_date, $end_date, $id);
         
         if (mysqli_stmt_execute($stmt)) {
             // Check if timeline phases exist
@@ -542,9 +550,11 @@ if (!empty($search)) {
 $where_clauses[] = "i.coordinator_id = " . intval($_SESSION['user_id']);
 $where_clauses[] = "i.is_deleted = 0";
 $sql = "
-    SELECT i.*, m.full_name as mentor_name 
+    SELECT i.*, m.full_name as mentor_name, pt.type_name as joined_type_name, ps.subtype_name as joined_subtype_name 
     FROM internships i 
     LEFT JOIN users m ON i.assigned_mentor = m.id 
+    LEFT JOIN project_types pt ON i.project_type_id = pt.id
+    LEFT JOIN project_subtypes ps ON i.project_subtype_id = ps.id AND ps.project_type_id = pt.id
 ";
 
 if (count($where_clauses) > 0) {
@@ -854,9 +864,9 @@ mysqli_stmt_close($stmt);
                                                                     <p class="text-[10px] text-gray-400 mt-1"><?php echo htmlspecialchars($item['mode'] ?? 'Remote'); ?> • <?php echo htmlspecialchars($item['duration'] ?? '3 Months'); ?></p>
                                                                 </td>
                                                                 <td class="px-6 py-4">
-                                                                    <span class="font-semibold text-slate-800"><?php echo htmlspecialchars($item['project_type'] ?: 'General'); ?></span>
-                                                                    <?php if (!empty($item['project_subtype'])): ?>
-                                                                        <p class="text-[10px] text-gray-400 mt-0.5"><?php echo htmlspecialchars($item['project_subtype']); ?></p>
+                                                                    <span class="font-semibold text-slate-800"><?php echo htmlspecialchars($item['joined_type_name'] ?: $item['project_type'] ?: 'General'); ?></span>
+                                                                    <?php if (!empty($item['joined_subtype_name']) || !empty($item['project_subtype'])): ?>
+                                                                        <p class="text-[10px] text-gray-400 mt-0.5"><?php echo htmlspecialchars($item['joined_subtype_name'] ?: $item['project_subtype']); ?></p>
                                                                     <?php endif; ?>
                                                                 </td>
                                                                 <td class="px-6 py-4 max-w-xs truncate" title="<?php echo htmlspecialchars($item['technology_stack'] ?: $item['skills']); ?>"><?php echo htmlspecialchars($item['technology_stack'] ?: $item['skills']); ?></td>
@@ -920,24 +930,24 @@ mysqli_stmt_close($stmt);
                                         <div class="grid grid-cols-2 gap-4">
                                                 <div>
                                                         <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Project Type</label>
-                                                        <select name="project_type" id="form-project-type" class="w-full rounded-xl border-gray-200 text-xs py-2 focus:border-blue-600 focus:ring-blue-600/10 cursor-pointer" required>
+                                                        <select name="project_type_id" id="form-project-type" class="w-full rounded-xl border-gray-200 text-xs py-2 focus:border-blue-600 focus:ring-blue-600/10 cursor-pointer" required>
                                                                 <?php if (empty($active_project_types)): ?>
                                                                     <option value="" selected>No project types available</option>
                                                                 <?php else: ?>
                                                                     <?php foreach ($active_project_types as $type): ?>
-                                                                        <option value="<?php echo htmlspecialchars($type['type_name']); ?>" data-type-id="<?php echo (int)$type['id']; ?>"><?php echo htmlspecialchars($type['type_name']); ?></option>
+                                                                        <option value="<?php echo (int)$type['id']; ?>"><?php echo htmlspecialchars($type['type_name']); ?></option>
                                                                     <?php endforeach; ?>
                                                                 <?php endif; ?>
                                                         </select>
                                                 </div>
                                                 <div>
                                                         <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Project Subtype</label>
-                                                        <select name="project_subtype" id="form-project-subtype" class="w-full rounded-xl border-gray-200 text-xs py-2 focus:border-blue-600 focus:ring-blue-600/10 cursor-pointer" required>
+                                                        <select name="project_subtype_id" id="form-project-subtype" class="w-full rounded-xl border-gray-200 text-xs py-2 focus:border-blue-600 focus:ring-blue-600/10 cursor-pointer" required>
                                                                 <?php if (empty($active_project_subtypes)): ?>
                                                                     <option value="">Select a type first</option>
                                                                 <?php else: ?>
                                                                     <?php foreach ($active_project_subtypes as $subtype): ?>
-                                                                        <option value="<?php echo htmlspecialchars($subtype['subtype_name']); ?>"><?php echo htmlspecialchars($subtype['subtype_name']); ?></option>
+                                                                        <option value="<?php echo (int)$subtype['id']; ?>"><?php echo htmlspecialchars($subtype['subtype_name']); ?></option>
                                                                     <?php endforeach; ?>
                                                                 <?php endif; ?>
                                                         </select>
@@ -1092,111 +1102,122 @@ mysqli_stmt_close($stmt);
 
                 let currentSubtypes = [];
 
-                function getSelectedTypeId(typeValue) {
-                        const option = Array.from(typeInput.options).find(opt => opt.value === typeValue);
-                        return option ? option.dataset.typeId : '';
-                }
+                 function getSelectedTypeId(typeValue) {
+                         if (!isNaN(typeValue) && parseInt(typeValue) > 0) {
+                                 return parseInt(typeValue);
+                         }
+                         const option = Array.from(typeInput.options).find(opt => opt.value === typeValue || opt.textContent === typeValue);
+                         return option ? option.value : '';
+                 }
 
-                function autofillSubtypeFields() {
-                        const selectedSubtypeName = subtypeInput.value;
-                        const subtypeObj = currentSubtypes.find(sub => sub.subtype_name === selectedSubtypeName);
-                        if (subtypeObj) {
-                                if (subtypeObj.skills) {
-                                        techStackInput.value = subtypeObj.skills;
-                                }
-                                if (subtypeObj.mode) {
-                                        let modeValue = subtypeObj.mode;
-                                        if (modeValue === 'Offline') {
-                                                modeValue = 'On-Site';
-                                        }
-                                        let modeExists = Array.from(modeInput.options).some(opt => opt.value === modeValue);
-                                        if (!modeExists && modeValue) {
-                                                const opt = document.createElement('option');
-                                                opt.value = modeValue;
-                                                opt.textContent = modeValue;
-                                                modeInput.appendChild(opt);
-                                        }
-                                        if (modeValue) {
-                                                modeInput.value = modeValue;
-                                        }
-                                }
-                                if (subtypeObj.duration) {
-                                        let durationExists = Array.from(durationInput.options).some(opt => opt.value === subtypeObj.duration);
-                                        if (!durationExists && subtypeObj.duration) {
-                                                const opt = document.createElement('option');
-                                                opt.value = subtypeObj.duration;
-                                                opt.textContent = subtypeObj.duration;
-                                                durationInput.appendChild(opt);
-                                        }
-                                        durationInput.value = subtypeObj.duration;
-                                }
-                                calculateEndDate();
-                        }
-                }
+                 function autofillSubtypeFields() {
+                         const selectedSubtypeVal = subtypeInput.value;
+                         const subtypeObj = currentSubtypes.find(sub => sub.id == selectedSubtypeVal || sub.subtype_name === selectedSubtypeVal);
+                         if (subtypeObj) {
+                                 if (subtypeObj.skills) {
+                                         techStackInput.value = subtypeObj.skills;
+                                 }
+                                 if (subtypeObj.mode) {
+                                         let modeValue = subtypeObj.mode;
+                                         if (modeValue === 'Offline') {
+                                                 modeValue = 'On-Site';
+                                         }
+                                         let modeExists = Array.from(modeInput.options).some(opt => opt.value === modeValue);
+                                         if (!modeExists && modeValue) {
+                                                 const opt = document.createElement('option');
+                                                 opt.value = modeValue;
+                                                 opt.textContent = modeValue;
+                                                 modeInput.appendChild(opt);
+                                         }
+                                         if (modeValue) {
+                                                 modeInput.value = modeValue;
+                                         }
+                                 }
+                                 if (subtypeObj.duration) {
+                                         let durationExists = Array.from(durationInput.options).some(opt => opt.value === subtypeObj.duration);
+                                         if (!durationExists && subtypeObj.duration) {
+                                                 const opt = document.createElement('option');
+                                                 opt.value = subtypeObj.duration;
+                                                 opt.textContent = subtypeObj.duration;
+                                                 durationInput.appendChild(opt);
+                                         }
+                                         durationInput.value = subtypeObj.duration;
+                                 }
+                                 calculateEndDate();
+                         }
+                 }
 
-                function updateSubtypes(selectedType, selectedSubtype = '') {
-                        const typeId = getSelectedTypeId(selectedType);
-                        subtypeInput.innerHTML = '';
+                 function updateSubtypes(selectedType, selectedSubtype = '') {
+                         const typeId = getSelectedTypeId(selectedType);
+                         subtypeInput.innerHTML = '';
 
-                        if (!typeId) {
-                                const opt = document.createElement('option');
-                                opt.value = '';
-                                opt.textContent = 'Select a valid project type';
-                                subtypeInput.appendChild(opt);
-                                return;
-                        }
+                         if (!typeId) {
+                                 const opt = document.createElement('option');
+                                 opt.value = '';
+                                 opt.textContent = 'Select a valid project type';
+                                 subtypeInput.appendChild(opt);
+                                 return;
+                         }
 
-                        fetch('project_category_api.php?action=get_subtypes&type_id=' + encodeURIComponent(typeId))
-                            .then(response => response.json())
-                            .then(list => {
-                                currentSubtypes = list;
-                                if (!Array.isArray(list) || list.length === 0) {
-                                    const opt = document.createElement('option');
-                                    opt.value = '';
-                                    opt.textContent = 'No subtypes available for this type';
-                                    subtypeInput.appendChild(opt);
-                                    if (selectedSubtype) {
-                                        const customOpt = document.createElement('option');
-                                        customOpt.value = selectedSubtype;
-                                        customOpt.textContent = selectedSubtype;
-                                        customOpt.selected = true;
-                                        subtypeInput.appendChild(customOpt);
-                                    }
-                                    return;
-                                }
+                         fetch('project_category_api.php?action=get_subtypes&type_id=' + encodeURIComponent(typeId))
+                             .then(response => response.json())
+                             .then(list => {
+                                 currentSubtypes = list;
+                                 if (!Array.isArray(list) || list.length === 0) {
+                                     const opt = document.createElement('option');
+                                     opt.value = '';
+                                     opt.textContent = 'No subtypes available for this type';
+                                     subtypeInput.appendChild(opt);
+                                     if (selectedSubtype) {
+                                         const customOpt = document.createElement('option');
+                                         customOpt.value = selectedSubtype;
+                                         customOpt.textContent = selectedSubtype;
+                                         customOpt.selected = true;
+                                         subtypeInput.appendChild(customOpt);
+                                     }
+                                     return;
+                                 }
 
-                                list.forEach(sub => {
-                                        const opt = document.createElement('option');
-                                        opt.value = sub.subtype_name;
-                                        opt.textContent = sub.subtype_name;
-                                        subtypeInput.appendChild(opt);
-                                });
+                                 list.forEach(sub => {
+                                         const opt = document.createElement('option');
+                                         opt.value = sub.id;
+                                         opt.textContent = sub.subtype_name;
+                                         subtypeInput.appendChild(opt);
+                                 });
 
-                                if (selectedSubtype && Array.from(subtypeInput.options).some(opt => opt.value === selectedSubtype)) {
-                                        subtypeInput.value = selectedSubtype;
-                                } else if (selectedSubtype) {
-                                        const opt = document.createElement('option');
-                                        opt.value = selectedSubtype;
-                                        opt.textContent = selectedSubtype;
-                                        customOpt.selected = true;
-                                        subtypeInput.appendChild(opt);
-                                        subtypeInput.value = selectedSubtype;
-                                } else if (subtypeInput.options.length > 0) {
-                                        subtypeInput.value = subtypeInput.options[0].value;
-                                }
+                                 if (selectedSubtype) {
+                                         const matchById = Array.from(subtypeInput.options).find(opt => opt.value == selectedSubtype);
+                                         if (matchById) {
+                                                 subtypeInput.value = selectedSubtype;
+                                         } else {
+                                                 const matchByName = Array.from(subtypeInput.options).find(opt => opt.textContent === selectedSubtype);
+                                                 if (matchByName) {
+                                                         subtypeInput.value = matchByName.value;
+                                                 } else {
+                                                         const opt = document.createElement('option');
+                                                         opt.value = selectedSubtype;
+                                                         opt.textContent = selectedSubtype;
+                                                         opt.selected = true;
+                                                         subtypeInput.appendChild(opt);
+                                                         subtypeInput.value = selectedSubtype;
+                                                 }
+                                         }
+                                 } else if (subtypeInput.options.length > 0) {
+                                         subtypeInput.value = subtypeInput.options[0].value;
+                                 }
 
-                                if (formAction.value === 'create') {
-                                        autofillSubtypeFields();
-                                }
-                            })
-                            .catch(() => {
-                                subtypeInput.innerHTML = '';
-                                const opt = document.createElement('option');
-                                opt.value = '';
-                                opt.textContent = 'Unable to load subtypes';
-                                subtypeInput.appendChild(opt);
-                            });
-                }
+                                 if (formAction.value === 'create') {
+                                         autofillSubtypeFields();
+                                 }
+                             })
+                             .catch(() => {
+                                 subtypeInput.innerHTML = '';
+                                 const opt = document.createElement('option');
+                                 opt.value = '';
+                                 opt.textContent = 'Unable to load subtypes';
+                                 subtypeInput.appendChild(opt);
+                             });
+                 }
 
                 typeInput.addEventListener('change', (e) => {
                         updateSubtypes(e.target.value);
@@ -1298,14 +1319,20 @@ mysqli_stmt_close($stmt);
 
                         titleInput.value = item.title;
                         
-                        if (![...typeInput.options].some(o => o.value === item.project_type)) {
-                                const option = document.createElement('option');
-                                option.value = item.project_type;
-                                option.textContent = item.project_type || 'Unknown Type';
-                                typeInput.appendChild(option);
+                        let typeVal = item.project_type_id;
+                        if (!typeVal && item.project_type) {
+                                const option = [...typeInput.options].find(o => o.textContent === item.project_type);
+                                if (option) typeVal = option.value;
                         }
-                        typeInput.value = item.project_type || (typeInput.options[0] ? typeInput.options[0].value : '');
-                        updateSubtypes(typeInput.value, item.project_subtype || '');
+                        if (!typeVal && item.project_type) {
+                                const option = document.createElement('option');
+                                option.value = item.project_type_id || '';
+                                option.textContent = item.project_type;
+                                typeInput.appendChild(option);
+                                typeVal = option.value;
+                        }
+                        typeInput.value = typeVal || (typeInput.options[0] ? typeInput.options[0].value : '');
+                        updateSubtypes(typeInput.value, item.project_subtype_id || item.project_subtype || '');
 
                         // Ensure option exists in duration select to avoid blank selection
                         let durationExists = false;

@@ -98,6 +98,7 @@ if ($new_status === 'HOD Approval Pending') {
     $update_hod_sql = "UPDATE internship_applications SET
         status = 'HOD Approval Pending',
         hod_approval_status = 'Pending',
+        hod_status = 'pending',
         hod_token = '$esc_token',
         hod_approval_sent_at = NOW()
         WHERE id = $app_id";

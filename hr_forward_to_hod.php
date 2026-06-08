@@ -64,7 +64,7 @@ if (empty($hod_email)) {
 $hod_token = bin2hex(random_bytes(32));
 
 // Update application status
-$update = $conn->prepare("UPDATE internship_applications SET status = 'Forwarded to HOD', hod_status = 'pending', final_status = 'pending', hod_token = ? WHERE id = ?");
+$update = $conn->prepare("UPDATE internship_applications SET status = 'Forwarded to HOD', hod_status = 'pending', hod_approval_status = 'Pending', final_status = 'pending', hod_token = ? WHERE id = ?");
 $update->bind_param("si", $hod_token, $app_id);
 if ($update->execute()) {
     log_status_change('internship_applications', $app_id, $app['status'], 'Forwarded to HOD', 'Application forwarded to HOD for approval');

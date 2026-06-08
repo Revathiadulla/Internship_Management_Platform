@@ -29,6 +29,7 @@ $pan_masked = $pan_valid ? substr($pan_raw, 0, 5) . '****' . substr($pan_raw, -1
 // ── Application meta ──
 $internship_id   = (int)($_POST['internship_id']   ?? 0);
 $internship_name = mysqli_real_escape_string($conn, trim($_POST['internship_name'] ?? ''));
+$applied_subtype = mysqli_real_escape_string($conn, trim($_POST['applied_subtype'] ?? ''));
 $profile_id      = (int)($_POST['profile_id']      ?? 0);
 
 // ── Education status ──
@@ -131,7 +132,7 @@ mysqli_query($conn, $update_profile_sql);
 
 // ── Insert application ──
 $insert_sql = "INSERT INTO internship_applications (
-    user_id, internship_id, profile_id, internship_name,
+    user_id, internship_id, profile_id, internship_name, applied_subtype,
     status, test_status,
     education_status,
     college_name, department, year_of_study, hod_name, hod_email,
@@ -139,7 +140,7 @@ $insert_sql = "INSERT INTO internship_applications (
     aadhaar_number, pan_number, pan_masked, pan_file, resume_file,
     aadhaar_card_file, resume_original_name, pan_original_name, aadhaar_original_name
 ) VALUES (
-    '$user_id', '$internship_id', '$profile_id', '$internship_name',
+    '$user_id', '$internship_id', '$profile_id', '$internship_name', '$applied_subtype',
     '$app_status', '$test_status',
     '$education_status',
     '$college_name', '$department', '$year_of_study', '$hod_name', '$hod_email',

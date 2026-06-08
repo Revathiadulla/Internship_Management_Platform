@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/includes/document_helper.php';
 
 // Live Render + Clever Cloud connection configuration
 $host = getenv('DB_HOST') ?: "by7xxebmaxfwobqrh1ne-mysql.services.clever-cloud.com";
@@ -131,6 +132,7 @@ $app_new_cols = [
     'hod_approval_status' => "VARCHAR(50) DEFAULT 'Pending'",
     'hod_approval_sent_at' => "TIMESTAMP NULL DEFAULT NULL",
     'hod_approved_at' => "TIMESTAMP NULL DEFAULT NULL",
+    'hod_rejected_at' => "TIMESTAMP NULL DEFAULT NULL",
     'hod_remarks' => "TEXT DEFAULT NULL",
     'selected_by' => "INT DEFAULT NULL",
     'selected_at' => "TIMESTAMP NULL DEFAULT NULL",
@@ -209,6 +211,24 @@ while ($row = mysqli_fetch_assoc($subtype_rows)) {
         mysqli_query($conn, "INSERT IGNORE INTO project_subtypes (project_type_id, subtype_name, status) VALUES ($type_id, '$subtype_name_safe', 'Active')");
     }
 }
+
+// Add project_type_id and project_subtype_id to internships if missing
+$_col_check = mysqli_query($conn, "SHOW COLUMNS FROM internships LIKE 'project_type_id'");
+if ($_col_check && mysqli_num_rows($_col_check) === 0) {
+    mysqli_query($conn, "ALTER TABLE internships ADD COLUMN project_type_id INT NULL");
+}
+unset($_col_check);
+
+$_col_check = mysqli_query($conn, "SHOW COLUMNS FROM internships LIKE 'project_subtype_id'");
+if ($_col_check && mysqli_num_rows($_col_check) === 0) {
+    mysqli_query($conn, "ALTER TABLE internships ADD COLUMN project_subtype_id INT NULL");
+}
+unset($_col_check);
+
+// Migrate existing internships to set project_type_id and project_subtype_id
+mysqli_query($conn, "UPDATE internships i JOIN project_types pt ON TRIM(i.project_type) = TRIM(pt.type_name) SET i.project_type_id = pt.id WHERE i.project_type_id IS NULL");
+mysqli_query($conn, "UPDATE internships i JOIN project_subtypes ps ON i.project_type_id = ps.project_type_id AND TRIM(i.project_subtype) = TRIM(ps.subtype_name) SET i.project_subtype_id = ps.id WHERE i.project_subtype_id IS NULL");
+
 
 if (isset($app_id) && intval($app_id) > 0) {
     $app_id = intval($app_id);
@@ -316,11 +336,36 @@ if ($_has_apps && mysqli_num_rows($_has_apps) > 0) {
 }
 unset($_has_apps);
 
+// Check hr_notes schema compatibility and recreate if legacy
+$_notes_table_check = mysqli_query($conn, "SHOW TABLES LIKE 'hr_notes'");
+if ($_notes_table_check && mysqli_num_rows($_notes_table_check) > 0) {
+    $_col_check = mysqli_query($conn, "SHOW COLUMNS FROM hr_notes LIKE 'student_id'");
+    if (!$_col_check || mysqli_num_rows($_col_check) === 0) {
+        mysqli_query($conn, "DROP TABLE IF EXISTS hr_notes");
+    }
+    if ($_col_check) {
+        unset($_col_check);
+    }
+}
+if ($_notes_table_check) {
+    unset($_notes_table_check);
+}
+
+mysqli_query($conn, "CREATE TABLE IF NOT EXISTS hr_notes (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    application_id INT NOT NULL,
+    student_id INT NOT NULL,
+    hr_id INT NOT NULL,
+    note_text TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+
 
 if (!function_exists('getDocumentViewUrl')) {
     function getDocumentViewUrl($url) {
-        if (empty($url)) return '#';
-        return $url;
+        $resolved = getDocumentUrl($url);
+        return ($resolved === 'unavailable') ? '#' : $resolved;
     }
 }
 
@@ -328,38 +373,30 @@ function get_resume_view_link($profile) {
     if (!$profile) {
         return '#';
     }
-    // Check resume_url
-    if (!empty($profile['resume_url']) && (strpos($profile['resume_url'], 'http://') === 0 || strpos($profile['resume_url'], 'https://') === 0)) {
-        return $profile['resume_url'];
+    $resume_url = !empty($profile['resume_url']) ? trim($profile['resume_url']) : (!empty($profile['resume_file']) ? trim($profile['resume_file']) : '');
+    $resolved = getDocumentUrl($resume_url);
+    if ($resolved === 'unavailable') {
+        return '#';
     }
-    // Check resume_file as an absolute URL (for safety)
-    if (!empty($profile['resume_file']) && (strpos($profile['resume_file'], 'http://') === 0 || strpos($profile['resume_file'], 'https://') === 0)) {
-        return $profile['resume_file'];
+    if (strpos($resolved, 'http://') === 0 || strpos($resolved, 'https://') === 0) {
+        return $resolved;
     }
-    // Check local resume_file
-    if (!empty($profile['resume_file'])) {
-        return 'resume_serve.php?file=' . urlencode(basename($profile['resume_file'])) . '&mode=view';
-    }
-    return '#';
+    return 'resume_serve.php?file=' . urlencode(basename($resolved)) . '&mode=view';
 }
 
 function get_resume_download_link($profile) {
     if (!$profile) {
         return '#';
     }
-    // Check resume_url
-    if (!empty($profile['resume_url']) && (strpos($profile['resume_url'], 'http://') === 0 || strpos($profile['resume_url'], 'https://') === 0)) {
-        return $profile['resume_url'];
+    $resume_url = !empty($profile['resume_url']) ? trim($profile['resume_url']) : (!empty($profile['resume_file']) ? trim($profile['resume_file']) : '');
+    $resolved = getDocumentUrl($resume_url);
+    if ($resolved === 'unavailable') {
+        return '#';
     }
-    // Check resume_file as an absolute URL
-    if (!empty($profile['resume_file']) && (strpos($profile['resume_file'], 'http://') === 0 || strpos($profile['resume_file'], 'https://') === 0)) {
-        return $profile['resume_file'];
+    if (strpos($resolved, 'http://') === 0 || strpos($resolved, 'https://') === 0) {
+        return $resolved;
     }
-    // Check local resume_file
-    if (!empty($profile['resume_file'])) {
-        return 'resume_serve.php?file=' . urlencode(basename($profile['resume_file'])) . '&mode=download';
-    }
-    return '#';
+    return 'resume_serve.php?file=' . urlencode(basename($resolved)) . '&mode=download';
 }
 
 function log_debug($message) {
@@ -409,23 +446,18 @@ function check_resume_exists($profile) {
     if (!$profile) {
         return false;
     }
-    // Check if resume_url exists and starts with http/https
-    if (!empty($profile['resume_url']) && (strpos($profile['resume_url'], 'http://') === 0 || strpos($profile['resume_url'], 'https://') === 0)) {
+    $resume_url = !empty($profile['resume_url']) ? trim($profile['resume_url']) : (!empty($profile['resume_file']) ? trim($profile['resume_file']) : '');
+    $resolved = getDocumentUrl($resume_url);
+    if ($resolved === 'unavailable') {
+        return false;
+    }
+    if (strpos($resolved, 'http://') === 0 || strpos($resolved, 'https://') === 0) {
         return true;
     }
-    // Check if resume_file starts with http/https (e.g. Cloudinary url)
-    if (!empty($profile['resume_file']) && (strpos($profile['resume_file'], 'http://') === 0 || strpos($profile['resume_file'], 'https://') === 0)) {
-        return true;
-    }
-    // Check if local file exists
-    if (!empty($profile['resume_file'])) {
-        $path = resolve_resume_file_path($profile['resume_file']);
-        if ($path !== null && is_file($path)) {
-            return true;
-        }
-    }
-    return false;
+    $path = resolve_resume_file_path($resolved);
+    return ($path !== null && is_file($path));
 }
+
 
 function print_resume_not_found_js() {
     ?>
