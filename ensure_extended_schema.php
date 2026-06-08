@@ -446,6 +446,7 @@ try {
     $create_questions_table = "CREATE TABLE IF NOT EXISTS subtype_test_questions (
         id INT AUTO_INCREMENT PRIMARY KEY,
         subtype_test_id INT NOT NULL,
+        question_bank_id INT NOT NULL DEFAULT 0,
         question_text TEXT NOT NULL,
         option_a VARCHAR(255) NOT NULL,
         option_b VARCHAR(255) NOT NULL,
@@ -458,6 +459,7 @@ try {
 
     $questions_cols = [
         'subtype_test_id' => 'INT NOT NULL',
+        'question_bank_id' => 'INT NOT NULL DEFAULT 0',
         'question_text' => 'TEXT NULL',
         'option_a' => 'VARCHAR(255) NULL',
         'option_b' => 'VARCHAR(255) NULL',
@@ -478,6 +480,15 @@ try {
         $col_info = mysqli_fetch_assoc($check_type);
         if (strpos(strtolower($col_info['Type']), 'varchar(5)') === false) {
             mysqli_query($conn, "ALTER TABLE subtype_test_questions MODIFY COLUMN correct_option VARCHAR(5) NOT NULL");
+        }
+    }
+
+    // FIX: Ensure question_bank_id has a DEFAULT value (prevents INSERT failures)
+    $check_qbid = mysqli_query($conn, "SHOW COLUMNS FROM subtype_test_questions LIKE 'question_bank_id'");
+    if ($check_qbid && mysqli_num_rows($check_qbid) > 0) {
+        $qbid_info = mysqli_fetch_assoc($check_qbid);
+        if ($qbid_info['Default'] === null || $qbid_info['Default'] === '') {
+            @mysqli_query($conn, "ALTER TABLE subtype_test_questions MODIFY COLUMN question_bank_id INT NOT NULL DEFAULT 0");
         }
     }
 

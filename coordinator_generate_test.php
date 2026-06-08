@@ -131,7 +131,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $del->close();
         
         // And insert the new/updated ones
-        $ins_q = $conn->prepare("INSERT INTO subtype_test_questions (subtype_test_id, question_text, option_a, option_b, option_c, option_d, correct_option) VALUES (?, ?, ?, ?, ?, ?, ?)");
+        $ins_q = $conn->prepare("INSERT INTO subtype_test_questions (subtype_test_id, question_text, option_a, option_b, option_c, option_d, correct_option, question_bank_id) VALUES (?, ?, ?, ?, ?, ?, ?, 0)");
         $saved_count = 0;
         foreach ($questions_post as $q) {
             $q_text = trim($q['text'] ?? '');
@@ -207,6 +207,7 @@ try {
     $create_questions_table = "CREATE TABLE IF NOT EXISTS subtype_test_questions (
         id INT AUTO_INCREMENT PRIMARY KEY,
         subtype_test_id INT NOT NULL,
+        question_bank_id INT NOT NULL DEFAULT 0,
         question_text TEXT NOT NULL,
         option_a VARCHAR(255) NOT NULL,
         option_b VARCHAR(255) NOT NULL,
@@ -223,6 +224,7 @@ try {
     // 4. Ensure all columns exist in subtype_test_questions (in case table was created with older schema)
     $questions_cols = [
         'subtype_test_id' => 'INT NOT NULL',
+        'question_bank_id' => 'INT NOT NULL DEFAULT 0',
         'question_text' => 'TEXT NULL',
         'option_a' => 'VARCHAR(255) NULL',
         'option_b' => 'VARCHAR(255) NULL',
@@ -238,6 +240,15 @@ try {
             if (!mysqli_query($conn, "ALTER TABLE subtype_test_questions ADD COLUMN $col $definition")) {
                 throw new Exception(mysqli_error($conn));
             }
+        }
+    }
+
+    // FIX: Ensure question_bank_id has a DEFAULT value (prevents INSERT failures on existing tables)
+    $check_qbid = mysqli_query($conn, "SHOW COLUMNS FROM subtype_test_questions LIKE 'question_bank_id'");
+    if ($check_qbid && mysqli_num_rows($check_qbid) > 0) {
+        $qbid_info = mysqli_fetch_assoc($check_qbid);
+        if ($qbid_info['Default'] === null || $qbid_info['Default'] === '') {
+            @mysqli_query($conn, "ALTER TABLE subtype_test_questions MODIFY COLUMN question_bank_id INT NOT NULL DEFAULT 0");
         }
     }
 
@@ -689,7 +700,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             error_log("[SAVE_TEST] Test record inserted with ID=$test_id");
 
             // Insert questions
-            $ins_q = $conn->prepare("INSERT INTO subtype_test_questions (subtype_test_id, question_text, option_a, option_b, option_c, option_d, correct_option) VALUES (?, ?, ?, ?, ?, ?, ?)");
+            $ins_q = $conn->prepare("INSERT INTO subtype_test_questions (subtype_test_id, question_text, option_a, option_b, option_c, option_d, correct_option, question_bank_id) VALUES (?, ?, ?, ?, ?, ?, ?, 0)");
             if (!$ins_q) {
                 throw new Exception("INSERT questions prepare: " . $conn->error);
             }

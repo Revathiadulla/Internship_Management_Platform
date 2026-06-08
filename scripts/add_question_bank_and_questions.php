@@ -28,11 +28,11 @@ mysqli_stmt_close($insert_bank);
 if ($added === 0) { echo "No question_bank rows inserted.\n"; exit(1); }
 
 $added_q = 0;
-$insq = mysqli_prepare($conn, "INSERT INTO subtype_test_questions (subtype_test_id, question_text, option_a, option_b, option_c, option_d, correct_option) VALUES (?, ?, ?, ?, ?, ?, ?)");
+$insq = mysqli_prepare($conn, "INSERT INTO subtype_test_questions (subtype_test_id, question_text, option_a, option_b, option_c, option_d, correct_option, question_bank_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
 if (!$insq) { echo "ERROR preparing subtype_test_questions insert: " . mysqli_error($conn) . "\n"; exit(1); }
 foreach ($bank_ids as $idx => $bid) {
     $q = $bank_questions[$idx];
-    mysqli_stmt_bind_param($insq, 'issssss', $test_id, $q[0], $q[1], $q[2], $q[3], $q[4], $q[5]);
+    mysqli_stmt_bind_param($insq, 'issssssi', $test_id, $q[0], $q[1], $q[2], $q[3], $q[4], $q[5], $bid);
     if (mysqli_stmt_execute($insq)) $added_q++;
 }
 mysqli_stmt_close($insq);
