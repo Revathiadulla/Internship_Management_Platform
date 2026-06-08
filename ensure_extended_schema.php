@@ -35,6 +35,8 @@ $test_app_cols = [
     'test_status' => "ALTER TABLE internship_applications ADD COLUMN test_status VARCHAR(50) DEFAULT NULL",
     'test_result' => "ALTER TABLE internship_applications ADD COLUMN test_result VARCHAR(50) DEFAULT NULL",
     'test_submitted_date' => "ALTER TABLE internship_applications ADD COLUMN test_submitted_date DATETIME DEFAULT NULL",
+    'test_attempts' => "ALTER TABLE internship_applications ADD COLUMN test_attempts INT NOT NULL DEFAULT 0",
+    'max_attempts' => "ALTER TABLE internship_applications ADD COLUMN max_attempts INT NOT NULL DEFAULT 3",
     'test_answers' => "ALTER TABLE internship_applications ADD COLUMN test_answers TEXT DEFAULT NULL"
 ];
 foreach ($test_app_cols as $col => $sql) {
@@ -702,6 +704,7 @@ try {
     $student_scores_cols = [
         'application_id' => 'INT DEFAULT NULL',
         'test_id' => 'INT DEFAULT NULL',
+        'attempt_no' => 'INT NOT NULL DEFAULT 0',
         'total_questions' => 'INT NOT NULL DEFAULT 0',
         'percentage' => 'DECIMAL(5,2) DEFAULT 0.00',
         'submitted_at' => 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP'
@@ -712,6 +715,26 @@ try {
             mysqli_query($conn, "ALTER TABLE student_scores ADD COLUMN $col $definition");
         }
     }
+
+    // Create test_attempt_history table if missing
+    $create_test_attempt_history = "CREATE TABLE IF NOT EXISTS test_attempt_history (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        application_id INT NOT NULL,
+        student_id INT NOT NULL,
+        internship_id INT NOT NULL,
+        test_id INT DEFAULT NULL,
+        attempt_no INT NOT NULL,
+        score DECIMAL(5,2) NOT NULL,
+        total_questions INT NOT NULL DEFAULT 0,
+        percentage DECIMAL(5,2) NOT NULL,
+        submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (application_id) REFERENCES internship_applications(id) ON DELETE CASCADE,
+        FOREIGN KEY (student_id) REFERENCES users(id) ON UPDATE CASCADE ON DELETE CASCADE,
+        FOREIGN KEY (internship_id) REFERENCES internships(id) ON UPDATE CASCADE ON DELETE CASCADE,
+        FOREIGN KEY (test_id) REFERENCES subtype_tests(id) ON UPDATE CASCADE ON DELETE SET NULL,
+        UNIQUE KEY uq_app_attempt (application_id, attempt_no)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+    mysqli_query($conn, $create_test_attempt_history);
 
     // Create coordinator_assignments table
     $create_coord_assignments = "CREATE TABLE IF NOT EXISTS coordinator_assignments (

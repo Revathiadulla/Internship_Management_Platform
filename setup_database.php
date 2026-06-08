@@ -66,6 +66,8 @@ $check_cols = mysqli_query($conn, "SHOW COLUMNS FROM internship_applications LIK
 if (mysqli_num_rows($check_cols) == 0) {
     executeSetupQuery($conn, "ALTER TABLE internship_applications ADD COLUMN test_status VARCHAR(50) DEFAULT 'Pending'", "Adding test_status column", $errors, $is_cli);
     executeSetupQuery($conn, "ALTER TABLE internship_applications ADD COLUMN test_score INT DEFAULT NULL", "Adding test_score column", $errors, $is_cli);
+    executeSetupQuery($conn, "ALTER TABLE internship_applications ADD COLUMN test_attempts INT NOT NULL DEFAULT 0", "Adding test_attempts column", $errors, $is_cli);
+    executeSetupQuery($conn, "ALTER TABLE internship_applications ADD COLUMN max_attempts INT NOT NULL DEFAULT 3", "Adding max_attempts column", $errors, $is_cli);
     executeSetupQuery($conn, "ALTER TABLE internship_applications ADD COLUMN test_answers TEXT DEFAULT NULL", "Adding test_answers column", $errors, $is_cli);
 } else {
     if ($is_cli) {

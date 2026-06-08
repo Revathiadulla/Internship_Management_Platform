@@ -25,6 +25,7 @@ if (!$profile) {
 $assigned_project = null;
 $assigned_team = null;
 $has_assigned_project = false;
+$has_direct_assignment = false;
 $has_confirmed_team = false;
 
 $team_assign_sql = "SELECT t.id AS team_id,
@@ -96,6 +97,8 @@ $app_sql = "SELECT a.id as app_id,
                    a.test_answers, a.education_status, a.preferred_duration,
                    a.team_name, a.mentor_id, a.team_status,
                    a.internship_status,
+                   a.assigned_project_id,
+                   a.team_id,
                    m.full_name as mentor_name, m.email as mentor_email,
                    i.description as project_desc,
                    i.project_type,
@@ -153,6 +156,9 @@ if ($app_result) {
                 'confirmation_letter_path' => $row['confirmation_letter_path'] ?? null
             ];
         }
+        if (!$has_direct_assignment && (!empty($row['assigned_project_id']) || !empty($row['team_id']))) {
+            $has_direct_assignment = true;
+        }
     }
     $app_count = count($app_rows);
 }
@@ -165,6 +171,41 @@ foreach ($app_rows as $ar) {
         $is_selected = true;
         $selected_app = $ar;
         break;
+    }
+}
+$has_project_details = $has_assigned_project || $has_direct_assignment;
+$pending_app = $selected_app ?: ($app_rows[0] ?? null);
+
+if (!$has_active && $has_direct_assignment && $active_intern === null) {
+    foreach ($app_rows as $row) {
+        if (!empty($row['assigned_project_id']) || !empty($row['team_id'])) {
+            $active_intern = [
+                'app_id' => $row['app_id'],
+                'internship_id' => $row['internship_id'] ?: 0,
+                'internship_status' => $row['internship_status'] ?? 'Assigned',
+                'title' => $row['title'],
+                'duration' => $row['duration'],
+                'mode' => $row['mode'],
+                'status' => $row['status'] ?? 'Assigned',
+                'applied_date' => $row['applied_date'] ?? null,
+                'test_score' => $row['test_score'] ?? null,
+                'education_status' => $row['education_status'] ?? null,
+                'team_name' => $row['team_name'] ?? null,
+                'mentor_name' => $row['mentor_name'] ?? null,
+                'mentor_email' => $row['mentor_email'] ?? null,
+                'team_status' => $row['team_status'] ?? 'Active',
+                'project_desc' => $row['project_desc'] ?? null,
+                'project_type' => $row['project_type'] ?? null,
+                'project_subtype' => $row['project_subtype'] ?? null,
+                'skills' => $row['skills'] ?? null,
+                'technology_stack' => $row['technology_stack'] ?? null,
+                'difficulty_level' => $row['difficulty_level'] ?? null,
+                'start_date' => $row['start_date'] ?? null,
+                'end_date' => $row['end_date'] ?? null,
+                'confirmation_letter_path' => $row['confirmation_letter_path'] ?? null
+            ];
+            break;
+        }
     }
 }
 
@@ -1067,7 +1108,7 @@ if (isset($_GET['warning'])) {
         </div><!-- /right col -->
       </div><!-- /row 3 -->
 
-      <?php elseif ($is_selected && !$has_assigned_project): ?>
+      <?php elseif ($is_selected && !$has_project_details): ?>
       <!-- ══ SELECTED — WAITING FOR COORDINATOR ASSIGNMENT ══ -->
 
       <!-- Congratulations Banner -->
@@ -1272,52 +1313,32 @@ if (isset($_GET['warning'])) {
         <span class="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-xs font-bold uppercase tracking-wide">
           <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping inline-block"></span> Active Intern
         </span>
-        <?php elseif ($is_selected && !$has_assigned_project): ?>
+        <?php elseif ($is_selected && !$has_project_details): ?>
         <span class="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-xs font-bold uppercase tracking-wide">
           <span class="material-symbols-outlined text-[14px]">check_circle</span> Selected
         </span>
         <?php endif; ?>
       </div>
 
-      <?php if ($is_selected && !$has_active && !$has_assigned_project): ?>
-        <!-- Selected but waiting for coordinator -->
+      <?php if (!$has_project_details): ?>
         <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-16 text-center max-w-lg mx-auto">
-          <div class="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-5">
-            <span class="material-symbols-outlined text-[40px] text-emerald-500">check_circle</span>
+          <div class="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-5">
+            <span class="material-symbols-outlined text-[40px] text-slate-300">hourglass_empty</span>
           </div>
-          <h3 class="text-lg font-bold text-slate-700 mb-2">You are selected! 🎉</h3>
-          <p class="text-slate-500 text-sm mb-2">Project assignment is pending from coordinator.</p>
-          <p class="text-slate-400 text-xs mb-6">Once the coordinator assigns a project, your internship details, mentor, team, and phases will appear here.</p>
+          <h3 class="text-lg font-bold text-slate-700 mb-2">Project not assigned yet.</h3>
+          <p class="text-slate-500 text-sm mb-4">You will see project details after coordinator assignment.</p>
+          <?php if (!empty($pending_app)): ?>
+          <div class="text-left mx-auto inline-block text-sm text-slate-600 mb-4">
+            <p class="mb-1"><span class="font-semibold">Applied Subtype:</span> <?php echo htmlspecialchars($pending_app['applied_subtype'] ?: 'Not specified'); ?></p>
+            <p><span class="font-semibold">Application Status:</span> <?php echo htmlspecialchars($pending_app['status'] ?? 'Pending'); ?></p>
+          </div>
+          <?php endif; ?>
           <div class="flex flex-col sm:flex-row gap-3 justify-center">
             <a href="student_applications.php" class="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl transition-colors shadow-sm">
               <span class="material-symbols-outlined text-[18px]">assignment</span> View Application Status
             </a>
           </div>
         </div>
-      <?php elseif (!$has_active && !$has_assigned_project): ?>
-        <?php if ($app_count > 0 || $has_confirmed_team): ?>
-          <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-16 text-center max-w-md mx-auto">
-            <div class="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-5">
-              <span class="material-symbols-outlined text-[40px] text-slate-300">hourglass_empty</span>
-            </div>
-            <h3 class="text-lg font-bold text-slate-600 mb-2">Project Not Assigned Yet</h3>
-            <p class="text-slate-400 text-sm mb-6">Your application is in progress, but a confirmed team has not yet been linked to a project. Once the coordinator assigns the project, it will appear here.</p>
-            <a href="student_applications.php" class="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl transition-colors shadow-sm">
-              <span class="material-symbols-outlined text-[18px]">assignment</span> View Application Status
-            </a>
-          </div>
-        <?php else: ?>
-          <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-16 text-center max-w-md mx-auto">
-            <div class="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-5">
-              <span class="material-symbols-outlined text-[40px] text-slate-300">badge</span>
-            </div>
-            <h3 class="text-lg font-bold text-slate-600 mb-2">No Active Internship</h3>
-            <p class="text-slate-400 text-sm mb-6">Apply for an internship to get started on your journey.</p>
-            <a href="student_browse_internships.php" class="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl transition-colors shadow-sm">
-              <span class="material-symbols-outlined text-[18px]">search</span> Browse Internships
-            </a>
-          </div>
-        <?php endif; ?>
       <?php else:
         $intern_end = clone $end_date;
       ?>
@@ -1537,20 +1558,16 @@ if (isset($_GET['warning'])) {
     <section id="sec-project" class="dashboard-section">
       <h2 class="text-xl font-bold text-slate-800 mb-6">My Project</h2>
 
-      <?php if (!$has_active && !$has_assigned_project): ?>
+      <?php if (!$has_project_details): ?>
       <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-12 text-center">
-        <?php if ($is_selected): ?>
-          <div class="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-4">
-            <span class="material-symbols-outlined text-[36px] text-emerald-500">check_circle</span>
-          </div>
-          <p class="text-slate-700 font-bold text-base mb-1">You are selected!</p>
-          <p class="text-slate-400 text-sm">Project assignment is pending from coordinator. Once assigned, your project details will appear here.</p>
-        <?php elseif ($has_confirmed_team): ?>
-          <span class="material-symbols-outlined text-[48px] text-slate-300 mb-4 block">terminal</span>
-          <p class="text-slate-500 font-medium">Project Not Assigned Yet</p>
-        <?php else: ?>
-          <span class="material-symbols-outlined text-[48px] text-slate-300 mb-4 block">terminal</span>
-          <p class="text-slate-500 font-medium">No active internship — no project assigned yet.</p>
+        <span class="material-symbols-outlined text-[48px] text-slate-300 mb-4 block">terminal</span>
+        <p class="text-slate-700 font-bold text-base mb-3">Project not assigned yet.</p>
+        <p class="text-slate-400 text-sm mb-4">You will see project details after coordinator assignment.</p>
+        <?php if (!empty($pending_app)): ?>
+        <div class="text-left mx-auto inline-block text-sm text-slate-600">
+          <p class="mb-1"><span class="font-semibold">Applied Subtype:</span> <?php echo htmlspecialchars($pending_app['applied_subtype'] ?: 'Not specified'); ?></p>
+          <p><span class="font-semibold">Application Status:</span> <?php echo htmlspecialchars($pending_app['status'] ?? 'Pending'); ?></p>
+        </div>
         <?php endif; ?>
       </div>
       <?php else: ?>

@@ -27,6 +27,7 @@ $app_sql = "SELECT a.id as app_id,
                    a.status, a.applied_date,
                    a.relevant_skills, a.preferred_duration,
                    a.test_status, a.test_score, a.test_answers, a.education_status, a.test_submitted_date,
+                   a.test_attempts, a.max_attempts,
                    i.project_type, i.project_subtype,
                    ss.score as ss_score,
                    ss.total_questions as ss_total_questions
@@ -306,7 +307,14 @@ $has_active = mysqli_num_rows($active_result) > 0;
                         }
                     }
                     
-                    $show_start_test = ($current_status === 'Applied' && $test_status !== 'Completed' && !$is_deadline_expired);
+                    $test_attempts = intval($app['test_attempts'] ?? 0);
+                    $max_attempts = intval($app['max_attempts'] ?? 3);
+                    if ($max_attempts <= 0) {
+                      $max_attempts = 3;
+                    }
+                    $attempts_remaining = max(0, $max_attempts - $test_attempts);
+                    $has_max_attempts = ($test_attempts >= $max_attempts);
+                    $show_start_test = ($current_status === 'Applied' && $test_status !== 'Completed' && !$is_deadline_expired && !$has_max_attempts);
                     $show_test_expired = ($current_status === 'Applied' && $test_status !== 'Completed' && $is_deadline_expired);
                     $show_view_result = ($test_status === 'Completed');
                 ?>
@@ -433,6 +441,12 @@ $has_active = mysqli_num_rows($active_result) > 0;
                             <span class="material-symbols-outlined text-[18px]">quiz</span> 
                             Start Test
                           </a>
+                        <?php elseif ($has_max_attempts): ?>
+                          <button disabled
+                                  class="px-4 py-2.5 bg-red-100 text-red-700 text-sm font-bold rounded-lg cursor-not-allowed flex items-center justify-center gap-2 opacity-90">
+                            <span class="material-symbols-outlined text-[18px]">error</span>
+                            Maximum test attempts reached
+                          </button>
                         <?php elseif ($show_test_expired): ?>
                           <button disabled
                                   class="px-4 py-2.5 bg-slate-200 text-slate-500 text-sm font-bold rounded-lg cursor-not-allowed flex items-center justify-center gap-2 opacity-60">

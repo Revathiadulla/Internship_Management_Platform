@@ -206,7 +206,8 @@ if (isset($d['app_id'])) {
         $score_stmt->close();
     }
     
-    $attempts_stmt = $conn->prepare("SELECT COUNT(*) as cnt FROM student_scores WHERE application_id = ?");
+    // Prefer using the test_attempt_history table if present to count attempts
+    $attempts_stmt = $conn->prepare("SELECT COUNT(*) as cnt FROM test_attempt_history WHERE application_id = ?");
     if ($attempts_stmt) {
         $app_id_int = intval($d['app_id']);
         $attempts_stmt->bind_param("i", $app_id_int);

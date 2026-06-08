@@ -98,50 +98,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         show_error_page('Application Not Found', 'Application not found or you are not allowed to access this test.');
     }
 
+    $test_attempts = intval($row['test_attempts'] ?? 0);
+    $max_attempts = intval($row['max_attempts'] ?? 3);
+    if ($max_attempts <= 0) {
+        $max_attempts = 3;
+    }
+    $remaining_attempts = max(0, $max_attempts - $test_attempts);
+    $next_attempt_no = min($test_attempts + 1, $max_attempts);
+    $test_status = $row['test_status'] ?? 'Pending';
+    $status_lower = strtolower($row['status'] ?? '');
+    $has_passed = in_array($status_lower, ['hr review', 'hod approved', 'selected', 'started', 'internship started', 'active intern']);
+
+    if ($has_passed || strtolower($test_status) === 'completed') {
+        show_error_page('Test Already Completed', 'Your test has already been completed. Please check your application status.');
+    }
+
+    if ($test_attempts >= $max_attempts) {
+        show_error_page('Maximum Test Attempts Reached', 'You have reached the maximum number of test attempts for this application.');
+    }
+
     // Ensure numeric casting
     $internship_id = intval($row['internship_id']);
     $student_id = intval($row['student_id'] ?? $row['user_id'] ?? 0);
     $subtype = $row['project_subtype'];
     $difficulty = $row['difficulty_level'];
 
-    // Check if student already completed this test (by application)
-    $check_score_stmt = $conn->prepare('SELECT id FROM student_scores WHERE student_id = ? AND application_id = ? LIMIT 1');
-    if (!$check_score_stmt) {
-        die('Database error: ' . $conn->error);
-    }
-    $check_score_stmt->bind_param('ii', $student_id, $app_id);
-    $check_score_stmt->execute();
-    $score_check = $check_score_stmt->get_result();
-    $check_score_stmt->close();
-
-    if ($score_check->num_rows > 0) {
-        // Student already completed this test
-        ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Test Already Completed</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL,GRAD,opsz@300,0,0,24" rel="stylesheet" />
-</head>
-<body class="bg-gradient-to-br from-blue-50 to-indigo-50 min-h-screen flex items-center justify-center p-4">
-    <div class="bg-white rounded-2xl shadow-lg p-8 max-w-md border border-amber-200">
-        <div class="flex justify-center mb-4">
-            <div class="w-16 h-16 bg-amber-50 rounded-full flex items-center justify-center">
-                <span class="material-symbols-outlined text-amber-600 text-4xl">check_circle</span>
-            </div>
-        </div>
-        <h2 class="text-2xl font-bold text-gray-900 text-center mb-2">Test Already Completed</h2>
-        <p class="text-gray-600 text-center mb-6">You have already completed this test. Multiple attempts are not allowed.</p>
-        <a href="student_applications.php" class="block text-center px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition-colors">Back to Applications</a>
-    </div>
-</body>
-</html>
-        <?php
-        exit;
-    }
+    // No block on existing scores: allow retries until max attempts.
 
     // Find matching subtype test (latest) for this project_subtype
     $test_stmt = $conn->prepare('SELECT * FROM subtype_tests WHERE project_subtype = ? AND status = "active" ORDER BY id DESC LIMIT 1');
@@ -223,6 +205,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 <div class="space-y-1">
                     <p class="text-xs uppercase tracking-[0.3em] text-slate-500">Difficulty Level</p>
                     <p class="text-lg font-semibold text-slate-900"><?php echo htmlspecialchars($row['difficulty_level'] ?? 'N/A'); ?></p>
+                </div>
+                <div class="space-y-1">
+                    <p class="text-xs uppercase tracking-[0.3em] text-slate-500">Attempt</p>
+                    <p class="text-lg font-semibold text-slate-900">Attempt <?php echo $next_attempt_no; ?> of <?php echo $max_attempts; ?></p>
+                    <p class="text-xs text-slate-500">Remaining: <?php echo $remaining_attempts; ?></p>
+                    <?php if ($test_attempts > 0 && strtolower($test_status) === 'failed'): ?>
+                    <p class="text-xs font-semibold text-red-600">You did not qualify. You have <?php echo $remaining_attempts; ?> attempt<?php echo $remaining_attempts === 1 ? '' : 's'; ?> remaining.</p>
+                    <?php endif; ?>
                 </div>
             </div>
         </header>
@@ -590,19 +580,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         show_error_page('Unauthorized', 'You do not have permission to submit this test.');
     }
 
-    // Prevent multiple attempts: Check if score already exists
-    $check_score_stmt = $conn->prepare('SELECT id FROM student_scores WHERE student_id = ? AND application_id = ? LIMIT 1');
-    if (!$check_score_stmt) {
-        die('Database error: ' . $conn->error);
+    $test_attempts = intval($row['test_attempts'] ?? 0);
+    $max_attempts = intval($row['max_attempts'] ?? 3);
+    if ($max_attempts <= 0) {
+        $max_attempts = 3;
     }
-    $check_score_stmt->bind_param('ii', $student_id, $app_id);
-    $check_score_stmt->execute();
-    $score_check = $check_score_stmt->get_result();
-    $check_score_stmt->close();
+    $remaining_attempts = max(0, $max_attempts - $test_attempts);
+    $current_test_status = strtolower($row['test_status'] ?? 'pending');
+    $current_app_status = strtolower($row['status'] ?? '');
+    $has_passed = in_array($current_app_status, ['hr review', 'hod approved', 'selected', 'started', 'internship started', 'active intern']);
 
-    if ($score_check->num_rows > 0) {
-        show_error_page('Test Already Completed', 'You have already completed this test. Multiple attempts are not allowed.');
+    if ($has_passed || $current_test_status === 'completed' || $current_test_status === 'passed') {
+        show_error_page('Test Already Completed', 'Your test has already been completed. Please check your application status.');
     }
+
+    if ($test_attempts >= $max_attempts) {
+        show_error_page('Maximum Test Attempts Reached', 'You have reached the maximum number of test attempts for this application.');
+    }
+
+    // Determine next attempt number
+    $attempt_no = $test_attempts + 1;
 
     // Friendly fallback if subtype missing
     if (empty($subtype)) {
@@ -682,34 +679,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Update application status and test scores
     $percentage_int = intval(round($percentage_decimal));
-    $new_status = ($percentage_int >= 60) ? 'HR Review' : 'Rejected';
-    
-    $current_status = $row['status'] ?? '';
-    $status_to_update = $current_status;
-    if (!in_array($current_status, ['Selected', 'HOD Approved', 'HOD Approval Pending', 'Rejected'])) {
-        if ($new_status === 'HR Review') {
-            if (in_array($current_status, ['Applied', 'Test Completed'])) {
-                $status_to_update = 'HR Review';
-            }
-        } else {
-            $status_to_update = 'Rejected';
-        }
+    $is_passed = ($percentage_int >= 60);
+    $status_to_update = $row['status'];
+    if ($is_passed) {
+        $status_to_update = 'HR Review';
+    } elseif ($attempt_no >= $max_attempts) {
+        $status_to_update = 'Rejected';
     }
+    $test_status_to_set = $is_passed ? 'Completed' : 'Failed';
+    $test_result = $is_passed ? 'Passed' : 'Failed';
+    $test_attempts_value = $attempt_no;
 
-    $upd = $conn->prepare("UPDATE internship_applications SET status = ?, test_score = ?, test_completed_at = NOW(), test_status = 'Completed', test_submitted_date = NOW() WHERE id = ?");
+    $upd = $conn->prepare("UPDATE internship_applications SET status = ?, test_score = ?, test_completed_at = NOW(), test_status = ?, test_result = ?, test_submitted_date = NOW(), test_attempts = ?, max_attempts = ? WHERE id = ?");
     if (!$upd) {
         die('Database error: ' . $conn->error);
     }
-    $upd->bind_param('sii', $status_to_update, $percentage_int, $app_id);
+    $upd->bind_param('sissiii', $status_to_update, $percentage_int, $test_status_to_set, $test_result, $test_attempts_value, $max_attempts, $app_id);
     $upd->execute();
     $upd->close();
 
-    // Save to student_scores with application_id included
-    $ins_score = $conn->prepare("INSERT INTO student_scores (student_id, internship_id, application_id, test_id, score, total_questions, percentage, submitted_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())");
+    // Save attempt history
+    $ins_history = $conn->prepare("INSERT INTO test_attempt_history (application_id, student_id, internship_id, test_id, attempt_no, score, total_questions, percentage) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+    if (!$ins_history) {
+        die('Database error: ' . $conn->error);
+    }
+    $ins_history->bind_param('iiiiiiid', $app_id, $student_id, $internship_id, $subtype_test_id, $attempt_no, $score, $total_questions, $percentage_decimal);
+    $ins_history->execute();
+    $ins_history->close();
+
+    // Save latest attempt summary in student_scores
+    $ins_score = $conn->prepare("INSERT INTO student_scores (student_id, internship_id, application_id, test_id, attempt_no, score, total_questions, percentage, submitted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())");
     if (!$ins_score) {
         die('Database error: ' . $conn->error);
     }
-    $ins_score->bind_param('iiiiiid', $student_id, $internship_id, $app_id, $subtype_test_id, $score, $total_questions, $percentage_decimal);
+    $ins_score->bind_param('iiiiiiid', $student_id, $internship_id, $app_id, $subtype_test_id, $attempt_no, $score, $total_questions, $percentage_decimal);
     $ins_score->execute();
     $ins_score->close();
 
