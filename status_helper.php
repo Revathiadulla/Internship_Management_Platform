@@ -32,33 +32,63 @@ function getStatusBadge($status) {
 
 // Get workflow steps based on education status
 function getWorkflowSteps($education_status) {
-    $base_steps = [
+    $steps = [
         ['status' => 'Applied', 'label' => 'Applied', 'icon' => 'send'],
-        ['status' => 'Test Completed', 'label' => 'Test Completed', 'icon' => 'task_alt'],
-        ['status' => 'HR Round', 'label' => 'HR Round', 'icon' => 'groups'],
+        ['status' => 'Test Completed', 'label' => 'Test Completed', 'icon' => 'quiz'],
+        ['status' => 'HR Review', 'label' => 'HR Review', 'icon' => 'manage_search'],
     ];
     
-    if ($education_status === 'Pursuing') {
-        $base_steps[] = ['status' => 'HOD Approval Pending', 'label' => 'HOD Approval', 'icon' => 'pending'];
-        $base_steps[] = ['status' => 'HOD Approved', 'label' => 'HOD Approved', 'icon' => 'verified'];
+    if (strtolower($education_status) === 'pursuing') {
+        $steps[] = ['status' => 'HOD Approval', 'label' => 'HOD Approval', 'icon' => 'verified'];
     }
     
-    $base_steps[] = ['status' => 'Selected', 'label' => 'Selected', 'icon' => 'check_circle'];
+    $steps[] = ['status' => 'Selected by HR', 'label' => 'Selected by HR', 'icon' => 'check_circle'];
+    $steps[] = ['status' => 'Confirmation Letter Sent', 'label' => 'Confirmation Letter Sent', 'icon' => 'mail'];
     
-    return $base_steps;
+    return $steps;
 }
 
 // Check if status is active in workflow
 function isStatusActive($current_status, $step_status, $all_history) {
+    $status_map = [
+        'applied' => ['applied'],
+        'test completed' => ['test completed'],
+        'hr review' => ['hr round', 'hr review'],
+        'hod approval' => ['hod approval pending', 'hod approved'],
+        'selected by hr' => ['selected'],
+        'confirmation letter sent' => ['active intern']
+    ];
+    
+    $current_status_lower = strtolower($current_status);
+    $step_status_lower = strtolower($step_status);
+    
     // Check if current status matches
-    if ($current_status === $step_status) {
+    $current_matched = false;
+    if (isset($status_map[$step_status_lower])) {
+        if (in_array($current_status_lower, $status_map[$step_status_lower])) {
+            $current_matched = true;
+        }
+    } else {
+        if ($current_status_lower === $step_status_lower) {
+            $current_matched = true;
+        }
+    }
+    
+    if ($current_matched) {
         return 'current';
     }
     
     // Check if this status was completed in history
     foreach ($all_history as $history) {
-        if ($history['new_status'] === $step_status) {
-            return 'completed';
+        $hist_status_lower = strtolower($history['new_status']);
+        if (isset($status_map[$step_status_lower])) {
+            if (in_array($hist_status_lower, $status_map[$step_status_lower])) {
+                return 'completed';
+            }
+        } else {
+            if ($hist_status_lower === $step_status_lower) {
+                return 'completed';
+            }
         }
     }
     

@@ -57,6 +57,28 @@ function uploadToCloudinary($file_path, $folder, $is_raw = false, $original_file
         throw new Exception("Local file not found for upload: " . $file_path);
     }
 
+    // Determine extension from original_filename or file_path
+    $ext = '';
+    if (!empty($original_filename)) {
+        $ext = strtolower(pathinfo($original_filename, PATHINFO_EXTENSION));
+    } else {
+        $ext = strtolower(pathinfo($file_path, PATHINFO_EXTENSION));
+    }
+
+    $is_pdf = ($ext === 'pdf');
+
+    // MIME type validation for PDF files before upload
+    if ($is_pdf) {
+        if (class_exists('finfo')) {
+            $finfo = finfo_open(FILEINFO_MIME_TYPE);
+            $mime = finfo_file($finfo, $file_path);
+            finfo_close($finfo);
+            if ($mime !== 'application/pdf') {
+                throw new Exception("Invalid file content: Expected application/pdf, got " . $mime);
+            }
+        }
+    }
+
     try {
         $uploadApi = new UploadApi();
         
@@ -81,6 +103,17 @@ function uploadToCloudinary($file_path, $folder, $is_raw = false, $original_file
             'use_filename' => true,
             'unique_filename' => false
         ];
+
+        if ($is_pdf) {
+            $options['format'] = 'pdf';
+            // Set public_id preserving the .pdf extension
+            $filename_to_use = !empty($original_filename) ? $original_filename : basename($file_path);
+            $clean_name = preg_replace('/[^a-zA-Z0-9_.-]/', '_', $filename_to_use);
+            if (strtolower(pathinfo($clean_name, PATHINFO_EXTENSION)) !== 'pdf') {
+                $clean_name .= '.pdf';
+            }
+            $options['public_id'] = $clean_name;
+        }
 
         $response = $uploadApi->upload($upload_file_path, $options);
         

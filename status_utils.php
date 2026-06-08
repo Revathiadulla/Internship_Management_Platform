@@ -54,16 +54,20 @@ function getStatusIcon($status) {
 }
 
 function getWorkflowSteps($education_status) {
-    $base_steps = [
+    $steps = [
         ['status' => 'Applied', 'label' => 'Applied', 'icon' => 'send'],
         ['status' => 'Test Completed', 'label' => 'Test Completed', 'icon' => 'quiz'],
-        ['status' => 'HR Round', 'label' => 'HR Round', 'icon' => 'manage_search'],
+        ['status' => 'HR Review', 'label' => 'HR Review', 'icon' => 'manage_search'],
     ];
-    if ($education_status === 'Pursuing') {
-        $base_steps[] = ['status' => 'HOD Approved', 'label' => 'HOD Approved', 'icon' => 'verified'];
+    
+    if (strtolower($education_status) === 'pursuing') {
+        $steps[] = ['status' => 'HOD Approval', 'label' => 'HOD Approval', 'icon' => 'verified'];
     }
-    $base_steps[] = ['status' => 'Selected', 'label' => 'Selected', 'icon' => 'check_circle'];
-    return $base_steps;
+    
+    $steps[] = ['status' => 'Selected by HR', 'label' => 'Selected by HR', 'icon' => 'check_circle'];
+    $steps[] = ['status' => 'Confirmation Letter Sent', 'label' => 'Confirmation Letter Sent', 'icon' => 'mail'];
+    
+    return $steps;
 }
 
 function getCurrentStepIndex($current_status, $workflow_steps) {
