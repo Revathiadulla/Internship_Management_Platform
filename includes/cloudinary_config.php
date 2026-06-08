@@ -81,3 +81,22 @@ function uploadToCloudinary($file_path, $folder, $is_raw = false) {
         throw new Exception("Failed to upload file to Cloudinary: " . $e->getMessage());
     }
 }
+
+/**
+ * Returns a Google Docs Viewer URL for PDF files or raw Cloudinary files.
+ *
+ * @param string $url The original file URL.
+ * @return string The viewer URL or original URL.
+ */
+function getDocumentViewUrl($url) {
+    if (empty($url)) {
+        return '#';
+    }
+    
+    $ext = strtolower(pathinfo(parse_url($url, PHP_URL_PATH) ?? '', PATHINFO_EXTENSION));
+    if ($ext === 'pdf' || strpos($url, '/raw/upload/') !== false || preg_match('/\.pdf/i', $url)) {
+        return 'https://docs.google.com/gview?embedded=true&url=' . urlencode($url);
+    }
+    
+    return $url;
+}

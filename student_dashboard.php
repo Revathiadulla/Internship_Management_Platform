@@ -1,6 +1,7 @@
 <?php
 session_start();
 include "db.php";
+require_once __DIR__ . '/includes/cloudinary_config.php';
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: login.html");
@@ -1852,11 +1853,20 @@ if (isset($_GET['warning'])) {
                   <p class="font-bold text-slate-800"><?php echo htmlspecialchars($active_intern['domain'] ?? 'General'); ?></p>
                 </div>
               </div>
-              <a href="generate_certificate.php?user_id=<?php echo intval($user_id); ?>"
-                 class="w-full flex items-center justify-center gap-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold py-3.5 rounded-xl transition-all shadow-md text-sm">
-                <span class="material-symbols-outlined text-[20px]">download</span>
-                Download Certificate (PDF)
-              </a>
+              <div class="flex flex-col sm:flex-row gap-3">
+                <a href="<?php echo htmlspecialchars("generate_certificate.php?user_id=" . intval($user_id) . "&mode=view"); ?>"
+                   target="_blank" rel="noopener noreferrer"
+                   class="flex-1 flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 rounded-xl transition-all shadow-md text-sm">
+                  <span class="material-symbols-outlined text-[20px]">visibility</span>
+                  View Certificate
+                </a>
+                <a href="<?php echo htmlspecialchars("generate_certificate.php?user_id=" . intval($user_id) . "&mode=download"); ?>"
+                   target="_blank" rel="noopener noreferrer"
+                   class="flex-1 flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3.5 rounded-xl transition-all text-sm border border-slate-200">
+                  <span class="material-symbols-outlined text-[20px]">download</span>
+                  Download
+                </a>
+              </div>
               <p class="text-center text-xs text-slate-400 mt-3">Certificate is digitally signed and verifiable</p>
             </div>
           </div>

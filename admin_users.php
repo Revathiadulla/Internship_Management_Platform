@@ -840,15 +840,24 @@ $header_photo = $header_user['profile_photo'] ?? '';
       const prof = data.profile || {};
       const baseUploadPath = 'view_doc.php?file=';
       
+      function getJsDocViewUrl(url) {
+        if (!url) return '#';
+        url = url.trim();
+        if (url.toLowerCase().endsWith('.pdf') || url.includes('/raw/upload/') || /\.pdf/i.test(url)) {
+          return 'https://docs.google.com/gview?embedded=true&url=' + encodeURIComponent(url);
+        }
+        return url;
+      }
+      
       let resumeHtml = '';
       if (prof.resume_file || prof.resume_url) {
         let rLink = '#';
         if (prof.resume_url && (prof.resume_url.startsWith('http://') || prof.resume_url.startsWith('https://'))) {
-          rLink = prof.resume_url;
+          rLink = getJsDocViewUrl(prof.resume_url);
         } else if (prof.resume_file && (prof.resume_file.startsWith('http://') || prof.resume_file.startsWith('https://'))) {
-          rLink = prof.resume_file;
+          rLink = getJsDocViewUrl(prof.resume_file);
         } else if (prof.resume_file) {
-          rLink = 'resume_serve.php?file=' + encodeURIComponent(prof.resume_file) + '&mode=view';
+          rLink = getJsDocViewUrl('resume_serve.php?file=' + encodeURIComponent(prof.resume_file) + '&mode=view');
         }
         resumeHtml = `
           <div class="flex justify-between items-center bg-slate-50 p-3 rounded-lg border border-slate-100">
@@ -856,7 +865,7 @@ $header_photo = $header_user['profile_photo'] ?? '';
               <span class="material-symbols-outlined text-red-500">picture_as_pdf</span>
               <span class="font-semibold text-gray-800 text-xs">Student Resume</span>
             </div>
-            <a href="${rLink}" target="_blank" data-resume-exists="${prof.resume_exists ? 'true' : 'false'}" class="text-blue-600 hover:text-blue-800 text-xs font-bold">View PDF</a>
+            <a href="${rLink}" target="_blank" rel="noopener noreferrer" data-resume-exists="${prof.resume_exists ? 'true' : 'false'}" class="text-blue-600 hover:text-blue-800 text-xs font-bold">View PDF</a>
           </div>
         `;
       }
@@ -872,7 +881,7 @@ $header_photo = $header_user['profile_photo'] ?? '';
               <span class="material-symbols-outlined text-green-500">description</span>
               <span class="font-semibold text-gray-800 text-xs">Aadhaar Document</span>
             </div>
-            <a href="${aLink}" target="_blank" class="text-blue-600 hover:text-blue-800 text-xs font-bold">View File</a>
+            <a href="${getJsDocViewUrl(aLink)}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 text-xs font-bold">View File</a>
           </div>
         `;
       }
@@ -888,7 +897,7 @@ $header_photo = $header_user['profile_photo'] ?? '';
               <span class="material-symbols-outlined text-amber-500">description</span>
               <span class="font-semibold text-gray-800 text-xs">PAN Card Document</span>
             </div>
-            <a href="${pLink}" target="_blank" class="text-blue-600 hover:text-blue-800 text-xs font-bold">View File</a>
+            <a href="${getJsDocViewUrl(pLink)}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 text-xs font-bold">View File</a>
           </div>
         `;
       }

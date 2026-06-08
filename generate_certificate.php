@@ -19,6 +19,7 @@ $session_role    = $_SESSION['role'] ?? 'student';
 
 // Determine target user
 $target_user_id = isset($_GET['user_id']) ? intval($_GET['user_id']) : $session_user_id;
+$mode = isset($_GET['mode']) && $_GET['mode'] === 'download' ? 'download' : 'view';
 
 // Students can only generate their own certificates
 if ($session_role === 'student' && $target_user_id !== $session_user_id) {
@@ -54,7 +55,11 @@ if (!$intern) {
 
 // If certificate_path is already generated and populated with a Cloudinary URL, redirect directly
 if (!empty($intern['certificate_path']) && (strpos($intern['certificate_path'], 'http://') === 0 || strpos($intern['certificate_path'], 'https://') === 0)) {
-    header("Location: " . $intern['certificate_path']);
+    $target_url = $intern['certificate_path'];
+    if ($mode === 'view') {
+        $target_url = 'https://docs.google.com/gview?embedded=true&url=' . urlencode($target_url);
+    }
+    header("Location: " . $target_url);
     exit();
 }
 
@@ -236,6 +241,10 @@ $app_id = intval($intern['app_id']);
 $update_sql = "UPDATE internship_applications SET certificate_path = '$esc_url' WHERE id = $app_id";
 mysqli_query($conn, $update_sql);
 
-// Redirect to Cloudinary URL
-header("Location: " . $secure_url);
+// Redirect to Cloudinary URL or Google Docs Viewer
+$target_url = $secure_url;
+if ($mode === 'view') {
+    $target_url = 'https://docs.google.com/gview?embedded=true&url=' . urlencode($target_url);
+}
+header("Location: " . $target_url);
 exit();

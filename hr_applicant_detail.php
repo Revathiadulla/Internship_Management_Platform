@@ -5,6 +5,7 @@ require_once __DIR__ . '/includes/crypto_helper.php';
 require_hr_or_admin();
 include 'db.php';
 include 'status_utils.php';
+require_once __DIR__ . '/includes/cloudinary_config.php';
 
 $app_id = isset($_GET['app_id']) ? intval($_GET['app_id']) : 0;
 if ($app_id <= 0) {
@@ -306,14 +307,14 @@ if ($is_remote) {
     $has_resume = true;
     $resume_ext = 'url';
     $resume_label = $resume_link;
-    $view_href = $resume_link;
+    $view_href = getDocumentViewUrl($resume_link);
     $download_href = $resume_link;
 } else {
     $resume_safe        = $resume !== '' ? urlencode(basename($resume)) : '';
     $resume_ext         = $resume !== '' ? strtolower(pathinfo($resume, PATHINFO_EXTENSION)) : '';
     $has_resume         = $resume_safe !== '' && in_array($resume_ext, ['pdf', 'doc', 'docx'], true);
     $resume_label       = $resume !== '' ? basename($resume) : 'No resume uploaded';
-    $view_href = "resume_serve.php?file=" . $resume_safe . "&mode=view";
+    $view_href = getDocumentViewUrl("resume_serve.php?file=" . $resume_safe . "&mode=view");
     $download_href = "resume_serve.php?file=" . $resume_safe . "&mode=download";
 }
 
@@ -774,7 +775,7 @@ $status_colors = [
               </div>
               <?php if ($has_resume): ?>
                 <div class="flex flex-wrap gap-2">
-                  <a href="<?php echo $view_href; ?>" target="_blank" data-resume-exists="<?php echo $exists ? 'true' : 'false'; ?>" class="inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-all">
+                  <a href="<?php echo htmlspecialchars($view_href); ?>" target="_blank" rel="noopener noreferrer" data-resume-exists="<?php echo $exists ? 'true' : 'false'; ?>" class="inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-all">
                     <span class="material-symbols-outlined">visibility</span>
                     View resume
                   </a>
@@ -833,7 +834,7 @@ $status_colors = [
                 <div class="mt-4 pt-3 border-t border-slate-200">
                   <p class="text-xs uppercase tracking-[0.24em] text-slate-400 mb-2">Aadhaar Document</p>
                   <?php if ($aadhaar_file_url !== null): ?>
-                    <a href="<?php echo htmlspecialchars($aadhaar_file_url); ?>" target="_blank" class="inline-flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-750 font-bold">
+                    <a href="<?php echo htmlspecialchars(getDocumentViewUrl($aadhaar_file_url)); ?>" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-750 font-bold">
                       <span class="material-symbols-outlined text-[16px]">visibility</span> View Aadhaar File
                     </a>
                   <?php elseif ($aadhaar_uploaded): ?>
@@ -854,7 +855,7 @@ $status_colors = [
                 <div class="mt-4 pt-3 border-t border-slate-200">
                   <p class="text-xs uppercase tracking-[0.24em] text-slate-400 mb-2">PAN Document</p>
                   <?php if ($pan_file_url !== null): ?>
-                    <a href="<?php echo htmlspecialchars($pan_file_url); ?>" target="_blank" class="inline-flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-750 font-bold">
+                    <a href="<?php echo htmlspecialchars(getDocumentViewUrl($pan_file_url)); ?>" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-750 font-bold">
                       <span class="material-symbols-outlined text-[16px]">visibility</span> View PAN File
                     </a>
                   <?php elseif ($pan_uploaded): ?>

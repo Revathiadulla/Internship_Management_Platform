@@ -587,20 +587,32 @@ $header_photo = $header_user['profile_photo'] ?? '';
           // Documents
           const baseUploadPath = 'view_doc.php?file=';
           
+          function getJsDocViewUrl(url) {
+            if (!url) return '#';
+            url = url.trim();
+            if (url.toLowerCase().endsWith('.pdf') || url.includes('/raw/upload/') || /\.pdf/i.test(url)) {
+              return 'https://docs.google.com/gview?embedded=true&url=' + encodeURIComponent(url);
+            }
+            return url;
+          }
+          
           if (app.resume_url && (app.resume_url.startsWith('http://') || app.resume_url.startsWith('https://'))) {
             document.getElementById('link-resume').classList.remove('hidden');
-            document.getElementById('link-resume').setAttribute('href', app.resume_url);
+            document.getElementById('link-resume').setAttribute('href', getJsDocViewUrl(app.resume_url));
             document.getElementById('link-resume').setAttribute('target', '_blank');
+            document.getElementById('link-resume').setAttribute('rel', 'noopener noreferrer');
             document.getElementById('no-resume').classList.add('hidden');
           } else if (app.resume_file && (app.resume_file.startsWith('http://') || app.resume_file.startsWith('https://'))) {
             document.getElementById('link-resume').classList.remove('hidden');
-            document.getElementById('link-resume').setAttribute('href', app.resume_file);
+            document.getElementById('link-resume').setAttribute('href', getJsDocViewUrl(app.resume_file));
             document.getElementById('link-resume').setAttribute('target', '_blank');
+            document.getElementById('link-resume').setAttribute('rel', 'noopener noreferrer');
             document.getElementById('no-resume').classList.add('hidden');
           } else if (app.resume_file && app.resume_file.trim() !== '') {
             document.getElementById('link-resume').classList.remove('hidden');
-            document.getElementById('link-resume').setAttribute('href', 'resume_serve.php?file=' + encodeURIComponent(app.resume_file) + '&mode=view');
+            document.getElementById('link-resume').setAttribute('href', getJsDocViewUrl('resume_serve.php?file=' + encodeURIComponent(app.resume_file) + '&mode=view'));
             document.getElementById('link-resume').setAttribute('target', '_blank');
+            document.getElementById('link-resume').setAttribute('rel', 'noopener noreferrer');
             document.getElementById('no-resume').classList.add('hidden');
           } else {
             document.getElementById('link-resume').classList.add('hidden');
@@ -615,7 +627,9 @@ $header_photo = $header_user['profile_photo'] ?? '';
             let pLink = (app.pan_file.startsWith('http://') || app.pan_file.startsWith('https://'))
                         ? app.pan_file
                         : baseUploadPath + app.pan_file;
-            document.getElementById('link-pan').setAttribute('href', pLink);
+            document.getElementById('link-pan').setAttribute('href', getJsDocViewUrl(pLink));
+            document.getElementById('link-pan').setAttribute('target', '_blank');
+            document.getElementById('link-pan').setAttribute('rel', 'noopener noreferrer');
             document.getElementById('no-pan').classList.add('hidden');
           } else {
             document.getElementById('link-pan').classList.add('hidden');
@@ -627,7 +641,9 @@ $header_photo = $header_user['profile_photo'] ?? '';
             let aLink = (app.aadhaar_card_file.startsWith('http://') || app.aadhaar_card_file.startsWith('https://'))
                         ? app.aadhaar_card_file
                         : baseUploadPath + app.aadhaar_card_file;
-            document.getElementById('link-aadhaar').setAttribute('href', aLink);
+            document.getElementById('link-aadhaar').setAttribute('href', getJsDocViewUrl(aLink));
+            document.getElementById('link-aadhaar').setAttribute('target', '_blank');
+            document.getElementById('link-aadhaar').setAttribute('rel', 'noopener noreferrer');
             document.getElementById('no-aadhaar').classList.add('hidden');
           } else {
             document.getElementById('link-aadhaar').classList.add('hidden');

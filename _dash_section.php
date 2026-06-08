@@ -437,10 +437,13 @@
           <h3 class="text-xl font-extrabold text-white tracking-tight">Congratulations! You have been selected.</h3>
           <p class="text-emerald-100 text-sm mt-1">Project assignment, team formation, and mentor allocation are pending from the coordinator. Please wait for further instructions.</p>
         </div>
-        <div class="flex items-center gap-3 shrink-0">
+        <div class="flex flex-wrap items-center gap-3 shrink-0">
           <?php if (!empty($selected_app['confirmation_letter_path'])): ?>
-          <a href="<?php echo htmlspecialchars($selected_app['confirmation_letter_path']); ?>" target="_blank" class="inline-flex items-center gap-2 bg-white text-emerald-700 font-bold text-sm px-4 py-2.5 rounded-xl hover:bg-emerald-50 transition-colors shadow-sm">
-            <span class="material-symbols-outlined text-[18px]">download</span> Download Confirmation Letter
+          <a href="<?php echo htmlspecialchars(getDocumentViewUrl($selected_app['confirmation_letter_path'])); ?>" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 bg-white text-emerald-700 font-bold text-sm px-4 py-2.5 rounded-xl hover:bg-emerald-50 transition-colors shadow-sm">
+            <span class="material-symbols-outlined text-[18px]">visibility</span> View Letter
+          </a>
+          <a href="<?php echo htmlspecialchars($selected_app['confirmation_letter_path']); ?>" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 bg-white/20 text-white font-bold text-sm px-4 py-2.5 rounded-xl hover:bg-white/30 transition-colors shadow-sm border border-white/20">
+            <span class="material-symbols-outlined text-[18px]">download</span> Download
           </a>
           <?php endif; ?>
         </div>

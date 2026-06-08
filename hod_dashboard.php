@@ -104,10 +104,10 @@ $result = mysqli_query($conn, $query);
                     $is_remote = false;
                     $view_href = '#';
                     if ($resume_url !== '' && (strpos($resume_url, 'http://') === 0 || strpos($resume_url, 'https://') === 0)) {
-                        $view_href = $resume_url;
+                        $view_href = getDocumentViewUrl($resume_url);
                         $is_remote = true;
                     } elseif ($resume !== '') {
-                        $view_href = "resume_serve.php?file=" . urlencode(basename($resume)) . "&mode=view";
+                        $view_href = getDocumentViewUrl("resume_serve.php?file=" . urlencode(basename($resume)) . "&mode=view");
                     }
                 ?>
                   <tr class="hover:bg-slate-50/50 transition">
@@ -140,7 +140,7 @@ $result = mysqli_query($conn, $query);
                     <td class="py-4 px-6">
                       <div class="flex flex-wrap items-center justify-center gap-2">
                         <?php if ($resume !== '' || $resume_url !== ''): ?>
-                          <a href="<?php echo $view_href; ?>" target="_blank" class="px-2 py-1 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded text-xs font-semibold transition" title="View Resume">
+                          <a href="<?php echo htmlspecialchars(getDocumentViewUrl($view_href)); ?>" target="_blank" rel="noopener noreferrer" class="px-2 py-1 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded text-xs font-semibold transition" title="View Resume">
                             Resume
                           </a>
                         <?php endif; ?>
@@ -149,8 +149,9 @@ $result = mysqli_query($conn, $query);
                           if (strpos($app['aadhaar_file'], 'http://') === 0 || strpos($app['aadhaar_file'], 'https://') === 0) {
                               $aadhaar_href = $app['aadhaar_file'];
                           }
+                          $aadhaar_view_href = getDocumentViewUrl($aadhaar_href);
                         ?>
-                          <a href="<?php echo $aadhaar_href; ?>" target="_blank" class="px-2 py-1 text-amber-700 bg-amber-50 hover:bg-amber-100 rounded text-xs font-semibold transition" title="View Aadhaar">
+                          <a href="<?php echo htmlspecialchars($aadhaar_view_href); ?>" target="_blank" rel="noopener noreferrer" class="px-2 py-1 text-amber-700 bg-amber-50 hover:bg-amber-100 rounded text-xs font-semibold transition" title="View Aadhaar">
                             Aadhaar
                           </a>
                         <?php endif; ?>
@@ -159,8 +160,9 @@ $result = mysqli_query($conn, $query);
                           if (strpos($app['pan_file'], 'http://') === 0 || strpos($app['pan_file'], 'https://') === 0) {
                               $pan_href = $app['pan_file'];
                           }
+                          $pan_view_href = getDocumentViewUrl($pan_href);
                         ?>
-                          <a href="<?php echo $pan_href; ?>" target="_blank" class="px-2 py-1 text-cyan-700 bg-cyan-50 hover:bg-cyan-100 rounded text-xs font-semibold transition" title="View PAN">
+                          <a href="<?php echo htmlspecialchars($pan_view_href); ?>" target="_blank" rel="noopener noreferrer" class="px-2 py-1 text-cyan-700 bg-cyan-50 hover:bg-cyan-100 rounded text-xs font-semibold transition" title="View PAN">
                             PAN
                           </a>
                         <?php endif; ?>
