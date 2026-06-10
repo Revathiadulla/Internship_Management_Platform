@@ -1,2 +1,10 @@
 [2026-06-07 19:11:35] Email: nonexistent_test_on_live@example.com | Email Found: No | Role: N/A | Password Verify: N/A | Active Status: N/A
 [2026-06-07 19:11:53] Email: test_student@example.com | Email Found: Yes | Role: student | Password Verify: Failed | Active Status: Active
+[2026-06-08 17:54:26] Email: veenasrijillella.27@gmail.com | Email Found: No | Role: N/A | Password Verify: N/A | Active Status: N/A
+[2026-06-08 19:00:19] Email: revathiadulla24@gmail.com | Email Found: Yes | Role: hr | Password Verify: Passed | Active Status: pending_approval
+[2026-06-08 21:14:35] Email: revathireddy2003@gmial.com | Email Found: No | Role: N/A | Password Verify: N/A | Active Status: N/A
+[2026-06-09 07:09:24] Email: revathiadulla@gmail.com | Email Found: No | Role: N/A | Password Verify: N/A | Active Status: N/A
+[2026-06-09 07:09:40] Email: revathiadulla24@gmail.com | Email Found: Yes | Role: hr | Password Verify: Failed | Active Status: approved
+[2026-06-09 14:08:47] Email: revathiadulla@gmail.com | Email Found: Yes | Role: student | Password Verify: Failed | Active Status: approved
+[2026-06-09 16:45:44] Email: revathiadulla@gmail.com | Email Found: Yes | Role: student | Password Verify: Failed | Active Status: approved
+[2026-06-09 18:42:42] Email: revathiadulla@gmail.com | Email Found: Yes | Role: student | Password Verify: Failed | Active Status: approved

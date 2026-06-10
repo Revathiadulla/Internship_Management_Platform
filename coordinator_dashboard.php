@@ -38,7 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_notif_action']))
             $res = mysqli_query($conn, "SELECT id FROM users WHERE role='student'");
             while ($r = mysqli_fetch_assoc($res)) $target_user_ids[] = intval($r['id']);
         } elseif ($recipient_type === 'active') {
-            $res = mysqli_query($conn, "SELECT DISTINCT user_id FROM internship_applications WHERE status IN ('Started','Internship Started','Active Intern','Selected')");
+            $res = mysqli_query($conn, "SELECT DISTINCT user_id FROM internship_applications WHERE status IN ('Started','Internship Started','Active Intern','Internship Active','Selected')");
             while ($r = mysqli_fetch_assoc($res)) $target_user_ids[] = intval($r['user_id']);
         } elseif ($recipient_type === 'selected') {
             foreach ($selected_students as $sid) $target_user_ids[] = intval($sid);
@@ -69,29 +69,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_notif_action']))
 // ── PHP-side metrics (no AJAX on load) ────────────────────────────────────────
 $coordinator_id = intval($_SESSION['user_id']);
 
-// Fetch coordinator's assigned subtypes dynamically
-$assigned_subtypes = [];
-$sub_stmt = mysqli_prepare($conn, "
-    SELECT DISTINCT ps.subtype_name 
-    FROM project_subtypes ps 
-    JOIN coordinator_assignments ca ON ps.project_type_id = ca.project_type_id 
-    WHERE ca.coordinator_id = ? AND ps.status = 'Active'
-    ORDER BY ps.subtype_name ASC
-");
-if ($sub_stmt) {
-    mysqli_stmt_bind_param($sub_stmt, "i", $coordinator_id);
-    mysqli_stmt_execute($sub_stmt);
-    $sub_res = mysqli_stmt_get_result($sub_stmt);
-    while ($row = mysqli_fetch_assoc($sub_res)) {
-        $assigned_subtypes[] = $row['subtype_name'];
-    }
-    mysqli_stmt_close($sub_stmt);
-}
+include_once "includes/coordinator_access.php";
+$coord_assignments = get_coordinator_assignments($conn, $coordinator_id);
+$assigned_subtypes = $coord_assignments['subtype_names'] ?? [];
+$assigned_types = $coord_assignments['type_names'] ?? [];
 
 // Select default subtype
 $selected_subtype = isset($_GET['subtype']) ? trim($_GET['subtype']) : '';
 if (empty($selected_subtype) && !empty($assigned_subtypes)) {
     $selected_subtype = $assigned_subtypes[0];
+} elseif (!empty($selected_subtype) && !in_array($selected_subtype, $assigned_subtypes)) {
+    // Prevent accessing unassigned subtypes
+    $selected_subtype = ''; 
 }
 
 $total_interns = 0;
@@ -106,7 +95,10 @@ $assigned_pct = 0;
 $pipeline_projects = [];
 $recent_logs = [];
 
-if (!empty($selected_subtype)) {
+if (empty($assigned_subtypes)) {
+    // User has no assignments. We'll show a friendly empty state later in HTML.
+    $selected_subtype = '';
+} elseif (!empty($selected_subtype)) {
     // 1. Total interns for selected subtype
     $total_interns_stmt = mysqli_prepare($conn, "
         SELECT COUNT(DISTINCT a.user_id) as c 
@@ -127,7 +119,7 @@ if (!empty($selected_subtype)) {
         SELECT COUNT(DISTINCT a.user_id) as c 
         FROM internship_applications a
         JOIN internships i ON a.internship_id = i.id
-        WHERE a.status IN ('Started','Internship Started','Active Intern','Selected')
+        WHERE a.status IN ('Started','Internship Started','Active Intern','Internship Active','Selected')
           AND i.coordinator_id = ? AND i.project_subtype = ?
     ");
     if ($active_interns_stmt) {
@@ -412,9 +404,6 @@ function subtypeBadgeClass($subtype) {
         <a href="coordinator_candidates.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
             <span class="material-symbols-outlined text-[20px]">group</span> Candidates
         </a>
-        <a href="coordinator_generate_test.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
-            <span class="material-symbols-outlined text-[20px]">quiz</span> Generate Test
-        </a>
         <a href="coordinator_daily_logs.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
             <span class="material-symbols-outlined text-[20px]">monitoring</span> Daily Logs
         </a>
@@ -476,9 +465,9 @@ function subtypeBadgeClass($subtype) {
                 class="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-xl text-sm font-semibold shadow-sm transition-colors cursor-pointer">
                 <span class="material-symbols-outlined text-[18px]">add</span> New Internship
             </button>
-            <button onclick="window.location.href='manual_message.php'"
+            <button onclick="window.location.href='coordinator_notifications.php'"
                 class="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white px-4 py-1.5 rounded-xl text-sm font-semibold shadow-sm transition-colors cursor-pointer">
-                <span class="material-symbols-outlined text-[18px]">chat</span> Send Message
+                <span class="material-symbols-outlined text-[18px]">notifications</span> Notifications
             </button>
             <!-- Theme Switcher -->
             <button id="theme-toggle" class="p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors rounded-full flex items-center justify-center cursor-pointer">
@@ -555,6 +544,15 @@ function subtypeBadgeClass($subtype) {
 
     <!-- ════════ DASHBOARD BODY ════════ -->
     <div class="p-6 space-y-5 flex-1">
+
+        <?php if (empty($assigned_subtypes)): ?>
+            <div class="bg-red-50 border border-red-200 rounded-2xl p-6 text-center text-red-700 fade-in">
+                <span class="material-symbols-outlined text-[48px] text-red-400 mb-2">block</span>
+                <h2 class="text-lg font-bold">Access Restricted</h2>
+                <p class="text-sm mt-1">No Project Types or Subtypes have been assigned to you by Admin.</p>
+                <p class="text-xs mt-2 opacity-80">You cannot manage internships or view candidates until an assignment is made.</p>
+            </div>
+        <?php else: ?>
 
         <!-- ── SECTION 1: Global Intern Overview + Project Filling ── -->
         <div class="flex flex-col lg:flex-row gap-4 items-stretch fade-in">
@@ -799,6 +797,7 @@ function subtypeBadgeClass($subtype) {
             </div>
         </div>
     </div><!-- /dashboard body -->
+    <?php endif; // end assigned_subtypes check ?>
 
 </main>
 

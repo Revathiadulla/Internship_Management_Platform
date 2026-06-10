@@ -16,7 +16,7 @@ $total_students_res = mysqli_query($conn, "
     SELECT COUNT(DISTINCT a.user_id) as cnt 
     FROM internship_applications a
     JOIN internships i ON a.internship_id = i.id
-    WHERE a.status IN ('Started', 'Internship Started', 'Active Intern', 'Selected')
+    WHERE a.status IN ('Started', 'Internship Started', 'Active Intern', 'Selected', 'Project Assigned', 'Internship Active')
       AND i.coordinator_id = $coord_id
 ");
 $total_students_row = mysqli_fetch_assoc($total_students_res);
@@ -224,9 +224,6 @@ mysqli_stmt_close($student_stmt);
                         </a>
                         <a href="coordinator_candidates.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
                                 <span class="material-symbols-outlined text-[20px]">group</span> Candidates
-                        </a>
-                        <a href="coordinator_generate_test.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
-                                <span class="material-symbols-outlined text-[20px]">quiz</span> Generate Test
                         </a>
                         <a href="coordinator_daily_logs.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
                                 <span class="material-symbols-outlined text-[20px]">monitoring</span> Daily Logs

@@ -93,9 +93,6 @@ $internships_list = fetchAssignedInternships($conn);
             <a href="coordinator_candidates.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
                 <span class="material-symbols-outlined text-[20px]">group</span> Candidates
             </a>
-            <a href="coordinator_generate_test.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
-                <span class="material-symbols-outlined text-[20px]">quiz</span> Generate Test
-            </a>
             <a href="coordinator_daily_logs.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
                 <span class="material-symbols-outlined text-[20px]">monitoring</span> Daily Logs
             </a>
@@ -287,6 +284,16 @@ $internships_list = fetchAssignedInternships($conn);
                                             <?php endif; ?>
                                         </div>
                                         <p class="font-semibold text-gray-800 text-sm mt-1 leading-relaxed"><?php echo htmlspecialchars($row['message']); ?></p>
+                                        <?php if (!empty($row['attachment_path'])): ?>
+                                            <div class="mt-3 flex items-center gap-2 text-xs bg-slate-50 p-2.5 rounded-xl border border-slate-100 max-w-fit">
+                                                <span class="material-symbols-outlined text-[16px] text-gray-500">attachment</span>
+                                                <span class="font-semibold text-slate-700"><?php echo htmlspecialchars($row['attachment_name']); ?></span>
+                                                <span class="text-gray-400"> (<?php echo round($row['attachment_size'] / 1024, 1); ?> KB)</span>
+                                                <span class="text-gray-300">|</span>
+                                                <a href="<?php echo htmlspecialchars($row['attachment_path']); ?>" target="_blank" class="text-blue-600 font-bold hover:underline">View</a>
+                                                <a href="<?php echo htmlspecialchars($row['attachment_path']); ?>" download class="text-indigo-600 font-bold hover:underline ml-1">Download</a>
+                                            </div>
+                                        <?php endif; ?>
                                         <span class="text-[10px] text-gray-400 font-medium flex items-center gap-1 mt-3">
                                             <span class="material-symbols-outlined text-[12px]">schedule</span>
                                             <?php echo date('M d, Y - h:i A', strtotime($row['created_at'])); ?>
@@ -340,6 +347,7 @@ $internships_list = fetchAssignedInternships($conn);
                                         <th class="px-4 py-3 font-semibold">Title</th>
                                         <th class="px-4 py-3 font-semibold">Type</th>
                                         <th class="px-4 py-3 font-semibold">Recipients</th>
+                                        <th class="px-4 py-3 font-semibold">Attachment</th>
                                         <th class="px-4 py-3 font-semibold">Read Status</th>
                                     </tr>
                                 </thead>
@@ -351,6 +359,16 @@ $internships_list = fetchAssignedInternships($conn);
                                             <td class="px-4 py-4 whitespace-nowrap"><?php echo htmlspecialchars($batch['title']); ?></td>
                                             <td class="px-4 py-4 whitespace-nowrap uppercase text-xs font-bold <?php echo htmlspecialchars($batch['type']) === 'success' ? 'text-green-600' : (htmlspecialchars($batch['type']) === 'alert' ? 'text-red-600' : 'text-blue-600'); ?>"><?php echo htmlspecialchars($batch['type']); ?></td>
                                             <td class="px-4 py-4 whitespace-nowrap"><?php echo intval($batch['recipient_count']); ?></td>
+                                            <td class="px-4 py-4 whitespace-nowrap">
+                                                <?php if (!empty($batch['attachment_path'])): ?>
+                                                    <a href="<?php echo htmlspecialchars($batch['attachment_path']); ?>" target="_blank" class="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline">
+                                                        <span class="material-symbols-outlined text-[14px]">attachment</span>
+                                                        <?php echo htmlspecialchars($batch['attachment_name']); ?>
+                                                    </a>
+                                                <?php else: ?>
+                                                    <span class="text-gray-400 text-xs">-</span>
+                                                <?php endif; ?>
+                                            </td>
                                             <td class="px-4 py-4 whitespace-nowrap text-sm font-semibold <?php echo $status === 'Completed' ? 'text-green-600' : 'text-amber-600'; ?>">
                                                 <?php echo intval($batch['read_count']); ?>/<?php echo intval($batch['recipient_count']); ?> read • <?php echo $status; ?>
                                             </td>
@@ -375,7 +393,7 @@ $internships_list = fetchAssignedInternships($conn);
                             <p class="text-gray-500 text-sm">Choose a recipient group and message type to send a notification.</p>
                         </div>
                     </div>
-                    <form method="POST" action="send_notification.php" class="space-y-5">
+                    <form method="POST" action="send_notification.php" enctype="multipart/form-data" class="space-y-5">
                         <input type="hidden" name="action" value="send_notification">
                         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                             <label class="block">
@@ -414,6 +432,13 @@ $internships_list = fetchAssignedInternships($conn);
                             <label class="block">
                                 <span class="text-sm font-semibold text-gray-700">Notification Message</span>
                                 <textarea name="notification_message" rows="5" required class="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" placeholder="Write the notification text here..."><?php echo htmlspecialchars($old_input['notification_message'] ?? ''); ?></textarea>
+                            </label>
+                        </div>
+                        <div class="grid grid-cols-1 gap-4">
+                            <label class="block">
+                                <span class="text-sm font-semibold text-gray-700">Attachment (Optional)</span>
+                                <input type="file" name="attachment" class="mt-2 w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 border border-gray-200 rounded-2xl p-2 bg-white" />
+                                <p class="text-xs text-gray-500 mt-1">Allowed types: PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX, ZIP, JPG, JPEG, PNG. Max size: 10 MB.</p>
                             </label>
                         </div>
                         <div class="flex justify-end">

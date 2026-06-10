@@ -14,58 +14,106 @@ $admin_unread_row = mysqli_fetch_assoc($admin_unread_res);
 $admin_unread_count = $admin_unread_row['count'] ?? 0;
 
 $success_msg = "";
-$error_msg = "";
+$error_msg   = "";
 
-// Handle Approvals and Rejections
+// ── Handle Approvals and Rejections ──────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['action']) && isset($_POST['user_id'])) {
-        $action = $_POST['action'];
+        $action  = $_POST['action'];
         $user_id = intval($_POST['user_id']);
 
         $stmt = mysqli_prepare($conn, "SELECT id, full_name, email, role FROM users WHERE id = ?");
         mysqli_stmt_bind_param($stmt, "i", $user_id);
         mysqli_stmt_execute($stmt);
         $res = mysqli_stmt_get_result($stmt);
-        
+
         if ($row = mysqli_fetch_assoc($res)) {
-            $user_name = $row['full_name'];
+            $user_name  = $row['full_name'];
             $user_email = $row['email'];
-            $user_role = $row['role'];
+            $user_role  = $row['role'];
+
+            $base_url   = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost');
+            $login_link = $base_url . '/IMP/login.php';
 
             if ($action === 'approve') {
-                $upd = mysqli_prepare($conn, "UPDATE users SET status = 'approved', approved_at = NOW(), approved_by = ? WHERE id = ?");
+                // ── Approve: activate account ──────────────────────────────
+                $upd = mysqli_prepare($conn,
+                    "UPDATE users
+                     SET status = 'approved',
+                         is_active = 1,
+                         approval_status = 'approved',
+                         approved_by = ?,
+                         approved_at = NOW()
+                     WHERE id = ?");
                 mysqli_stmt_bind_param($upd, "ii", $admin_id, $user_id);
+
                 if (mysqli_stmt_execute($upd)) {
-                    // Send approval email
-                    $base_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://" . $_SERVER['HTTP_HOST'];
-                    $login_link = $base_url . "/IMP/login.php"; // Adjust subfolder if needed
+                    // Send approval email (non-fatal if it fails)
+                    $email_body = "Dear $user_name,\n\nGreat news! Your Internship Management Platform account has been approved by Admin.\n\nYou can now log in using the link below:\n$login_link\n\nPlease complete your profile after logging in.\n\nRegards,\nIMP Admin Team";
+                    $emailErr = '';
+                    $emailOk  = notifyUser($user_id, $user_role, $user_email,
+                        "✅ Your IMP Account Has Been Approved",
+                        $email_body,
+                        [
+                            'event'          => 'Account Approved',
+                            'registered_name'=> $user_name,
+                            'role'           => ucfirst($user_role),
+                            'action_url'     => $login_link,
+                            'action_label'   => 'Log In Now',
+                        ],
+                        'account_approval'
+                    );
+                    if (!$emailOk) {
+                        error_log("Approval email failed for $user_email (user #$user_id): " . $emailErr);
+                    }
 
-                    $email_body = "Dear $user_name,\n\nYour Internship Management Platform account has been approved by Admin.\n\nYou can now login using the link below:\n$login_link\n\nPlease complete your profile after login.\n\nRegards,\nIMP Admin Team";
+                    // In-app notification
+                    @mysqli_query($conn,
+                        "INSERT INTO notifications (user_id, role, title, message, type)
+                         VALUES ($user_id, '" . mysqli_real_escape_string($conn, $user_role) . "',
+                         'Account Approved',
+                         'Your account has been approved by admin. You can now log in.',
+                         'success')");
 
-                    // Use the existing mail helper to log/send email
-                    notifyUser($user_id, $user_role, $user_email, "Your IMP Account Has Been Approved", $email_body, [
-                        'event' => 'Account Approval',
-                        'registered_name' => $user_name,
-                        'action_url' => $login_link,
-                        'action_label' => 'Log In'
-                    ], 'account_approval');
-
-                    // In-app notification if the table exists
-                    $link = "student_dashboard.php";
-                    @mysqli_query($conn, "INSERT INTO notifications (user_id, role, title, message, type, link) VALUES ($user_id, '$user_role', 'Account Approved', 'Your account has been approved. You can now login.', 'success', '$link')");
-
-                    $success_msg = "User $user_name approved successfully and email sent.";
+                    $success_msg = "✅ $user_name approved." . ($emailOk ? " Approval email sent." : " (Email delivery failed — check logs.)");
                 } else {
-                    $error_msg = "Failed to approve user.";
+                    $error_msg = "Failed to approve user: " . mysqli_error($conn);
                 }
                 mysqli_stmt_close($upd);
+
             } elseif ($action === 'reject') {
-                $upd = mysqli_prepare($conn, "UPDATE users SET status = 'rejected', approved_by = ? WHERE id = ?");
+                // ── Reject: deactivate account ─────────────────────────────
+                $upd = mysqli_prepare($conn,
+                    "UPDATE users
+                     SET status = 'rejected',
+                         is_active = 0,
+                         approval_status = 'rejected',
+                         approved_by = ?
+                     WHERE id = ?");
                 mysqli_stmt_bind_param($upd, "ii", $admin_id, $user_id);
+
                 if (mysqli_stmt_execute($upd)) {
-                    $success_msg = "User $user_name has been rejected.";
+                    // Send rejection email (non-fatal)
+                    $rej_body = "Dear $user_name,\n\nWe regret to inform you that your registration request for the Internship Management Platform has not been approved at this time.\n\nIf you believe this is an error, please contact the administrator.\n\nRegards,\nIMP Admin Team";
+                    $emailOk  = notifyUser($user_id, $user_role, $user_email,
+                        "❌ IMP Registration Not Approved",
+                        $rej_body,
+                        [
+                            'event'          => 'Registration Rejected',
+                            'registered_name'=> $user_name,
+                            'role'           => ucfirst($user_role),
+                            'action_url'     => $login_link,
+                            'action_label'   => 'Contact Admin',
+                        ],
+                        'account_rejection'
+                    );
+                    if (!$emailOk) {
+                        error_log("Rejection email failed for $user_email (user #$user_id)");
+                    }
+
+                    $success_msg = "❌ $user_name rejected." . ($emailOk ? " Rejection email sent." : " (Email delivery failed — check logs.)");
                 } else {
-                    $error_msg = "Failed to reject user.";
+                    $error_msg = "Failed to reject user: " . mysqli_error($conn);
                 }
                 mysqli_stmt_close($upd);
             }
@@ -74,9 +122,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Fetch Pending Users
+// ── Fetch Pending Users ───────────────────────────────────────────────────────
 $pending_users = [];
-$res = mysqli_query($conn, "SELECT * FROM users WHERE status = 'pending_approval' ORDER BY id DESC");
+$res = mysqli_query($conn,
+    "SELECT * FROM users
+     WHERE status = 'pending_approval'
+     ORDER BY registered_date DESC, id DESC");
 if ($res) {
     while ($row = mysqli_fetch_assoc($res)) {
         $pending_users[] = $row;
@@ -226,7 +277,7 @@ $header_photo = $header_user['profile_photo'] ?? '';
                       <td class="px-6 py-4 font-bold text-gray-900"><?php echo htmlspecialchars($user['full_name']); ?></td>
                       <td class="px-6 py-4 text-gray-500"><?php echo htmlspecialchars($user['email']); ?></td>
                       <td class="px-6 py-4 uppercase font-bold text-xs"><?php echo htmlspecialchars($user['role']); ?></td>
-                      <td class="px-6 py-4 text-gray-400 text-xs font-semibold"><?php echo isset($user['created_at']) ? date('M d, Y', strtotime($user['created_at'])) : 'Unknown'; ?></td>
+                      <td class="px-6 py-4 text-gray-400 text-xs font-semibold"><?php echo !empty($user['registered_date']) ? date('d M Y h:i A', strtotime($user['registered_date'])) : 'Not Available'; ?></td>
                       <td class="px-6 py-4">
                         <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-yellow-50 text-yellow-700 border border-yellow-100 uppercase tracking-wider">Pending</span>
                       </td>

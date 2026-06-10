@@ -5,7 +5,7 @@ require_hr_or_admin();
 include "db.php";
 include "status_utils.php";
 
-$status_options = ['Applied', 'Test Completed', 'HR Round', 'HOD Approved', 'Selected', 'Rejected'];
+$status_options    = ['Applied', 'HR Review', 'Shortlisted', 'Exam Mail Sent', 'HOD Pending', 'HOD Approved', 'Selected', 'Rejected'];
 $verification_options = ['Pending', 'Verified', 'Rejected'];
 $status_filter = isset($_GET['status']) ? trim($_GET['status']) : '';
 $verification_filter = isset($_GET['verification_status']) ? trim($_GET['verification_status']) : '';
@@ -14,8 +14,10 @@ $search_query = isset($_GET['search']) ? trim($_GET['search']) : '';
 
 $pipeline_statuses = [
     'Applied',
-    'Test Completed',
-    'HR Round',
+    'HR Review',
+    'Shortlisted',
+    'Exam Mail Sent',
+    'HOD Pending',
     'HOD Approved',
     'Selected',
     'Rejected'
@@ -108,8 +110,9 @@ if ($app_result) {
       <a href="hr_applications.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 hover:bg-gray-100 transition"> <span class="material-symbols-outlined">assignment</span> Applications</a>
       <a href="candidates.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 hover:bg-gray-100 transition"> <span class="material-symbols-outlined">group</span> Candidates</a>
       <a href="student_logs.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 hover:bg-gray-100 transition"> <span class="material-symbols-outlined">description</span> Student Logs</a>
-      <a href="reports.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 hover:bg-gray-100 transition"> <span class="material-symbols-outlined">analytics</span> Reports</a>
-      <a href="users.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 hover:bg-gray-100 transition"> <span class="material-symbols-outlined">manage_accounts</span> Users</a>
+      <a href="hr_hiring_requests.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 hover:bg-gray-100 transition"> <span class="material-symbols-outlined">handshake</span> Hiring Requests</a>
+      <a href="hr_reports.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 hover:bg-gray-100 transition"> <span class="material-symbols-outlined">analytics</span> Reports</a>
+      <a href="admin_received_notifications.php" class="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 hover:bg-gray-100 transition"> <span class="material-symbols-outlined">notifications</span> Notifications</a>
     </nav>
     <div class="mt-auto border-t border-gray-200 pt-4 px-4">
       <a href="logout.php" class="flex items-center gap-3 text-gray-600 py-3 hover:bg-gray-100 rounded-xl transition"><span class="material-symbols-outlined">logout</span> Logout</a>

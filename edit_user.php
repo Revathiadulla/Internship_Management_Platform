@@ -4,6 +4,7 @@ include_once __DIR__ . '/includes/auth.php';
 require_module_access('users');
 include 'db.php';
 include_once __DIR__ . '/includes/hr_module_helpers.php';
+require_once __DIR__ . '/password_validation.php';
 ensure_module_schema($conn);
 
 $id = (int) ($_GET['id'] ?? 0);
@@ -25,11 +26,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $reset_required = isset($_POST['reset_required']) ? 1 : 0;
     $password_sql = '';
     if ($password !== '') {
-        $hash = mysqli_real_escape_string($conn, password_hash($password, PASSWORD_DEFAULT));
-        $password_sql = ", password = '$hash', reset_required = 1";
+        $password_validation = validate_password_strength($password);
+        if (!$password_validation['is_valid']) {
+            $error = implode(' ', $password_validation['errors']);
+        } else {
+            $hash = mysqli_real_escape_string($conn, password_hash($password, PASSWORD_DEFAULT));
+            $password_sql = ", password = '$hash', reset_required = 1";
+        }
     } else {
         $password_sql = ", reset_required = $reset_required";
     }
+    if ($error === '') {
     $q = "UPDATE users SET full_name='" . mysqli_real_escape_string($conn, $full_name) . "', email='" . mysqli_real_escape_string($conn, $email) . "', phone='" . mysqli_real_escape_string($conn, $phone) . "', role='" . mysqli_real_escape_string($conn, $role) . "', status='" . mysqli_real_escape_string($conn, $status) . "', permissions='" . mysqli_real_escape_string($conn, $permissions) . "' $password_sql WHERE id=$id";
     if (mysqli_query($conn, $q)) {
         set_flash('User updated successfully.');
@@ -37,6 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit();
     }
     $error = mysqli_error($conn);
+    }
 }
 
 page_shell_start('users', 'Edit User', 'Update role, permissions, access status, or reset password.');

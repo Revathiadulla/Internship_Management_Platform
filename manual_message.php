@@ -281,23 +281,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if (empty($errors)) {
-        $sentCount = 0;
-        $failedCount = 0;
-        $failedMsgs = [];
-        foreach ($targets as $target) {
-            $recipientRole = strtolower(trim($target['role'] ?? 'student'));
-            $result = sendManualMessage($senderId, $senderRole, intval($target['id']), $recipientRole, $subject, $messageBody, $sendNotification, $sendEmail);
-            if ($sendEmail && $result['email_status'] === 'failed') {
-                $failedCount++;
-                $failedMsgs[] = htmlspecialchars($target['full_name'] ?? 'User') . ' (' . ($result['email_error'] ?: 'Unknown error') . ')';
+        // Process file upload if any
+        $attachment_path = null;
+        $attachment_name = null;
+        $attachment_size = null;
+        $attachment_type = null;
+        if (isset($_FILES['attachment']) && $_FILES['attachment']['error'] !== UPLOAD_ERR_NO_FILE) {
+            $upload_err = '';
+            require_once 'includes/notification_attachment_helper.php';
+            $attachment_res = validateAndUploadNotificationAttachment($_FILES['attachment'], $upload_err);
+            if ($attachment_res === false) {
+                $errors[] = $upload_err;
             } else {
-                $sentCount++;
+                $attachment_path = $attachment_res['path'];
+                $attachment_name = $attachment_res['name'];
+                $attachment_size = $attachment_res['size'];
+                $attachment_type = $attachment_res['type'];
             }
         }
 
-        $successMessage = "Message delivered to {$sentCount} recipient" . ($sentCount === 1 ? '' : 's') . ".";
-        if ($failedCount > 0) {
-            $successMessage .= " Failed to send email to: " . implode(', ', $failedMsgs) . ".";
+        if (empty($errors)) {
+            $sentCount = 0;
+            $failedCount = 0;
+            $failedMsgs = [];
+            foreach ($targets as $target) {
+                $recipientRole = strtolower(trim($target['role'] ?? 'student'));
+                $result = sendManualMessage($senderId, $senderRole, intval($target['id']), $recipientRole, $subject, $messageBody, $sendNotification, $sendEmail, $attachment_path, $attachment_name, $attachment_size, $attachment_type);
+                if ($sendEmail && $result['email_status'] === 'failed') {
+                    $failedCount++;
+                    $failedMsgs[] = htmlspecialchars($target['full_name'] ?? 'User') . ' (' . ($result['email_error'] ?: 'Unknown error') . ')';
+                } else {
+                    $sentCount++;
+                }
+            }
+
+            $successMessage = "Message delivered to {$sentCount} recipient" . ($sentCount === 1 ? '' : 's') . ".";
+            if ($failedCount > 0) {
+                $successMessage .= " Failed to send email to: " . implode(', ', $failedMsgs) . ".";
+            }
         }
     }
 }
@@ -377,7 +398,7 @@ Form targets resolved: <?= count($targets) ?>
             <div class="grid gap-6 xl:grid-cols-3">
                 <section class="xl:col-span-2 rounded-3xl bg-white p-6 shadow-sm border border-slate-200">
                     <div class="space-y-6">
-                        <form id="manual_message_form" action="manual_message.php" method="post" class="space-y-6">
+                        <form id="manual_message_form" action="manual_message.php" method="post" enctype="multipart/form-data" class="space-y-6">
                             <div>
                                 <label for="recipient_type" class="block text-sm font-semibold text-slate-700">Recipient Group</label>
                                 <select id="recipient_type" name="recipient_type" class="mt-2 block w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
@@ -493,6 +514,12 @@ Form targets resolved: <?= count($targets) ?>
                                 </label>
                             </div>
 
+                            <div>
+                                <label for="attachment" class="block text-sm font-semibold text-slate-700">Attachment (Optional)</label>
+                                <input type="file" id="attachment" name="attachment" class="mt-2 block w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 file:mr-4 file:py-1 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
+                                <p class="text-xs text-slate-500 mt-1">Allowed types: PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX, ZIP, JPG, JPEG, PNG. Max size: 10 MB.</p>
+                            </div>
+
                             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                 <button type="submit" id="submit_btn" class="inline-flex items-center justify-center rounded-2xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-blue-700" disabled>Send Message</button>
                                 <p class="text-sm text-slate-500">Messages are recorded for administrative history.</p>
@@ -535,6 +562,7 @@ Form targets resolved: <?= count($targets) ?>
                                 <th class="px-4 py-3 font-semibold">Sender</th>
                                 <th class="px-4 py-3 font-semibold">Recipient</th>
                                 <th class="px-4 py-3 font-semibold">Subject</th>
+                                <th class="px-4 py-3 font-semibold">Attachment</th>
                                 <th class="px-4 py-3 font-semibold">Delivery</th>
                                 <th class="px-4 py-3 font-semibold">Email Status</th>
                             </tr>
@@ -551,6 +579,16 @@ Form targets resolved: <?= count($targets) ?>
                                         <td class="px-4 py-3 text-slate-700"><?= e($row['sender_name'] ?: 'System') ?> <span class="text-xs text-slate-500">(<?= e($row['sender_role']) ?>)</span></td>
                                         <td class="px-4 py-3 text-slate-700"><?= e($row['recipient_name'] ?: 'Unknown') ?> <span class="text-xs text-slate-500">(<?= e($row['recipient_role']) ?>)</span></td>
                                         <td class="px-4 py-3 text-slate-700"><?= e($row['subject']) ?></td>
+                                        <td class="px-4 py-3 text-slate-700">
+                                            <?php if (!empty($row['attachment_path'])): ?>
+                                                <a href="<?= e($row['attachment_path']) ?>" target="_blank" class="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline">
+                                                    <span class="material-symbols-outlined text-[14px]">attachment</span>
+                                                    <?= e($row['attachment_name']) ?>
+                                                </a>
+                                            <?php else: ?>
+                                                <span class="text-slate-400 text-xs">-</span>
+                                            <?php endif; ?>
+                                        </td>
                                         <td class="px-4 py-3 text-slate-700"><?= $row['send_notification'] ? '<span class="rounded-full bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-700">Notification</span>' : '<span class="rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-500">Email only</span>' ?></td>
                                         <td class="px-4 py-3 text-slate-700"><?= e($row['email_status']) ?><?= $row['email_error'] ? ' / ' . e($row['email_error']) : '' ?></td>
                                     </tr>

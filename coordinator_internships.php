@@ -54,52 +54,7 @@ if ($check_deleted_col->num_rows == 0) {
     $conn->query("ALTER TABLE internships ADD COLUMN is_deleted TINYINT(1) NOT NULL DEFAULT 0");
 }
 
-// Helper function to generate test questions
-function generate_test_questions($conn, $internship_id, $skillsCsv, $difficulty, $numQuestions) {
-    // Delete old generated questions for this internship
-    $del = $conn->prepare('DELETE FROM test_questions WHERE internship_id = ?');
-    $del->bind_param('i', $internship_id);
-    $del->execute();
-
-    $skills = array_map('trim', explode(',', $skillsCsv));
-    if (empty($skills)) return [false, 0];
-    // Build placeholders for IN clause
-    $placeholders = implode(',', array_fill(0, count($skills), '?'));
-    $types = str_repeat('s', count($skills)) . 'si'; // skills (s), difficulty (s), limit (i)
-    $stmt = $conn->prepare(
-        "SELECT id FROM question_bank WHERE skill IN (".$placeholders.") AND difficulty = ? LIMIT ?"
-    );
-    $bindParams = array_merge($skills, [$difficulty, $numQuestions]);
-    $stmt->bind_param($types, ...$bindParams);
-    $stmt->execute();
-    $res = $stmt->get_result();
-    $ids = [];
-    while($row = $res->fetch_assoc()) $ids[] = $row['id'];
-    if (count($ids) < $numQuestions) {
-        return [false, count($ids)];
-    }
-    // Fetch full questions
-    $in = implode(',', array_fill(0, count($ids), '?'));
-    $stmt2 = $conn->prepare("SELECT * FROM question_bank WHERE id IN (".$in.")");
-    $stmt2->bind_param(str_repeat('i', count($ids)), ...$ids);
-    $stmt2->execute();
-    $questions = $stmt2->get_result();
-    // Insert into test_questions
-    $ins = $conn->prepare(
-        "INSERT INTO test_questions (internship_id, question_text, option_a, option_b, option_c, option_d, correct_option) VALUES (?,?,?,?,?,?,?)"
-    );
-    while($q = $questions->fetch_assoc()) {
-        $ins->bind_param(
-            'issssss',
-            $internship_id,
-            $q['question_text'], $q['option_a'], $q['option_b'], $q['option_c'], $q['option_d'], $q['correct_option']
-        );
-        $ins->execute();
-    }
-    return [true, $numQuestions];
-}
-
-
+// The legacy internal assessment generator is no longer used; the assessment flow is handled externally.
 $success_msg = "";
 $error_msg = "";
 
@@ -217,38 +172,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     }
 }
 
-// Fetch mentors list for dropdowns
-$mentors_res = mysqli_query($conn, "SELECT id, full_name FROM users WHERE role='mentor' ORDER BY full_name ASC");
-$mentors = [];
-while ($row = mysqli_fetch_assoc($mentors_res)) {
-    $mentors[] = $row;
-}
+include_once __DIR__ . "/includes/coordinator_access.php";
+$coord_assignments = get_coordinator_assignments($conn, intval($_SESSION['user_id']));
 
 $active_project_types = [];
-$type_stmt = mysqli_prepare($conn, "SELECT pt.id, pt.type_name FROM project_types pt JOIN coordinator_assignments ca ON pt.id = ca.project_type_id WHERE pt.status = 'Active' AND ca.coordinator_id = ? ORDER BY pt.type_name ASC");
-if ($type_stmt) {
-    $coord_id = intval($_SESSION['user_id']);
-    $type_stmt->bind_param('i', $coord_id);
-    $type_stmt->execute();
-    $type_result = $type_stmt->get_result();
+if (!empty($coord_assignments['type_ids'])) {
+    $type_id_list = implode(',', array_map('intval', $coord_assignments['type_ids']));
+    $type_result = mysqli_query($conn, "SELECT id, type_name FROM project_types WHERE id IN ($type_id_list) AND status = 'Active' ORDER BY type_name ASC");
     while ($type_row = mysqli_fetch_assoc($type_result)) {
         $active_project_types[] = $type_row;
     }
-    $type_stmt->close();
 }
 
+// Fetch subtypes restricted to assigned types (and specific subtypes if any)
 $active_project_subtypes = [];
 if (!empty($active_project_types)) {
     $first_type_id = intval($active_project_types[0]['id']);
-    $subtype_stmt = mysqli_prepare($conn, "SELECT id, subtype_name FROM project_subtypes WHERE project_type_id = ? AND status = 'Active' ORDER BY subtype_name ASC");
-    if ($subtype_stmt) {
-        $subtype_stmt->bind_param('i', $first_type_id);
-        $subtype_stmt->execute();
-        $subtype_result = $subtype_stmt->get_result();
-        while ($subtype_row = mysqli_fetch_assoc($subtype_result)) {
-            $active_project_subtypes[] = $subtype_row;
-        }
-        $subtype_stmt->close();
+    $subtype_sql = "SELECT id, subtype_name FROM project_subtypes WHERE project_type_id = $first_type_id AND status = 'Active'";
+    if (!empty($coord_assignments['subtype_ids'])) {
+        $sub_id_list = implode(',', array_map('intval', $coord_assignments['subtype_ids']));
+        $subtype_sql .= " AND id IN ($sub_id_list)";
+    }
+    $subtype_sql .= " ORDER BY subtype_name ASC";
+    $subtype_result = mysqli_query($conn, $subtype_sql);
+    while ($subtype_row = mysqli_fetch_assoc($subtype_result)) {
+        $active_project_subtypes[] = $subtype_row;
     }
 }
 
@@ -382,8 +330,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $description = trim($_POST['description']);
     $project_type_id = intval($_POST['project_type_id'] ?? 0);
     $project_subtype_id = intval($_POST['project_subtype_id'] ?? 0);
-    $difficulty_level = trim($_POST['difficulty_level']);
-    $openings = intval($_POST['openings']);
     $start_date = !empty($_POST['start_date']) ? $_POST['start_date'] : null;
     $end_date = !empty($_POST['end_date']) ? $_POST['end_date'] : null;
 
@@ -412,14 +358,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         }
     }
 
-    if (empty($title) || empty($project_title) || empty($duration) || empty($mode) || empty($technology_stack) || empty($description) || $project_type_id <= 0 || $project_subtype_id <= 0 || empty($difficulty_level)) {
+    if (empty($title) || empty($project_title) || empty($duration) || empty($mode) || empty($technology_stack) || empty($description) || $project_type_id <= 0 || $project_subtype_id <= 0) {
         $error_msg = "Please fill in all required fields.";
     } elseif (!$valid_category) {
         $error_msg = "Selected project type and subtype combination is invalid.";
     } else {
         $coord_id = intval($_SESSION['user_id']);
-        $stmt = mysqli_prepare($conn, "INSERT INTO internships (title, duration, mode, skills, status, approval_status, description, project_type, project_subtype, project_type_id, project_subtype_id, project_title, task_title, technology_stack, difficulty_level, openings, start_date, end_date, coordinator_id, submission_date) VALUES (?, ?, ?, ?, 'Pending Approval', 'Pending Approval', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURDATE())");
-        mysqli_stmt_bind_param($stmt, "sssssssiisssisssi", $title, $duration, $mode, $skills, $description, $project_type, $project_subtype, $project_type_id, $project_subtype_id, $project_title, $task_title, $technology_stack, $difficulty_level, $openings, $start_date, $end_date, $coord_id);
+        $stmt = mysqli_prepare($conn, "INSERT INTO internships (title, duration, mode, skills, status, approval_status, description, project_type, project_subtype, project_type_id, project_subtype_id, project_title, task_title, technology_stack, start_date, end_date, coordinator_id, submission_date) VALUES (?, ?, ?, ?, 'Pending Approval', 'Pending Approval', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURDATE())");
+        mysqli_stmt_bind_param($stmt, "sssssssiisssssi", $title, $duration, $mode, $skills, $description, $project_type, $project_subtype, $project_type_id, $project_subtype_id, $project_title, $task_title, $technology_stack, $start_date, $end_date, $coord_id);
         
         if (mysqli_stmt_execute($stmt)) {
             $new_id = mysqli_insert_id($conn);
@@ -467,8 +413,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $description = trim($_POST['description']);
     $project_type_id = intval($_POST['project_type_id'] ?? 0);
     $project_subtype_id = intval($_POST['project_subtype_id'] ?? 0);
-    $difficulty_level = trim($_POST['difficulty_level']);
-    $openings = intval($_POST['openings']);
     $start_date = !empty($_POST['start_date']) ? $_POST['start_date'] : null;
     $end_date = !empty($_POST['end_date']) ? $_POST['end_date'] : null;
 
@@ -497,7 +441,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         }
     }
 
-    if (empty($title) || empty($project_title) || empty($duration) || empty($mode) || empty($technology_stack) || empty($description) || $project_type_id <= 0 || $project_subtype_id <= 0 || empty($difficulty_level)) {
+    if (empty($title) || empty($project_title) || empty($duration) || empty($mode) || empty($technology_stack) || empty($description) || $project_type_id <= 0 || $project_subtype_id <= 0) {
         $error_msg = "Please fill in all required fields.";
     } elseif (!$valid_category) {
         $error_msg = "Selected project type and subtype combination is invalid.";
@@ -508,8 +452,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $date_changed = ($old_row && $old_row['start_date'] !== $start_date);
         $duration_changed = ($old_row && $old_row['duration'] !== $duration);
 
-        $stmt = mysqli_prepare($conn, "UPDATE internships SET title = ?, duration = ?, mode = ?, skills = ?, description = ?, project_type = ?, project_subtype = ?, project_type_id = ?, project_subtype_id = ?, project_title = ?, task_title = ?, technology_stack = ?, difficulty_level = ?, openings = ?, start_date = ?, end_date = ? WHERE id = ?");
-        mysqli_stmt_bind_param($stmt, "sssssssiisssisssi", $title, $duration, $mode, $skills, $description, $project_type, $project_subtype, $project_type_id, $project_subtype_id, $project_title, $task_title, $technology_stack, $difficulty_level, $openings, $start_date, $end_date, $id);
+        $stmt = mysqli_prepare($conn, "UPDATE internships SET title = ?, duration = ?, mode = ?, skills = ?, description = ?, project_type = ?, project_subtype = ?, project_type_id = ?, project_subtype_id = ?, project_title = ?, task_title = ?, technology_stack = ?, start_date = ?, end_date = ? WHERE id = ?");
+        mysqli_stmt_bind_param($stmt, "sssssssiisssssi", $title, $duration, $mode, $skills, $description, $project_type, $project_subtype, $project_type_id, $project_subtype_id, $project_title, $task_title, $technology_stack, $start_date, $end_date, $id);
         
         if (mysqli_stmt_execute($stmt)) {
             // Check if timeline phases exist
@@ -541,18 +485,17 @@ $types = "";
 $params = [];
 
 if (!empty($search)) {
-    $where_clauses[] = "(i.title LIKE ? OR i.project_type LIKE ? OR i.project_subtype LIKE ? OR i.technology_stack LIKE ? OR m.full_name LIKE ?)";
+    $where_clauses[] = "(i.title LIKE ? OR i.project_type LIKE ? OR i.project_subtype LIKE ? OR i.technology_stack LIKE ?)";
     $search_param = "%" . $search . "%";
-    $types = "sssss";
-    $params = [$search_param, $search_param, $search_param, $search_param, $search_param];
+    $types = "ssss";
+    $params = [$search_param, $search_param, $search_param, $search_param];
 }
 
 $where_clauses[] = "i.coordinator_id = " . intval($_SESSION['user_id']);
 $where_clauses[] = "i.is_deleted = 0";
 $sql = "
-    SELECT i.*, m.full_name as mentor_name, pt.type_name as joined_type_name, ps.subtype_name as joined_subtype_name 
+    SELECT i.*, pt.type_name as joined_type_name, ps.subtype_name as joined_subtype_name 
     FROM internships i 
-    LEFT JOIN users m ON i.assigned_mentor = m.id 
     LEFT JOIN project_types pt ON i.project_type_id = pt.id
     LEFT JOIN project_subtypes ps ON i.project_subtype_id = ps.id AND ps.project_type_id = pt.id
 ";
@@ -650,9 +593,6 @@ mysqli_stmt_close($stmt);
                         </a>
                         <a href="coordinator_candidates.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
                                 <span class="material-symbols-outlined text-[20px]">group</span> Candidates
-                        </a>
-                        <a href="coordinator_generate_test.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
-                                <span class="material-symbols-outlined text-[20px]">quiz</span> Generate Test
                         </a>
                         <a href="coordinator_daily_logs.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
                                 <span class="material-symbols-outlined text-[20px]">monitoring</span> Daily Logs
@@ -812,9 +752,6 @@ mysqli_stmt_close($stmt);
                                                         <th class="px-6 py-4">Project Title</th>
                                                         <th class="px-6 py-4">Project Type</th>
                                                         <th class="px-6 py-4">Tech Stack</th>
-                                                        <th class="px-6 py-4">Difficulty</th>
-                                                        <th class="px-6 py-4">Openings</th>
-                                                        <th class="px-6 py-4">Assigned Mentor</th>
                                                         <th class="px-6 py-4">Start Date</th>
                                                         <th class="px-6 py-4">End Date</th>
                                                         <th class="px-6 py-4">Status</th>
@@ -824,7 +761,7 @@ mysqli_stmt_close($stmt);
                                         <tbody class="divide-y divide-gray-100 text-gray-600">
                                                 <?php if (empty($internships)): ?>
                                                     <tr>
-                                                        <td colspan="10" class="px-6 py-10 text-center text-gray-400">No project postings found. Click "New Project Posting" to create one.</td>
+                                                        <td colspan="8" class="px-6 py-10 text-center text-gray-400">No project postings found. Click "New Project Posting" to create one.</td>
                                                     </tr>
                                                 <?php else: ?>
                                                 <?php foreach ($internships as $item):
@@ -849,11 +786,6 @@ mysqli_stmt_close($stmt);
                                                         };
                                                         $approval_status = $item['approval_status'] ?? $item['status'] ?? 'Pending Approval';
 
-                                                        $difficulty_cls = match($item['difficulty_level'] ?? 'Medium') {
-                                                            'Easy' => 'bg-emerald-50 text-emerald-600',
-                                                            'Hard' => 'bg-red-50 text-red-600',
-                                                            default => 'bg-amber-50 text-amber-600'
-                                                        };
                                                     ?>
                                                         <tr class="hover:bg-gray-50 transition-colors">
                                                                 <td class="px-6 py-4 font-semibold text-gray-900">
@@ -870,11 +802,6 @@ mysqli_stmt_close($stmt);
                                                                     <?php endif; ?>
                                                                 </td>
                                                                 <td class="px-6 py-4 max-w-xs truncate" title="<?php echo htmlspecialchars($item['technology_stack'] ?: $item['skills']); ?>"><?php echo htmlspecialchars($item['technology_stack'] ?: $item['skills']); ?></td>
-                                                                <td class="px-6 py-4">
-                                                                    <span class="px-2 py-0.5 rounded text-[11px] font-semibold <?php echo $difficulty_cls; ?>"><?php echo htmlspecialchars($item['difficulty_level'] ?: 'Medium'); ?></span>
-                                                                </td>
-                                                                <td class="px-6 py-4 font-medium text-gray-700"><?php echo intval($item['openings'] ?? 1); ?></td>
-                                                                <td class="px-6 py-4 font-medium text-gray-700"><?php echo htmlspecialchars($item['mentor_name'] ?: 'None'); ?></td>
                                                                 <td class="px-6 py-4 text-xs font-semibold text-gray-700 whitespace-nowrap"><?php echo $item['start_date'] ? date('M d, Y', strtotime($item['start_date'])) : '—'; ?></td>
                                                                 <td class="px-6 py-4 text-xs font-semibold text-gray-700 whitespace-nowrap"><?php echo $item['end_date'] ? date('M d, Y', strtotime($item['end_date'])) : '—'; ?></td>
                                                                 <td class="px-6 py-4">
@@ -985,21 +912,6 @@ mysqli_stmt_close($stmt);
 
                                         <div class="grid grid-cols-2 gap-4">
                                                 <div>
-                                                        <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Difficulty Level</label>
-                                                        <select name="difficulty_level" id="form-difficulty-level" class="w-full rounded-xl border-gray-200 text-xs py-2 focus:border-blue-600 focus:ring-blue-600/10 cursor-pointer">
-                                                                <option value="Easy">Easy</option>
-                                                                <option value="Medium" selected>Medium</option>
-                                                                <option value="Hard">Hard</option>
-                                                        </select>
-                                                </div>
-                                                <div>
-                                                        <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Openings</label>
-                                                        <input type="number" name="openings" id="form-openings" required min="1" value="1" class="w-full rounded-xl border-gray-200 text-xs py-2 focus:border-blue-600 focus:ring-blue-600/10">
-                                                </div>
-                                        </div>
-
-                                        <div class="grid grid-cols-2 gap-4">
-                                                <div>
                                                         <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Start Date</label>
                                                         <input type="date" name="start_date" id="form-start-date" class="w-full rounded-xl border-gray-200 text-xs py-2 focus:border-blue-600 focus:ring-blue-600/10">
                                                 </div>
@@ -1037,13 +949,10 @@ mysqli_stmt_close($stmt);
                     <div><strong>Project Type:</strong> <span id="view-project-type"></span></div>
                     <div><strong>Project Subtype:</strong> <span id="view-project-subtype"></span></div>
                     <div><strong>Technology Stack:</strong> <span id="view-tech-stack"></span></div>
-                    <div><strong>Difficulty:</strong> <span id="view-difficulty"></span></div>
-                    <div><strong>Openings:</strong> <span id="view-openings"></span></div>
                     <div><strong>Mode:</strong> <span id="view-mode"></span></div>
                     <div><strong>Duration:</strong> <span id="view-duration"></span></div>
                     <div><strong>Start Date:</strong> <span id="view-start-date"></span></div>
                     <div><strong>End Date:</strong> <span id="view-end-date"></span></div>
-                    <div><strong>Mentor:</strong> <span id="view-mentor"></span></div>
                     <div><strong>Status:</strong> <span id="view-status"></span></div>
                     <div><strong>Admin Remarks:</strong> <span id="view-admin-remarks"></span></div>
                     <div><strong>Description:</strong> <p id="view-description" class="whitespace-pre-wrap"></p></div>
@@ -1093,8 +1002,6 @@ mysqli_stmt_close($stmt);
                 
                 const typeInput = document.getElementById('form-project-type');
                 const subtypeInput = document.getElementById('form-project-subtype');
-                const difficultyInput = document.getElementById('form-difficulty-level');
-                const openingsInput = document.getElementById('form-openings');
                 const startDateInput = document.getElementById('form-start-date');
                 const endDateInput = document.getElementById('form-end-date');
                 const techStackInput = document.getElementById('form-tech-stack');
@@ -1351,8 +1258,6 @@ mysqli_stmt_close($stmt);
                         durationInput.value = item.duration || '3 Months';
 
                         modeInput.value = item.mode;
-                        difficultyInput.value = item.difficulty_level || 'Medium';
-                        openingsInput.value = item.openings || 1;
                         startDateInput.value = item.start_date || '';
                         endDateInput.value = item.end_date || '';
                         techStackInput.value = item.technology_stack || '';
@@ -1443,13 +1348,10 @@ function openViewModal(item) {
     document.getElementById('view-project-type').textContent = item.project_type || '';
     document.getElementById('view-project-subtype').textContent = item.project_subtype || '';
     document.getElementById('view-tech-stack').textContent = item.technology_stack || '';
-    document.getElementById('view-difficulty').textContent = item.difficulty_level || '';
-    document.getElementById('view-openings').textContent = item.openings ?? '';
     document.getElementById('view-mode').textContent = item.mode || '';
     document.getElementById('view-duration').textContent = item.duration || '';
     document.getElementById('view-start-date').textContent = item.start_date ? new Date(item.start_date).toLocaleDateString() : '';
     document.getElementById('view-end-date').textContent = item.end_date ? new Date(item.end_date).toLocaleDateString() : '';
-    document.getElementById('view-mentor').textContent = item.mentor_name || '';
     document.getElementById('view-status').textContent = item.status || '';
     document.getElementById('view-admin-remarks').textContent = item.admin_remarks || 'No admin remarks available.';
     document.getElementById('view-description').textContent = item.description || '';

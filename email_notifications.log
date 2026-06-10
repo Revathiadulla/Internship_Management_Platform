@@ -260,3 +260,683 @@ PHPMailer sending failed. Check email_notifications.log.
 HTML body generated (5514 bytes).
 ========================================================================
 
+[2026-06-08 14:24:14] Missing BREVO_API_KEY environment variable.
+========================================================================
+[2026-06-08 14:24:16] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: revathiadulla@gmail.com (Revathi Adulla) [ID: 75]
+SUBJECT: Mentor Reviewed Your Daily Log
+MESSAGE TEXT: Your log for Jun 08, 2026 has been reviewed by your mentor and marked: Approved
+METADATA: {"event":"Mentor Feedback","log_date":"Jun 08, 2026","rating":5,"status":"Approved","action_url":"http:\/\/localhost\/IMP\/student_dashboard.php","action_label":"View Feedback","recipient_name":"Revathi Adulla"}
+------------------------------------------------------------------------
+SMTP LOGS:
+Missing BREVO_API_KEY environment variable.
+------------------------------------------------------------------------
+HTML body generated (5438 bytes).
+========================================================================
+
+[2026-06-08 16:29:35] Missing BREVO_API_KEY environment variable.
+========================================================================
+[2026-06-08 16:29:38] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: veenasrijillella.27@gmail.com (Veenasri Jillella) [ID: 84]
+SUBJECT: Account Registration Successful
+MESSAGE TEXT: Dear Veenasri Jillella,
+
+Welcome to the Internship Management Platform (IMP)!
+
+Your account has been registered successfully as a Student with the email address: veenasrijillella.27@gmail.com.
+
+You can now log in to your student dashboard to complete your profile, browse available internships, and track applications.
+METADATA: {"event":"Account Registration","registered_name":"Veenasri Jillella","assigned_role":"Student","status":"Active","action_url":"http:\/\/localhost\/IMP\/login.php","action_label":"Log In to IMP","recipient_name":"Veenasri Jillella","recipient_role":"student"}
+------------------------------------------------------------------------
+SMTP LOGS:
+Missing BREVO_API_KEY environment variable.
+------------------------------------------------------------------------
+HTML body generated (5904 bytes).
+========================================================================
+
+[2026-06-08 16:29:41] Missing BREVO_API_KEY environment variable.
+========================================================================
+[2026-06-08 16:29:42] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: imp.webprotal2026@gmail.com (Admin) [ID: 29]
+SUBJECT: New User Registered
+MESSAGE TEXT: Veenasri Jillella has registered a new account as Student.
+METADATA: {"event":"New Student Registered","user_name":"Veenasri Jillella","user_email":"veenasrijillella.27@gmail.com","assigned_role":"Student","action_url":"http:\/\/localhost\/IMP\/admin_users.php","action_label":"Review Users","recipient_name":"Admin","recipient_role":"admin"}
+------------------------------------------------------------------------
+SMTP LOGS:
+Missing BREVO_API_KEY environment variable.
+------------------------------------------------------------------------
+HTML body generated (5598 bytes).
+========================================================================
+
+[2026-06-08 16:29:43] Missing BREVO_API_KEY environment variable.
+========================================================================
+[2026-06-08 16:29:46] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: imp.webportal2026@gmail.com (Admin) [ID: 38]
+SUBJECT: New User Registered
+MESSAGE TEXT: Veenasri Jillella has registered a new account as Student.
+METADATA: {"event":"New Student Registered","user_name":"Veenasri Jillella","user_email":"veenasrijillella.27@gmail.com","assigned_role":"Student","action_url":"http:\/\/localhost\/IMP\/admin_users.php","action_label":"Review Users","recipient_name":"Admin","recipient_role":"admin"}
+------------------------------------------------------------------------
+SMTP LOGS:
+Missing BREVO_API_KEY environment variable.
+------------------------------------------------------------------------
+HTML body generated (5598 bytes).
+========================================================================
+
+[2026-06-08 17:56:30] Missing BREVO_API_KEY environment variable.
+========================================================================
+[2026-06-08 17:56:30] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: veenasri.j27@gmail.com (Veenasri Jillella) [ID: 75]
+SUBJECT: Account Registration Successful
+MESSAGE TEXT: Dear Veenasri Jillella,
+
+Welcome to the Internship Management Platform (IMP)!
+
+Your account has been registered successfully as a Student with the email address: veenasri.j27@gmail.com.
+
+You can now log in to your student dashboard to complete your profile, browse available internships, and track applications.
+METADATA: {"event":"Account Registration","registered_name":"Veenasri Jillella","assigned_role":"Student","status":"Active","action_url":"http:\/\/localhost\/IMP\/login.php","action_label":"Log In to IMP","recipient_name":"Veenasri Jillella","recipient_role":"student"}
+------------------------------------------------------------------------
+SMTP LOGS:
+Missing BREVO_API_KEY environment variable.
+------------------------------------------------------------------------
+HTML body generated (5897 bytes).
+========================================================================
+
+[2026-06-08 17:56:31] Missing BREVO_API_KEY environment variable.
+========================================================================
+[2026-06-08 17:56:31] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: imp.webprotal2026@gmail.com (Admin) [ID: 29]
+SUBJECT: New User Registered
+MESSAGE TEXT: Veenasri Jillella has registered a new account as Student.
+METADATA: {"event":"New Student Registered","user_name":"Veenasri Jillella","user_email":"veenasri.j27@gmail.com","assigned_role":"Student","action_url":"http:\/\/localhost\/IMP\/admin_users.php","action_label":"Review Users","recipient_name":"Admin","recipient_role":"admin"}
+------------------------------------------------------------------------
+SMTP LOGS:
+Missing BREVO_API_KEY environment variable.
+------------------------------------------------------------------------
+HTML body generated (5591 bytes).
+========================================================================
+
+[2026-06-08 17:56:31] Missing BREVO_API_KEY environment variable.
+========================================================================
+[2026-06-08 17:56:31] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: imp.webportal2026@gmail.com (Admin) [ID: 38]
+SUBJECT: New User Registered
+MESSAGE TEXT: Veenasri Jillella has registered a new account as Student.
+METADATA: {"event":"New Student Registered","user_name":"Veenasri Jillella","user_email":"veenasri.j27@gmail.com","assigned_role":"Student","action_url":"http:\/\/localhost\/IMP\/admin_users.php","action_label":"Review Users","recipient_name":"Admin","recipient_role":"admin"}
+------------------------------------------------------------------------
+SMTP LOGS:
+Missing BREVO_API_KEY environment variable.
+------------------------------------------------------------------------
+HTML body generated (5591 bytes).
+========================================================================
+
+[2026-06-08 18:12:03] Missing BREVO_API_KEY environment variable.
+========================================================================
+[2026-06-08 18:12:03] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: veenasri.j27@gmail.com (Veenasri Jillella) [ID: 75]
+SUBJECT: Application Submitted
+MESSAGE TEXT: Your application for 'logo Design' has been submitted. Status: Applied.
+METADATA: {"event":"Application Submitted","internship_title":"logo Design","current_status":"Applied","action_url":"http:\/\/localhost\/IMP\/student_applications.php","action_label":"View Application Status","recipient_name":"Veenasri Jillella","recipient_role":"student"}
+------------------------------------------------------------------------
+SMTP LOGS:
+Missing BREVO_API_KEY environment variable.
+------------------------------------------------------------------------
+HTML body generated (5474 bytes).
+========================================================================
+
+[2026-06-08 18:12:03] Missing BREVO_API_KEY environment variable.
+========================================================================
+[2026-06-08 18:12:03] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: jaya@gmail.com (Jaya) [ID: 3]
+SUBJECT: New Student Application
+MESSAGE TEXT: New application received from Veenasri Jillella for 'logo Design'.
+METADATA: {"event":"New Internship Application","student_name":"Veenasri Jillella","internship_title":"logo Design","action_url":"http:\/\/localhost\/IMP\/coordinator_applications.php","action_label":"Review Application","recipient_name":"Jaya","recipient_role":"coordinator"}
+------------------------------------------------------------------------
+SMTP LOGS:
+Missing BREVO_API_KEY environment variable.
+------------------------------------------------------------------------
+HTML body generated (5461 bytes).
+========================================================================
+
+[2026-06-08 18:12:03] Missing BREVO_API_KEY environment variable.
+========================================================================
+[2026-06-08 18:12:03] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: revathireddy2003@gmial.com (Revathi Adulla) [ID: 31]
+SUBJECT: New Student Application
+MESSAGE TEXT: New application received from Veenasri Jillella for 'logo Design'.
+METADATA: {"event":"New Internship Application","student_name":"Veenasri Jillella","internship_title":"logo Design","action_url":"http:\/\/localhost\/IMP\/coordinator_applications.php","action_label":"Review Application","recipient_name":"Revathi Adulla","recipient_role":"coordinator"}
+------------------------------------------------------------------------
+SMTP LOGS:
+Missing BREVO_API_KEY environment variable.
+------------------------------------------------------------------------
+HTML body generated (5481 bytes).
+========================================================================
+
+[2026-06-08 18:12:03] Missing BREVO_API_KEY environment variable.
+========================================================================
+[2026-06-08 18:12:03] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: revathireddy2003@gmail.com (Revathi Adulla) [ID: 41]
+SUBJECT: New Student Application
+MESSAGE TEXT: New application received from Veenasri Jillella for 'logo Design'.
+METADATA: {"event":"New Internship Application","student_name":"Veenasri Jillella","internship_title":"logo Design","action_url":"http:\/\/localhost\/IMP\/coordinator_applications.php","action_label":"Review Application","recipient_name":"Revathi Adulla","recipient_role":"coordinator"}
+------------------------------------------------------------------------
+SMTP LOGS:
+Missing BREVO_API_KEY environment variable.
+------------------------------------------------------------------------
+HTML body generated (5481 bytes).
+========================================================================
+
+[2026-06-08 18:12:03] Missing BREVO_API_KEY environment variable.
+========================================================================
+[2026-06-08 18:12:03] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: imp.webprotal2026@gmail.com (Admin) [ID: 29]
+SUBJECT: New Internship Application Submitted
+MESSAGE TEXT: A new application from Veenasri Jillella has been submitted for 'logo Design'.
+METADATA: {"event":"New Application Received","student_name":"Veenasri Jillella","internship_title":"logo Design","action_url":"http:\/\/localhost\/IMP\/admin_applications.php","action_label":"View Applications","recipient_name":"Admin","recipient_role":"admin"}
+------------------------------------------------------------------------
+SMTP LOGS:
+Missing BREVO_API_KEY environment variable.
+------------------------------------------------------------------------
+HTML body generated (5473 bytes).
+========================================================================
+
+[2026-06-08 18:12:03] Missing BREVO_API_KEY environment variable.
+========================================================================
+[2026-06-08 18:12:03] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: imp.webportal2026@gmail.com (Admin) [ID: 38]
+SUBJECT: New Internship Application Submitted
+MESSAGE TEXT: A new application from Veenasri Jillella has been submitted for 'logo Design'.
+METADATA: {"event":"New Application Received","student_name":"Veenasri Jillella","internship_title":"logo Design","action_url":"http:\/\/localhost\/IMP\/admin_applications.php","action_label":"View Applications","recipient_name":"Admin","recipient_role":"admin"}
+------------------------------------------------------------------------
+SMTP LOGS:
+Missing BREVO_API_KEY environment variable.
+------------------------------------------------------------------------
+HTML body generated (5473 bytes).
+========================================================================
+
+[2026-06-08 18:12:03] Missing BREVO_API_KEY environment variable.
+========================================================================
+[2026-06-08 18:12:03] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: veenasri.j27@gmail.com (Veenasri Jillella) [ID: 75]
+SUBJECT: IMP Application Submitted: logo Design
+MESSAGE TEXT: Dear Veenasri Jillella,
+
+Your application for the "logo Design" internship has been successfully submitted to the platform.
+
+Your current application status is: **Applied**.
+
+Please remember that you are required to complete your skills assessment test (if applicable) within 48 hours of application submission.
+
+Thank you for choosing IMP!
+METADATA: {"event":"Internship Application","internship_position":"logo Design","education_status":"Pursuing","current_status":"Applied","action_url":"http:\/\/localhost\/IMP\/student_applications.php","action_label":"View Application Status","recipient_name":"Veenasri Jillella"}
+------------------------------------------------------------------------
+SMTP LOGS:
+Missing BREVO_API_KEY environment variable.
+------------------------------------------------------------------------
+HTML body generated (5815 bytes).
+========================================================================
+
+[2026-06-08 18:12:03] Missing BREVO_API_KEY environment variable.
+========================================================================
+[2026-06-08 18:12:03] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: veenasri.j27@gmail.com (Veenasri Jillella) [ID: 75]
+SUBJECT: Exam Invitation for logo Design
+MESSAGE TEXT: Dear Veenasri Jillella,
+
+You are invited to take the skills assessment test for the 'logo Design' internship. Please complete the exam using the following link (valid for 48 hours): https://internship-management-platform-1.onrender.com/student_test.php?application_id=93
+
+Best regards,
+Internship Management Platform Team
+METADATA: {"event":"Exam Invitation","action_url":"https:\/\/internship-management-platform-1.onrender.com\/student_test.php?application_id=93","action_label":"Take Exam"}
+------------------------------------------------------------------------
+SMTP LOGS:
+Missing BREVO_API_KEY environment variable.
+------------------------------------------------------------------------
+HTML body generated (5099 bytes).
+========================================================================
+
+[2026-06-08 18:14:07] Missing BREVO_API_KEY environment variable.
+========================================================================
+[2026-06-08 18:14:07] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: veenasri.j27@gmail.com (Veenasri Jillella) [ID: 75]
+SUBJECT: Application Submitted
+MESSAGE TEXT: Your application for 'IMP' has been submitted. Status: Applied.
+METADATA: {"event":"Application Submitted","internship_title":"IMP","current_status":"Applied","action_url":"http:\/\/localhost\/IMP\/student_applications.php","action_label":"View Application Status","recipient_name":"Veenasri Jillella","recipient_role":"student"}
+------------------------------------------------------------------------
+SMTP LOGS:
+Missing BREVO_API_KEY environment variable.
+------------------------------------------------------------------------
+HTML body generated (5458 bytes).
+========================================================================
+
+[2026-06-08 18:14:07] Missing BREVO_API_KEY environment variable.
+========================================================================
+[2026-06-08 18:14:07] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: jaya@gmail.com (Jaya) [ID: 3]
+SUBJECT: New Student Application
+MESSAGE TEXT: New application received from Veenasri Jillella for 'IMP'.
+METADATA: {"event":"New Internship Application","student_name":"Veenasri Jillella","internship_title":"IMP","action_url":"http:\/\/localhost\/IMP\/coordinator_applications.php","action_label":"Review Application","recipient_name":"Jaya","recipient_role":"coordinator"}
+------------------------------------------------------------------------
+SMTP LOGS:
+Missing BREVO_API_KEY environment variable.
+------------------------------------------------------------------------
+HTML body generated (5445 bytes).
+========================================================================
+
+[2026-06-08 18:14:07] Missing BREVO_API_KEY environment variable.
+========================================================================
+[2026-06-08 18:14:07] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: revathireddy2003@gmial.com (Revathi Adulla) [ID: 31]
+SUBJECT: New Student Application
+MESSAGE TEXT: New application received from Veenasri Jillella for 'IMP'.
+METADATA: {"event":"New Internship Application","student_name":"Veenasri Jillella","internship_title":"IMP","action_url":"http:\/\/localhost\/IMP\/coordinator_applications.php","action_label":"Review Application","recipient_name":"Revathi Adulla","recipient_role":"coordinator"}
+------------------------------------------------------------------------
+SMTP LOGS:
+Missing BREVO_API_KEY environment variable.
+------------------------------------------------------------------------
+HTML body generated (5465 bytes).
+========================================================================
+
+[2026-06-08 18:14:07] Missing BREVO_API_KEY environment variable.
+========================================================================
+[2026-06-08 18:14:07] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: revathireddy2003@gmail.com (Revathi Adulla) [ID: 41]
+SUBJECT: New Student Application
+MESSAGE TEXT: New application received from Veenasri Jillella for 'IMP'.
+METADATA: {"event":"New Internship Application","student_name":"Veenasri Jillella","internship_title":"IMP","action_url":"http:\/\/localhost\/IMP\/coordinator_applications.php","action_label":"Review Application","recipient_name":"Revathi Adulla","recipient_role":"coordinator"}
+------------------------------------------------------------------------
+SMTP LOGS:
+Missing BREVO_API_KEY environment variable.
+------------------------------------------------------------------------
+HTML body generated (5465 bytes).
+========================================================================
+
+[2026-06-08 18:14:07] Missing BREVO_API_KEY environment variable.
+========================================================================
+[2026-06-08 18:14:07] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: imp.webprotal2026@gmail.com (Admin) [ID: 29]
+SUBJECT: New Internship Application Submitted
+MESSAGE TEXT: A new application from Veenasri Jillella has been submitted for 'IMP'.
+METADATA: {"event":"New Application Received","student_name":"Veenasri Jillella","internship_title":"IMP","action_url":"http:\/\/localhost\/IMP\/admin_applications.php","action_label":"View Applications","recipient_name":"Admin","recipient_role":"admin"}
+------------------------------------------------------------------------
+SMTP LOGS:
+Missing BREVO_API_KEY environment variable.
+------------------------------------------------------------------------
+HTML body generated (5457 bytes).
+========================================================================
+
+[2026-06-08 18:14:07] Missing BREVO_API_KEY environment variable.
+========================================================================
+[2026-06-08 18:14:07] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: imp.webportal2026@gmail.com (Admin) [ID: 38]
+SUBJECT: New Internship Application Submitted
+MESSAGE TEXT: A new application from Veenasri Jillella has been submitted for 'IMP'.
+METADATA: {"event":"New Application Received","student_name":"Veenasri Jillella","internship_title":"IMP","action_url":"http:\/\/localhost\/IMP\/admin_applications.php","action_label":"View Applications","recipient_name":"Admin","recipient_role":"admin"}
+------------------------------------------------------------------------
+SMTP LOGS:
+Missing BREVO_API_KEY environment variable.
+------------------------------------------------------------------------
+HTML body generated (5457 bytes).
+========================================================================
+
+[2026-06-08 18:14:07] Missing BREVO_API_KEY environment variable.
+========================================================================
+[2026-06-08 18:14:07] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: veenasri.j27@gmail.com (Veenasri Jillella) [ID: 75]
+SUBJECT: IMP Application Submitted: IMP
+MESSAGE TEXT: Dear Veenasri Jillella,
+
+Your application for the "IMP" internship has been successfully submitted to the platform.
+
+Your current application status is: **Applied**.
+
+Please remember that you are required to complete your skills assessment test (if applicable) within 48 hours of application submission.
+
+Thank you for choosing IMP!
+METADATA: {"event":"Internship Application","internship_position":"IMP","education_status":"Pursuing","current_status":"Applied","action_url":"http:\/\/localhost\/IMP\/student_applications.php","action_label":"View Application Status","recipient_name":"Veenasri Jillella"}
+------------------------------------------------------------------------
+SMTP LOGS:
+Missing BREVO_API_KEY environment variable.
+------------------------------------------------------------------------
+HTML body generated (5791 bytes).
+========================================================================
+
+[2026-06-08 18:14:07] Missing BREVO_API_KEY environment variable.
+========================================================================
+[2026-06-08 18:14:07] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: veenasri.j27@gmail.com (Veenasri Jillella) [ID: 75]
+SUBJECT: Exam Invitation for IMP
+MESSAGE TEXT: Dear Veenasri Jillella,
+
+You are invited to take the skills assessment test for the 'IMP' internship. Please complete the exam using the following link (valid for 48 hours): https://internship-management-platform-1.onrender.com/student_test.php?application_id=101
+
+Best regards,
+Internship Management Platform Team
+METADATA: {"event":"Exam Invitation","action_url":"https:\/\/internship-management-platform-1.onrender.com\/student_test.php?application_id=101","action_label":"Take Exam"}
+------------------------------------------------------------------------
+SMTP LOGS:
+Missing BREVO_API_KEY environment variable.
+------------------------------------------------------------------------
+HTML body generated (5085 bytes).
+========================================================================
+
+[2026-06-08 18:18:34] Missing BREVO_API_KEY environment variable.
+========================================================================
+[2026-06-08 18:18:34] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: adullatejasree@gmail.com (Tejasree Adulla) [ID: 76]
+SUBJECT: Account Registration Successful
+MESSAGE TEXT: Dear Tejasree Adulla,
+
+Welcome to the Internship Management Platform (IMP)!
+
+Your account has been registered successfully as a Student with the email address: adullatejasree@gmail.com.
+
+You can now log in to your student dashboard to complete your profile, browse available internships, and track applications.
+METADATA: {"event":"Account Registration","registered_name":"Tejasree Adulla","assigned_role":"Student","status":"Active","action_url":"http:\/\/localhost\/IMP\/login.php","action_label":"Log In to IMP","recipient_name":"Tejasree Adulla","recipient_role":"student"}
+------------------------------------------------------------------------
+SMTP LOGS:
+Missing BREVO_API_KEY environment variable.
+------------------------------------------------------------------------
+HTML body generated (5891 bytes).
+========================================================================
+
+[2026-06-08 18:18:34] Missing BREVO_API_KEY environment variable.
+========================================================================
+[2026-06-08 18:18:34] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: imp.webprotal2026@gmail.com (Admin) [ID: 29]
+SUBJECT: New User Registered
+MESSAGE TEXT: Tejasree Adulla has registered a new account as Student.
+METADATA: {"event":"New Student Registered","user_name":"Tejasree Adulla","user_email":"adullatejasree@gmail.com","assigned_role":"Student","action_url":"http:\/\/localhost\/IMP\/admin_users.php","action_label":"Review Users","recipient_name":"Admin","recipient_role":"admin"}
+------------------------------------------------------------------------
+SMTP LOGS:
+Missing BREVO_API_KEY environment variable.
+------------------------------------------------------------------------
+HTML body generated (5589 bytes).
+========================================================================
+
+[2026-06-08 18:18:34] Missing BREVO_API_KEY environment variable.
+========================================================================
+[2026-06-08 18:18:34] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: imp.webportal2026@gmail.com (Admin) [ID: 38]
+SUBJECT: New User Registered
+MESSAGE TEXT: Tejasree Adulla has registered a new account as Student.
+METADATA: {"event":"New Student Registered","user_name":"Tejasree Adulla","user_email":"adullatejasree@gmail.com","assigned_role":"Student","action_url":"http:\/\/localhost\/IMP\/admin_users.php","action_label":"Review Users","recipient_name":"Admin","recipient_role":"admin"}
+------------------------------------------------------------------------
+SMTP LOGS:
+Missing BREVO_API_KEY environment variable.
+------------------------------------------------------------------------
+HTML body generated (5589 bytes).
+========================================================================
+
+[2026-06-08 18:20:37] Missing BREVO_API_KEY environment variable.
+========================================================================
+[2026-06-08 18:20:37] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: adullatejasree@gmail.com (Tejasree Adulla) [ID: 76]
+SUBJECT: Application Submitted
+MESSAGE TEXT: Your application for 'IMP' has been submitted. Status: Applied.
+METADATA: {"event":"Application Submitted","internship_title":"IMP","current_status":"Applied","action_url":"http:\/\/localhost\/IMP\/student_applications.php","action_label":"View Application Status","recipient_name":"Tejasree Adulla","recipient_role":"student"}
+------------------------------------------------------------------------
+SMTP LOGS:
+Missing BREVO_API_KEY environment variable.
+------------------------------------------------------------------------
+HTML body generated (5454 bytes).
+========================================================================
+
+[2026-06-08 18:20:37] Missing BREVO_API_KEY environment variable.
+========================================================================
+[2026-06-08 18:20:37] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: jaya@gmail.com (Jaya) [ID: 3]
+SUBJECT: New Student Application
+MESSAGE TEXT: New application received from Tejasree Adulla for 'IMP'.
+METADATA: {"event":"New Internship Application","student_name":"Tejasree Adulla","internship_title":"IMP","action_url":"http:\/\/localhost\/IMP\/coordinator_applications.php","action_label":"Review Application","recipient_name":"Jaya","recipient_role":"coordinator"}
+------------------------------------------------------------------------
+SMTP LOGS:
+Missing BREVO_API_KEY environment variable.
+------------------------------------------------------------------------
+HTML body generated (5441 bytes).
+========================================================================
+
+[2026-06-08 18:20:37] Missing BREVO_API_KEY environment variable.
+========================================================================
+[2026-06-08 18:20:37] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: revathireddy2003@gmial.com (Revathi Adulla) [ID: 31]
+SUBJECT: New Student Application
+MESSAGE TEXT: New application received from Tejasree Adulla for 'IMP'.
+METADATA: {"event":"New Internship Application","student_name":"Tejasree Adulla","internship_title":"IMP","action_url":"http:\/\/localhost\/IMP\/coordinator_applications.php","action_label":"Review Application","recipient_name":"Revathi Adulla","recipient_role":"coordinator"}
+------------------------------------------------------------------------
+SMTP LOGS:
+Missing BREVO_API_KEY environment variable.
+------------------------------------------------------------------------
+HTML body generated (5461 bytes).
+========================================================================
+
+[2026-06-08 18:20:37] Missing BREVO_API_KEY environment variable.
+========================================================================
+[2026-06-08 18:20:37] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: revathireddy2003@gmail.com (Revathi Adulla) [ID: 41]
+SUBJECT: New Student Application
+MESSAGE TEXT: New application received from Tejasree Adulla for 'IMP'.
+METADATA: {"event":"New Internship Application","student_name":"Tejasree Adulla","internship_title":"IMP","action_url":"http:\/\/localhost\/IMP\/coordinator_applications.php","action_label":"Review Application","recipient_name":"Revathi Adulla","recipient_role":"coordinator"}
+------------------------------------------------------------------------
+SMTP LOGS:
+Missing BREVO_API_KEY environment variable.
+------------------------------------------------------------------------
+HTML body generated (5461 bytes).
+========================================================================
+
+[2026-06-08 18:20:37] Missing BREVO_API_KEY environment variable.
+========================================================================
+[2026-06-08 18:20:37] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: imp.webprotal2026@gmail.com (Admin) [ID: 29]
+SUBJECT: New Internship Application Submitted
+MESSAGE TEXT: A new application from Tejasree Adulla has been submitted for 'IMP'.
+METADATA: {"event":"New Application Received","student_name":"Tejasree Adulla","internship_title":"IMP","action_url":"http:\/\/localhost\/IMP\/admin_applications.php","action_label":"View Applications","recipient_name":"Admin","recipient_role":"admin"}
+------------------------------------------------------------------------
+SMTP LOGS:
+Missing BREVO_API_KEY environment variable.
+------------------------------------------------------------------------
+HTML body generated (5453 bytes).
+========================================================================
+
+[2026-06-08 18:20:37] Missing BREVO_API_KEY environment variable.
+========================================================================
+[2026-06-08 18:20:37] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: imp.webportal2026@gmail.com (Admin) [ID: 38]
+SUBJECT: New Internship Application Submitted
+MESSAGE TEXT: A new application from Tejasree Adulla has been submitted for 'IMP'.
+METADATA: {"event":"New Application Received","student_name":"Tejasree Adulla","internship_title":"IMP","action_url":"http:\/\/localhost\/IMP\/admin_applications.php","action_label":"View Applications","recipient_name":"Admin","recipient_role":"admin"}
+------------------------------------------------------------------------
+SMTP LOGS:
+Missing BREVO_API_KEY environment variable.
+------------------------------------------------------------------------
+HTML body generated (5453 bytes).
+========================================================================
+
+[2026-06-08 18:20:37] Missing BREVO_API_KEY environment variable.
+========================================================================
+[2026-06-08 18:20:37] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: adullatejasree@gmail.com (Tejasree Adulla) [ID: 76]
+SUBJECT: IMP Application Submitted: IMP
+MESSAGE TEXT: Dear Tejasree Adulla,
+
+Your application for the "IMP" internship has been successfully submitted to the platform.
+
+Your current application status is: **Applied**.
+
+Please remember that you are required to complete your skills assessment test (if applicable) within 48 hours of application submission.
+
+Thank you for choosing IMP!
+METADATA: {"event":"Internship Application","internship_position":"IMP","education_status":"Passed Out","current_status":"Applied","action_url":"http:\/\/localhost\/IMP\/student_applications.php","action_label":"View Application Status","recipient_name":"Tejasree Adulla"}
+------------------------------------------------------------------------
+SMTP LOGS:
+Missing BREVO_API_KEY environment variable.
+------------------------------------------------------------------------
+HTML body generated (5787 bytes).
+========================================================================
+
+[2026-06-08 18:20:37] Missing BREVO_API_KEY environment variable.
+========================================================================
+[2026-06-08 18:20:37] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: adullatejasree@gmail.com (Tejasree Adulla) [ID: 76]
+SUBJECT: Exam Invitation for IMP
+MESSAGE TEXT: Dear Tejasree Adulla,
+
+You are invited to take the skills assessment test for the 'IMP' internship. Please complete the exam using the following link (valid for 48 hours): https://internship-management-platform-1.onrender.com/student_test.php?application_id=112
+
+Best regards,
+Internship Management Platform Team
+METADATA: {"event":"Exam Invitation","action_url":"https:\/\/internship-management-platform-1.onrender.com\/student_test.php?application_id=112","action_label":"Take Exam"}
+------------------------------------------------------------------------
+SMTP LOGS:
+Missing BREVO_API_KEY environment variable.
+------------------------------------------------------------------------
+HTML body generated (5081 bytes).
+========================================================================
+
+[2026-06-08 18:31:46] PHPMailer SMTP: Sent OK to imp.webportal2026@gmail.com | Subject: SMTP Test — IMP
+[2026-06-08 18:32:14] PHPMailer SMTP: Sent OK to veenasri.j27@gmail.com | Subject: SMTP Test — IMP
+[2026-06-08 18:32:24] PHPMailer SMTP: Sent OK to veenasri.j27@gmail.com | Subject: SMTP Test — IMP
+[2026-06-08 18:36:06] PHPMailer SMTP: Sent OK to imp.webportal2026@gmail.com | Subject: SMTP Test — IMP
+[2026-06-08 18:42:13] PHPMailer SMTP: Sent OK to revathiadulla@24gmail.com | Subject: Account Registration Successful
+[2026-06-08 18:42:17] PHPMailer SMTP: Sent OK to imp.webprotal2026@gmail.com | Subject: New User Registered
+[2026-06-08 18:42:21] PHPMailer SMTP: Sent OK to imp.webportal2026@gmail.com | Subject: New User Registered
+[2026-06-08 18:59:49] PHPMailer SMTP: Sent OK to revathiadulla24@gmail.com | Subject: IMP — Account Registration Received
+[2026-06-08 18:59:53] PHPMailer SMTP: Sent OK to imp.webprotal2026@gmail.com | Subject: New Registration Pending Approval — Hr
+[2026-06-08 18:59:57] PHPMailer SMTP: Sent OK to imp.webportal2026@gmail.com | Subject: New Registration Pending Approval — Hr
+[2026-06-08 19:02:15] PHPMailer SMTP: Sent OK to revathiadulla24@gmail.com | Subject: ✅ Your IMP Account Has Been Approved
+[2026-06-08 19:41:31] PHPMailer SMTP: Sent OK to revathireddy2003@gmail.com | Subject: IMP — Account Registration Received
+[2026-06-08 19:41:35] PHPMailer SMTP: Sent OK to imp.webportal2026@gmail.com | Subject: New Registration Pending Approval — Coordinator
+[2026-06-08 19:46:39] PHPMailer SMTP: Sent OK to revathireddy2003@gmail.com | Subject: ✅ Your IMP Account Has Been Approved
+[2026-06-08 20:20:05] PHPMailer SMTP: Sent OK to revathiadulla24@gmail.com | Subject: Selections
+[2026-06-08 21:17:19] PHPMailer SMTP: Sent OK to imp.webportal2026@gmail.com | Subject: IMP – New Project Awaiting Approval: Student Internship Management Portal
+[2026-06-08 21:20:05] PHPMailer SMTP: Sent OK to revathireddy2003@gmail.com | Subject: IMP – Internship Approved: Student Internship Management Portal
+[2026-06-08 21:43:24] PHPMailer SMTP: Sent OK to adullatejasree@gmail.com | Subject: Aadhaar Document Verified - IMP
+[2026-06-08 21:43:32] PHPMailer SMTP: Sent OK to adullatejasree@gmail.com | Subject: PAN Document Verified - IMP
+[2026-06-09 05:27:32] PHPMailer SMTP: Sent OK to adullatejasree@gmail.com | Subject: Your application has been shortlisted
+[2026-06-09 05:29:20] PHPMailer SMTP: Sent OK to adullatejasree@gmail.com | Subject: Exam Details: Technical Assessment – IMP
+[2026-06-09 05:29:34] PHPMailer SMTP: Sent OK to adullatejasree@gmail.com | Subject: Your exam status has been updated to Completed
+[2026-06-09 08:59:02] PHPMailer SMTP: Sent OK to revathiadulla24@gmail.com | Subject: IMP Password Recovery Verification Code
+[2026-06-09 08:59:09] PHPMailer SMTP: Sent OK to revathiadulla24@gmail.com | Subject: IMP Password Recovery Verification Code
+[2026-06-09 08:59:15] PHPMailer SMTP: Sent OK to revathiadulla24@gmail.com | Subject: IMP Password Recovery Verification Code
+[2026-06-09 08:59:20] PHPMailer SMTP: Sent OK to revathiadulla24@gmail.com | Subject: IMP Password Recovery Verification Code
+[2026-06-09 08:59:27] PHPMailer SMTP: Sent OK to revathiadulla24@gmail.com | Subject: IMP Password Recovery Verification Code
+[2026-06-09 08:59:34] PHPMailer SMTP: Sent OK to revathiadulla24@gmail.com | Subject: IMP Password Recovery Verification Code
+[2026-06-09 08:59:41] PHPMailer SMTP: Sent OK to revathiadulla24@gmail.com | Subject: IMP Password Recovery Verification Code
+[2026-06-09 08:59:48] PHPMailer SMTP: Sent OK to revathiadulla24@gmail.com | Subject: IMP Password Recovery Verification Code
+[2026-06-09 09:04:07] PHPMailer SMTP: Sent OK to veenasri.j27@gmail.com | Subject: Aadhaar Document Verified - IMP
+[2026-06-09 09:04:19] PHPMailer SMTP: Sent OK to veenasri.j27@gmail.com | Subject: PAN Document Verified - IMP
+[2026-06-09 09:04:36] PHPMailer SMTP: Sent OK to veenasri.j27@gmail.com | Subject: Your application has been shortlisted
+[2026-06-09 09:05:08] PHPMailer SMTP: Sent OK to veenasri.j27@gmail.com | Subject: Aadhaar Document Verified - IMP
+[2026-06-09 09:05:13] PHPMailer SMTP: Sent OK to veenasri.j27@gmail.com | Subject: PAN Document Verified - IMP
+[2026-06-09 09:05:40] PHPMailer SMTP: Sent OK to veenasri.j27@gmail.com | Subject: Update: Internship application not selected
+[2026-06-09 09:57:59] PHPMailer SMTP: Sent OK to revathiadulla@gmail.com | Subject: IMP — Account Registration Received
+[2026-06-09 09:58:04] PHPMailer SMTP: Sent OK to imp.webportal2026@gmail.com | Subject: New User Registered — Student
+[2026-06-09 10:00:40] PHPMailer SMTP: Sent OK to revathiadulla@gmail.com | Subject: Application Submitted
+[2026-06-09 10:00:44] PHPMailer SMTP: Sent OK to jaya@gmail.com | Subject: New Student Application
+[2026-06-09 10:00:48] PHPMailer SMTP: Sent OK to revathireddy2003@gmail.com | Subject: New Student Application
+[2026-06-09 10:00:51] PHPMailer SMTP: Sent OK to imp.webportal2026@gmail.com | Subject: New Internship Application Submitted
+[2026-06-09 10:00:55] PHPMailer SMTP: Sent OK to revathiadulla@gmail.com | Subject: IMP Application Submitted: Student Internship Management Portal
+[2026-06-09 10:00:59] PHPMailer SMTP: Sent OK to revathiadulla@gmail.com | Subject: Exam Invitation for Student Internship Management Portal
+[2026-06-09 10:02:20] PHPMailer SMTP: Sent OK to revathiadulla@gmail.com | Subject: Aadhaar Document Verified - IMP
+[2026-06-09 10:02:29] PHPMailer SMTP: Sent OK to revathiadulla@gmail.com | Subject: PAN Document Verified - IMP
+[2026-06-09 10:02:41] PHPMailer SMTP: Sent OK to revathiadulla@gmail.com | Subject: Your application has been shortlisted
+[2026-06-09 10:45:41] PHPMailer SMTP: Sent OK to revathiadulla@gmail.com | Subject: IMP — Account Registration Received
+[2026-06-09 10:45:45] PHPMailer SMTP: Sent OK to imp.webportal2026@gmail.com | Subject: New User Registered — Student
+[2026-06-09 10:47:31] PHPMailer SMTP: Sent OK to revathiadulla@gmail.com | Subject: Application Submitted
+[2026-06-09 10:47:35] PHPMailer SMTP: Sent OK to jaya@gmail.com | Subject: New Student Application
+[2026-06-09 10:47:39] PHPMailer SMTP: Sent OK to revathireddy2003@gmail.com | Subject: New Student Application
+[2026-06-09 10:47:43] PHPMailer SMTP: Sent OK to imp.webportal2026@gmail.com | Subject: New Internship Application Submitted
+[2026-06-09 10:47:47] PHPMailer SMTP: Sent OK to revathiadulla@gmail.com | Subject: IMP Application Submitted: Student Internship Management Portal
+[2026-06-09 10:47:51] PHPMailer SMTP: Sent OK to revathiadulla@gmail.com | Subject: Exam Invitation for Student Internship Management Portal
+[2026-06-09 10:48:44] PHPMailer SMTP: Sent OK to revathiadulla@gmail.com | Subject: Aadhaar Document Verified - IMP
+[2026-06-09 10:48:55] PHPMailer SMTP: Sent OK to revathiadulla@gmail.com | Subject: PAN Document Verified - IMP
+[2026-06-09 10:49:06] PHPMailer SMTP: Sent OK to revathiadulla@gmail.com | Subject: Your application has been shortlisted
+[2026-06-09 11:46:29] PHPMailer SMTP: Sent OK to adullatejasree@gmail.com | Subject: Congratulations! You have been selected for the internship
+[2026-06-09 13:34:43] PHPMailer SMTP: Sent OK to revathiadulla@gmail.com | Subject: Internship Assessment Link
+[2026-06-09 14:03:20] PHPMailer SMTP: Sent OK to revathiadulla@gmail.com | Subject: Action Required: Internship Approval for Revathi Adulla – IMP
+[2026-06-09 14:03:54] PHPMailer SMTP: Sent OK to revathiadulla@gmail.com | Subject: Your application status is now HOD Approved
+[2026-06-09 14:03:59] PHPMailer SMTP: Sent OK to imp.webportal2026@gmail.com | Subject: Internship Application status updated to HOD Approved
+[2026-06-09 14:04:03] PHPMailer SMTP: Sent OK to revathiadulla24@gmail.com | Subject: Internship Application status updated to HOD Approved
+[2026-06-09 14:04:21] PHPMailer SMTP: Sent OK to revathiadulla@gmail.com | Subject: Congratulations! You have been selected for the internship
+[2026-06-09 14:04:29] PHPMailer SMTP: Sent OK to revathiadulla@gmail.com | Subject: Congratulations! You have been selected for the internship
+[2026-06-09 14:04:57] PHPMailer SMTP: Sent OK to revathiadulla@gmail.com | Subject: Congratulations! You have been selected for the internship
+[2026-06-09 14:10:44] PHPMailer SMTP: Sent OK to revathiadulla@gmail.com | Subject: Squad Assignment: alpha
+[2026-06-09 14:10:48] PHPMailer SMTP: Sent OK to mentor.rajesh@example.com | Subject: Squad Assignment: alpha
+[2026-06-09 14:16:48] PHPMailer SMTP: Sent OK to adullatejasree@gmail.com | Subject: Application Submitted
+[2026-06-09 14:16:53] PHPMailer SMTP: Sent OK to jaya@gmail.com | Subject: New Student Application
+[2026-06-09 14:16:58] PHPMailer SMTP: Sent OK to revathireddy2003@gmail.com | Subject: New Student Application
+[2026-06-09 14:17:03] PHPMailer SMTP: Sent OK to imp.webportal2026@gmail.com | Subject: New Internship Application Submitted
+[2026-06-09 14:17:08] PHPMailer SMTP: Sent OK to adullatejasree@gmail.com | Subject: IMP Application Submitted: Student Internship Management Portal
+[2026-06-09 14:17:13] PHPMailer SMTP: Sent OK to adullatejasree@gmail.com | Subject: Exam Invitation for Student Internship Management Portal
+[2026-06-09 14:18:19] PHPMailer SMTP: Sent OK to adullatejasree@gmail.com | Subject: Aadhaar Document Verified - IMP
+[2026-06-09 14:18:27] PHPMailer SMTP: Sent OK to adullatejasree@gmail.com | Subject: PAN Document Verified - IMP
+[2026-06-09 14:18:55] PHPMailer SMTP: Sent OK to adullatejasree@gmail.com | Subject: Your application has been shortlisted
+[2026-06-09 14:22:53] PHPMailer SMTP: Sent OK to adullatejasree@gmail.com | Subject: Internship Assessment Link
+[2026-06-09 14:23:10] PHPMailer SMTP: Sent OK to adullatejasree@gmail.com | Subject: Congratulations! You have been selected for the internship
+[2026-06-09 14:32:52] PHPMailer SMTP: Sent OK to adullatejasree@gmail.com | Subject: Squad Assignment: alpha
+[2026-06-09 14:32:57] PHPMailer SMTP: Sent OK to mentor.rajesh@example.com | Subject: Squad Assignment: alpha
+[2026-06-09 14:34:14] PHPMailer SMTP: Sent OK to revathiadulla@gmail.com | Subject: Squad Assignment: alpha
+[2026-06-09 14:34:19] PHPMailer SMTP: Sent OK to mentor.rajesh@example.com | Subject: Squad Assignment: alpha
+[2026-06-09 14:52:07] PHPMailer SMTP: Sent OK to adullatejasree@gmail.com | Subject: Squad Assignment: alpha
+[2026-06-09 14:52:12] PHPMailer SMTP: Sent OK to mentor.rajesh@example.com | Subject: Squad Assignment: alpha
+[2026-06-09 15:25:53] PHPMailer SMTP: Sent OK to revathiadulla@gmail.com | Subject: Squad Assignment: alpha
+[2026-06-09 15:25:57] PHPMailer SMTP: Sent OK to mentor.rajesh@example.com | Subject: Squad Assignment: alpha
+[2026-06-09 15:34:28] PHPMailer SMTP: Sent OK to revathiadulla@gmail.com | Subject: Squad Assignment: alpha
+[2026-06-09 15:34:34] PHPMailer SMTP: Sent OK to mentor.rajesh@example.com | Subject: Squad Assignment: alpha
+[2026-06-09 15:34:53] PHPMailer SMTP: Sent OK to adullatejasree@gmail.com | Subject: Squad Assignment: alpha
+[2026-06-09 15:34:58] PHPMailer SMTP: Sent OK to mentor.rajesh@example.com | Subject: Squad Assignment: alpha
+[2026-06-09 15:38:41] PHPMailer SMTP: Sent OK to adullatejasree@gmail.com | Subject: Squad Assignment: alpha
+[2026-06-09 15:38:46] PHPMailer SMTP: Sent OK to mentor.rajesh@example.com | Subject: Squad Assignment: alpha
+[2026-06-09 15:39:08] PHPMailer SMTP: Sent OK to adullatejasree@gmail.com | Subject: Squad Assignment: alpha
+[2026-06-09 15:39:14] PHPMailer SMTP: Sent OK to revathiadulla@gmail.com | Subject: Squad Assignment: alpha
+[2026-06-09 15:39:18] PHPMailer SMTP: Sent OK to mentor.rajesh@example.com | Subject: Squad Assignment: alpha
+[2026-06-09 16:45:36] PHPMailer SMTP: Sent OK to adullatejasree@gmail.com | Subject: Squad Assignment: alpha
+[2026-06-09 16:45:39] PHPMailer SMTP: Sent OK to revathiadulla@gmail.com | Subject: Squad Assignment: alpha
+[2026-06-09 16:45:43] PHPMailer SMTP: Sent OK to mentor.rajesh@example.com | Subject: Squad Assignment: alpha
+[2026-06-09 17:56:58] PHPMailer SMTP: Sent OK to uytryuetr@gmail.com | Subject: IMP — Account Registration Received
+[2026-06-09 17:57:03] PHPMailer SMTP: Sent OK to imp.webportal2026@gmail.com | Subject: New User Registered — Student
+[2026-06-09 18:31:27] PHPMailer SMTP: Sent OK to revathiadulla@gmail.com | Subject: Squad Assignment: alpha
+[2026-06-09 18:31:32] PHPMailer SMTP: Sent OK to adullatejasree@gmail.com | Subject: Squad Assignment: alpha
+[2026-06-09 18:31:36] PHPMailer SMTP: Sent OK to mentor.rajesh@example.com | Subject: Squad Assignment: alpha
+[2026-06-09 19:08:59] PHPMailer SMTP: Sent OK to revathiadulla@gmail.com | Subject: Mentor Reviewed Your Daily Log
+[2026-06-10 07:13:19] PHPMailer SMTP: Sent OK to madhavimacha03@gmail.com | Subject: IMP — Account Registration Received
+[2026-06-10 07:13:24] PHPMailer SMTP: Sent OK to imp.webportal2026@gmail.com | Subject: New User Registered — Student
+[2026-06-10 07:19:12] PHPMailer SMTP: Sent OK to madhavimacha03@gmail.com | Subject: Application Submitted
+[2026-06-10 07:19:17] PHPMailer SMTP: Sent OK to jaya@gmail.com | Subject: New Student Application
+[2026-06-10 07:19:22] PHPMailer SMTP: Sent OK to revathireddy2003@gmail.com | Subject: New Student Application
+[2026-06-10 07:19:27] PHPMailer SMTP: Sent OK to imp.webportal2026@gmail.com | Subject: New Internship Application Submitted
+[2026-06-10 07:19:32] PHPMailer SMTP: Sent OK to madhavimacha03@gmail.com | Subject: IMP Application Submitted: Design - Graphic Design

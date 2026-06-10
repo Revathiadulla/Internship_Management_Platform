@@ -32,7 +32,7 @@ function insertNotif($conn, $user_id, $type, $message) {
 }
 
 // ── 1. Application status-based notifications ────────────────────────────────
-$apps_sql = "SELECT a.id, a.status, a.education_status, a.test_status, a.test_score,
+$apps_sql = "SELECT a.id, a.status, a.education_status,
                     COALESCE(i.title, a.internship_name) as title
              FROM internship_applications a
              LEFT JOIN internships i ON a.internship_id = i.id AND a.internship_id > 0
@@ -49,13 +49,21 @@ while ($app = mysqli_fetch_assoc($apps_res)) {
             insertNotif($conn, $user_id, 'info',
                 "Your application for \"$title\" has been submitted successfully.");
             break;
-        case 'Test Completed':
-            insertNotif($conn, $user_id, 'success',
-                "Assessment completed for \"$title\". Score: " . ($app['test_score'] ?? 'Pending') . ".");
-            break;
-        case 'HR Round':
+        case 'HR Review':
             insertNotif($conn, $user_id, 'info',
-                "Your application for \"$title\" has moved to the HR Round. Stay prepared!");
+                "Your application for \"$title\" is under HR review. We'll notify you of any updates.");
+            break;
+        case 'Shortlisted':
+            insertNotif($conn, $user_id, 'success',
+                "Your application for \"$title\" has been shortlisted!");
+            break;
+        case 'Exam Mail Sent':
+            insertNotif($conn, $user_id, 'info',
+                "Exam details have been sent for \"$title\". Check your dashboard.");
+            break;
+        case 'HOD Pending':
+            insertNotif($conn, $user_id, 'info',
+                "Your application for \"$title\" has been sent to your HOD for approval.");
             break;
         case 'HOD Approved':
             insertNotif($conn, $user_id, 'success',
@@ -75,13 +83,6 @@ while ($app = mysqli_fetch_assoc($apps_res)) {
             insertNotif($conn, $user_id, 'internship',
                 "Your internship \"$title\" has officially started. Welcome aboard!");
             break;
-    }
-
-    // Test pending reminder
-    if (($app['test_status'] ?? '') !== 'Completed' &&
-        in_array($status, ['Applied', 'HR Round'])) {
-        insertNotif($conn, $user_id, 'test',
-            "Reminder: Complete your assessment test for \"$title\" within 48 hours.");
     }
 }
 

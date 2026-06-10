@@ -1,15 +1,45 @@
 <?php
 require_once __DIR__ . '/includes/document_helper.php';
 
+$db_connection_error = '';
+$conn = null;
+
+if (!function_exists('imp_is_debug_mode')) {
+    function imp_is_debug_mode() {
+        $host = $_SERVER['HTTP_HOST'] ?? '';
+        return strpos($host, 'localhost') !== false || strpos($host, '127.0.0.1') !== false || getenv('APP_ENV') !== 'production';
+    }
+}
+
 // Live Render + Clever Cloud connection configuration
-$host = getenv('DB_HOST') ?: "by7xxebmaxfwobqrh1ne-mysql.services.clever-cloud.com";
-$user = getenv('DB_USER') ?: "ujebqn1hlk9qd98k";
-$pass = getenv('DB_PASSWORD') ?: "zqPIiSbk9EU6l3KHrvml";
-$db   = getenv('DB_NAME') ?: "by7xxebmaxfwobqrh1ne";
-$port = getenv('DB_PORT') ?: 3306;
+// Detect local host
+$is_local_host = (isset($_SERVER['HTTP_HOST']) && ($_SERVER['HTTP_HOST'] == 'localhost' || strpos($_SERVER['HTTP_HOST'], '127.0.0.1') !== false)) || (php_sapi_name() === 'cli' && !getenv('DB_HOST'));
+
+if ($is_local_host) {
+    $host = getenv('DB_HOST') ?: "localhost";
+    $user = getenv('DB_USER') ?: "root";
+    $pass = getenv('DB_PASSWORD') ?: "";
+    $db   = getenv('DB_NAME') ?: "imp_db";
+    $port = getenv('DB_PORT') ?: 3306;
+} else {
+    $host = getenv('DB_HOST') ?: "by7xxebmaxfwobqrh1ne-mysql.services.clever-cloud.com";
+    $user = getenv('DB_USER') ?: "ujebqn1hlk9qd98k";
+    $pass = getenv('DB_PASSWORD') ?: "zqPIiSbk9EU6l3KHrvml";
+    $db   = getenv('DB_NAME') ?: "by7xxebmaxfwobqrh1ne";
+    $port = getenv('DB_PORT') ?: 3306;
+}
 
 try {
-    $conn = mysqli_connect($host, $user, $pass, $db, $port);
+    mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+    $conn = mysqli_init();
+    if (!$conn) {
+        throw new RuntimeException('Failed to initialize MySQL connection object.');
+    }
+    mysqli_options($conn, MYSQLI_OPT_CONNECT_TIMEOUT, 3);
+    mysqli_options($conn, MYSQLI_OPT_READ_TIMEOUT, 3);
+    if (!mysqli_real_connect($conn, $host, $user, $pass, $db, $port)) {
+        throw new RuntimeException(mysqli_connect_error());
+    }
 
     // Prevent test/setup scripts from executing in production environment
     $is_production = (getenv('APP_ENV') === 'production' || strpos($host, 'clever-cloud.com') !== false || strpos($host, 'render.com') !== false);
@@ -17,52 +47,38 @@ try {
         $current_script = basename($_SERVER['SCRIPT_FILENAME'] ?? $_SERVER['PHP_SELF'] ?? '');
         if (strpos($current_script, 'test_') === 0 || strpos($current_script, 'temp_') === 0 || strpos($current_script, 'check_') === 0 || $current_script === 'setup_database.php') {
             if ($current_script !== 'test_live_db_users.php') {
-                die("SECURITY ERROR: Execution of test/setup script '$current_script' is blocked on the production database.");
+                throw new RuntimeException("SECURITY ERROR: Execution of test/setup script '$current_script' is blocked on the production database.");
             }
         }
     }
-// Register shutdown function to ensure the DB connection is closed at script termination
-register_shutdown_function(function() use (&$conn) {
-    if (isset($conn) && $conn) {
-        mysqli_close($conn);
-    }
-});
-log_debug('Database connection opened and shutdown handler registered.');
-} catch (\mysqli_sql_exception $e) {
-    $is_local = (isset($_SERVER['HTTP_HOST']) && ($_SERVER['HTTP_HOST'] == 'localhost' || strpos($_SERVER['HTTP_HOST'], '127.0.0.1') !== false));
-    if (!$is_local) {
-        http_response_code(503);
-        echo "<!DOCTYPE html>
-        <html lang='en'>
-        <head>
-            <meta charset='UTF-8'>
-            <title>Server Busy - IMP</title>
-            <style>
-                body { font-family: 'Inter', sans-serif; background-color: #f8f9fa; color: #191c1d; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-                .container { text-align: center; max-width: 450px; padding: 40px; background: white; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); border: 1px solid #e1e3e4; }
-                h1 { font-size: 24px; font-weight: 600; margin-bottom: 16px; color: #004ac6; }
-                p { font-size: 14px; line-height: 22px; color: #434655; margin-bottom: 24px; }
-                button { background-color: #004ac6; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background-color 0.2s; }
-                button:hover { background-color: #003ea8; }
-            </style>
-        </head>
-        <body>
-            <div class='container'>
-                <h1>Server is Busy</h1>
-                <p>The system is currently experiencing high traffic (database connections exhausted). Please wait a few seconds and click reload to try again.</p>
-                <button onclick='window.location.reload()'>Reload Page</button>
-            </div>
-        </body>
-        </html>";
-        exit();
-    } else {
-        die("Connection failed: " . $e->getMessage());
-    }
+
+    register_shutdown_function(function() use (&$conn) {
+        if (isset($conn) && $conn) {
+            mysqli_close($conn);
+        }
+    });
+    log_debug('Database connection opened and shutdown handler registered.');
+} catch (Throwable $e) {
+    $db_connection_error = $e->getMessage();
+    error_log('Database connection failed: ' . $db_connection_error);
+    $conn = null;
 }
 
 if (!$conn) {
-    die("Connection failed: " . mysqli_connect_error());
+    if (imp_is_debug_mode()) {
+        error_reporting(E_ALL);
+        ini_set('display_errors', '1');
+    }
+    return;
 }
+
+$current_script = basename($_SERVER['SCRIPT_FILENAME'] ?? $_SERVER['PHP_SELF'] ?? '');
+$auth_only_scripts = ['login.php', 'forgot_password.php', 'registration_page.php', 'register.php', 'logout.php', 'index.php'];
+if (in_array($current_script, $auth_only_scripts, true)) {
+    return;
+}
+
+mysqli_query($conn, "UPDATE internship_applications SET status = 'Selected' WHERE LOWER(TRIM(COALESCE(status, ''))) IN ('confirmation letter sent', 'confirmation_letter_sent', 'offer sent', 'offer_sent')");
 
 // Add `title` column to student_notifications if it doesn't exist yet
 $_col_check = mysqli_query($conn, "SHOW COLUMNS FROM student_notifications LIKE 'title'");
@@ -77,6 +93,30 @@ unset($_col_check);
 $_col_check = mysqli_query($conn, "SHOW COLUMNS FROM student_profiles LIKE 'resume_url'");
 if ($_col_check && mysqli_num_rows($_col_check) === 0) {
     mysqli_query($conn, "ALTER TABLE student_profiles ADD COLUMN resume_url VARCHAR(255) NULL AFTER resume_file");
+}
+unset($_col_check);
+
+// Ensure confirmation-letter columns exist for internship applications
+$_col_check = mysqli_query($conn, "SHOW COLUMNS FROM internship_applications LIKE 'confirmation_letter_sent'");
+if ($_col_check && mysqli_num_rows($_col_check) === 0) {
+    mysqli_query($conn, "ALTER TABLE internship_applications ADD COLUMN confirmation_letter_sent TINYINT(1) DEFAULT 0");
+}
+unset($_col_check);
+
+$_col_check = mysqli_query($conn, "SHOW COLUMNS FROM internship_applications LIKE 'confirmation_letter_sent_at'");
+if ($_col_check && mysqli_num_rows($_col_check) === 0) {
+    mysqli_query($conn, "ALTER TABLE internship_applications ADD COLUMN confirmation_letter_sent_at DATETIME NULL DEFAULT NULL");
+} else {
+    $sent_at_col = mysqli_query($conn, "SHOW COLUMNS FROM internship_applications LIKE 'confirmation_letter_sent_at'");
+    if ($sent_at_col && mysqli_num_rows($sent_at_col) > 0) {
+        mysqli_query($conn, "ALTER TABLE internship_applications MODIFY COLUMN confirmation_letter_sent_at DATETIME NULL DEFAULT NULL");
+    }
+}
+unset($_col_check);
+
+$_col_check = mysqli_query($conn, "SHOW COLUMNS FROM internship_applications LIKE 'offer_letter_path'");
+if ($_col_check && mysqli_num_rows($_col_check) === 0) {
+    mysqli_query($conn, "ALTER TABLE internship_applications ADD COLUMN offer_letter_path VARCHAR(500) NULL DEFAULT NULL");
 }
 unset($_col_check);
 
@@ -228,6 +268,10 @@ unset($_col_check);
 // Migrate existing internships to set project_type_id and project_subtype_id
 mysqli_query($conn, "UPDATE internships i JOIN project_types pt ON TRIM(i.project_type) = TRIM(pt.type_name) SET i.project_type_id = pt.id WHERE i.project_type_id IS NULL");
 mysqli_query($conn, "UPDATE internships i JOIN project_subtypes ps ON i.project_type_id = ps.project_type_id AND TRIM(i.project_subtype) = TRIM(ps.subtype_name) SET i.project_subtype_id = ps.id WHERE i.project_subtype_id IS NULL");
+
+// Run the extended schema migrations to ensure all columns (like applied_subtype) exist
+require_once __DIR__ . '/includes/ensure_extended_schema.php';
+ensure_extended_schema($conn);
 
 
 if (isset($app_id) && intval($app_id) > 0) {

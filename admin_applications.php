@@ -94,7 +94,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_details') {
     $details_sql = "
         SELECT a.*, u.full_name as student_name, u.email as student_email, u.phone as student_phone, i.title as internship_title,
                sp.aadhaar_file as profile_aadhaar_file, sp.pan_file as profile_pan_file, sp.resume_file as profile_resume_file,
-               sp.verification_status as profile_verification_status, $resume_url_select as profile_resume_url
+               sp.verification_status as profile_verification_status, sp.skills as student_skills, $resume_url_select as profile_resume_url
         FROM internship_applications a
         JOIN users u ON a.user_id = u.id
         LEFT JOIN internships i ON a.internship_id = i.id
@@ -359,7 +359,7 @@ $header_photo = $header_user['profile_photo'] ?? '';
                 <option value="">All Statuses</option>
                 <option value="Applied" <?php if ($status_filter === 'Applied') echo 'selected'; ?>>Applied</option>
                 <option value="Test Completed" <?php if ($status_filter === 'Test Completed') echo 'selected'; ?>>Test Completed</option>
-                <option value="HR Round" <?php if ($status_filter === 'HR Round') echo 'selected'; ?>>HR Round</option>
+                <option value="HR Review" <?php if ($status_filter === 'HR Review') echo 'selected'; ?>>HR Review</option>
                 <option value="HOD Approved" <?php if ($status_filter === 'HOD Approved') echo 'selected'; ?>>HOD Approved</option>
                 <option value="Selected" <?php if ($status_filter === 'Selected') echo 'selected'; ?>>Selected</option>
                 <option value="Rejected" <?php if ($status_filter === 'Rejected') echo 'selected'; ?>>Rejected</option>
@@ -399,7 +399,7 @@ $header_photo = $header_user['profile_photo'] ?? '';
                     $stat_colors = [
                       'applied' => 'bg-blue-50 text-blue-700 border-blue-150',
                       'test completed' => 'bg-purple-50 text-purple-700 border-purple-150',
-                      'hr round' => 'bg-indigo-50 text-indigo-700 border-indigo-150',
+                      'hr review' => 'bg-indigo-50 text-indigo-700 border-indigo-150',
                       'hod approved' => 'bg-teal-50 text-teal-700 border-teal-150',
                       'selected' => 'bg-green-50 text-green-700 border-green-150',
                       'rejected' => 'bg-red-50 text-red-700 border-red-150'
@@ -582,7 +582,7 @@ $header_photo = $header_user['profile_photo'] ?? '';
           document.getElementById('detail-grad-year').textContent = (app.year_of_study || "Year N/A") + " / " + (app.graduation_year || "Grad N/A");
           document.getElementById('detail-aadhaar-pan').textContent = (app.aadhaar_number || "Aadhaar N/A") + " / " + (app.pan_number || "PAN N/A");
 
-          document.getElementById('detail-skills').textContent = app.relevant_skills || "None listed.";
+          document.getElementById('detail-skills').textContent = app.student_skills || "None listed.";
           
           // Documents
           const baseUploadPath = 'view_doc.php?file=';

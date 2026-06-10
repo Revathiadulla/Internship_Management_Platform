@@ -88,7 +88,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     if ($action === 'get_details') {
         // Fetch candidate details
         $stmt = $conn->prepare("
-            SELECT c.*, sp.course, sp.year_of_study AS sp_year, a.test_score, a.test_status, a.test_submitted_date, COALESCE(jp.title, a.internship_name) AS project_title, a.reason_for_applying
+            SELECT c.*, sp.course, sp.year_of_study AS sp_year, COALESCE(jp.title, a.internship_name) AS project_title
             FROM candidates c
             LEFT JOIN student_profiles sp ON c.user_id = sp.user_id
             LEFT JOIN internship_applications a ON c.latest_application_id = a.id
@@ -241,7 +241,7 @@ if ($plan_selected === 'Free') {
     }
 }
 
-$where = ["c.current_status IN ('Test Completed', 'HR Round', 'HOD Approved', 'Selected')"];
+$where = ["c.current_status IN ('Applied', 'HR Review', 'HOD Approval', 'Selected', 'Project Assignment')"];
 
 if ($search !== '') {
     $search_safe = mysqli_real_escape_string($conn, $search);
@@ -264,11 +264,7 @@ if ($stack !== '' && $stack !== 'Tech Stack') {
 }
 
 if ($score !== '' && $score !== 'Score') {
-    if ($score === '90% +') {
-        $where[] = "a.test_score >= 90";
-    } elseif ($score === '80% +') {
-        $where[] = "a.test_score >= 80";
-    }
+    // Performance score filtering is no longer used because the internal assessment module has been removed.
 }
 
 if ($certification !== '' && $certification !== 'Certification') {
@@ -304,12 +300,12 @@ $total_pages = ceil($total_rows / $limit);
 
 // Data query
 $data_query = "
-    SELECT c.*, a.test_score, COALESCE(jp.title, a.internship_name) AS project_title, a.relevant_skills, a.preferred_domain
+    SELECT c.*, COALESCE(jp.title, a.internship_name) AS project_title, a.preferred_domain
     FROM candidates c
     LEFT JOIN internship_applications a ON c.latest_application_id = a.id
     LEFT JOIN job_postings jp ON a.job_posting_id = jp.id
     WHERE $where_sql
-    ORDER BY a.test_score DESC, c.updated_at DESC
+    ORDER BY c.updated_at DESC
     LIMIT $limit OFFSET $offset
 ";
 $candidates_res = mysqli_query($conn, $data_query);
@@ -533,7 +529,7 @@ if ($candidates_res) {
                                 </div>
                                 <div class="bg-gray-50 px-3 py-1 rounded-lg border border-gray-100 text-center">
                                     <p class="text-[10px] font-bold text-gray-400 uppercase tracking-tighter leading-none">Score</p>
-                                    <p class="text-sm font-black text-gray-900 mt-0.5"><?php echo htmlspecialchars($cand['test_score'] ?? '90'); ?>%</p>
+                                    <p class="text-sm font-black text-gray-900 mt-0.5">N/A</p>
                                 </div>
                             </div>
 
@@ -808,11 +804,11 @@ if ($candidates_res) {
                     document.getElementById('modal-phone').innerText = c.phone || '—';
                     document.getElementById('modal-college').innerText = c.college || '—';
                     document.getElementById('modal-degree').innerText = (c.course ? c.course : '') + (c.sp_year ? ' (' + c.sp_year + ')' : '');
-                    document.getElementById('modal-score').innerText = (c.test_score ? c.test_score : '—') + '%';
-                    document.getElementById('modal-status').innerText = c.test_status || '—';
+                    document.getElementById('modal-score').innerText = '—';
+                    document.getElementById('modal-status').innerText = '—';
                     document.getElementById('modal-skills').innerText = c.skills || '—';
                     document.getElementById('modal-project-title').innerText = c.project_title || 'General Internship';
-                    document.getElementById('modal-project-description').innerText = c.reason_for_applying ? '"' + c.reason_for_applying + '"' : '"Completed internship tasks."';
+                    document.getElementById('modal-project-description').innerText = '"Completed internship tasks."';
 
                     // Helper to escape HTML safely
                     const escapeHtml = (str) => {

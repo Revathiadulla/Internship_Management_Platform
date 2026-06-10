@@ -6,8 +6,8 @@ include_once "status_utils.php";
 
 function renderStatusTimeline($application_id, $conn) {
     // Fetch application details with profile fallback
-    $app_sql = "SELECT a.status, a.education_status, a.applied_date, a.test_status, a.test_submitted_date, a.confirmation_letter_path, a.user_id,
-                       sp.education_status AS profile_edu_status
+    $app_sql = "SELECT a.status, a.education_status, a.applied_date, a.confirmation_letter_path, a.confirmation_letter_sent_at, a.user_id,
+                       sp.education_status AS profile_edu_status, sp.student_type AS sp_student_type
                 FROM internship_applications a
                 LEFT JOIN student_profiles sp ON a.user_id = sp.user_id
                 WHERE a.id = $application_id LIMIT 1";
@@ -19,117 +19,60 @@ function renderStatusTimeline($application_id, $conn) {
     }
     
     $app = mysqli_fetch_assoc($app_result);
-    $current_status = $app['status'];
+    $current_status   = in_array(strtolower(trim((string) ($app['status'] ?? ''))), ['confirmation letter sent', 'confirmation_letter_sent', 'offer sent', 'offer_sent']) ? 'Selected' : ($app['status'] ?? 'Applied');
     $education_status = !empty($app['education_status']) ? $app['education_status'] : (!empty($app['profile_edu_status']) ? $app['profile_edu_status'] : 'Pursuing');
-    $is_pursuing = (strtolower($education_status) === 'pursuing' || strtolower($education_status) === 'currently pursuing');
+    $student_type_raw = $app['sp_student_type'] ?? '';
+    $st_lower         = strtolower(trim($student_type_raw));
+    $edu_lower        = strtolower(trim($education_status));
+    $is_passed_out    = ($st_lower === 'passed_out' || $st_lower === 'passed out' || $edu_lower === 'passed out' || $edu_lower === 'passed_out');
+    $is_pursuing      = !$is_passed_out;
     
     $applied_date = $app['applied_date'];
-    $test_status = $app['test_status'] ?? 'Pending';
-    $test_submitted_date = $app['test_submitted_date'] ?? null;
     $has_letter = !empty($app['confirmation_letter_path']);
+    $letter_emailed = !empty($app['confirmation_letter_sent_at']);
     
-    // Calculate test deadline (48 hours from application)
-    $applied_time = strtotime($applied_date);
-    $deadline_time = $applied_time + (48 * 60 * 60);
-    $current_time = time();
-    $time_remaining = $deadline_time - $current_time;
-    $is_deadline_expired = ($time_remaining <= 0);
-    $hours_left = floor($time_remaining / 3600);
-    $minutes_left = floor(($time_remaining % 3600) / 60);
-    
-    // Build steps based on student type
-    $steps = [
-        [
-            'id' => 'applied',
-            'label' => 'Applied',
-            'icon' => 'send',
-            'color' => 'slate',
-            'bg' => 'bg-slate-500'
-        ],
-        [
-            'id' => 'test_completed',
-            'label' => 'Test Completed',
-            'icon' => 'quiz',
-            'color' => 'purple',
-            'bg' => 'bg-purple-500'
-        ],
-        [
-            'id' => 'hr_review',
-            'label' => 'HR Review',
-            'icon' => 'manage_search',
-            'color' => 'orange',
-            'bg' => 'bg-orange-500'
-        ]
-    ];
-    
-    if ($is_pursuing) {
+    // Status config for styling
+        // Status config for styling (aligned with new official flow)
+        $status_config = [
+            'Applied'                  => ['bg' => 'bg-slate-500',   'icon' => 'send',            'color' => 'slate'],
+            'HR Review'                => ['bg' => 'bg-indigo-500',  'icon' => 'rate_review',     'color' => 'indigo'],
+            'Shortlisted'              => ['bg' => 'bg-amber-500',   'icon' => 'star',            'color' => 'amber'],
+            'Exam Mail Sent'           => ['bg' => 'bg-purple-500',  'icon' => 'mail',            'color' => 'purple'],
+            'HOD Pending'              => ['bg' => 'bg-orange-500',  'icon' => 'hourglass_empty', 'color' => 'orange'],
+            'HOD Approved'             => ['bg' => 'bg-teal-500',    'icon' => 'verified',        'color' => 'teal'],
+            'HR Selected'              => ['bg' => 'bg-emerald-500', 'icon' => 'how_to_reg',      'color' => 'emerald'],
+            'Selected'                 => ['bg' => 'bg-emerald-500', 'icon' => 'how_to_reg',      'color' => 'emerald'],
+            'Project Assigned'         => ['bg' => 'bg-blue-500',    'icon' => 'assignment',      'color' => 'blue'],
+            'Active Intern'            => ['bg' => 'bg-green-500',   'icon' => 'work',            'color' => 'green'],
+            'Completed'                => ['bg' => 'bg-emerald-700', 'icon' => 'task_alt',        'color' => 'emerald'],
+            'Talent Pool'              => ['bg' => 'bg-rose-500',    'icon' => 'groups',          'color' => 'rose'],
+            'Rejected'                 => ['bg' => 'bg-red-500',     'icon' => 'cancel',          'color' => 'red'],
+            'HOD Rejected'             => ['bg' => 'bg-red-500',     'icon' => 'cancel',          'color' => 'red'],
+        ];
+
+    // Build timeline steps dynamically
+    $raw_steps = getWorkflowSteps($education_status, $student_type_raw);
+    $steps = [];
+    foreach ($raw_steps as $ws) {
+        $st = $ws['status'];
+        $cfg = $status_config[$st] ?? ['bg' => 'bg-slate-500', 'icon' => 'info', 'color' => 'slate'];
         $steps[] = [
-            'id' => 'hod_approval',
-            'label' => 'HOD Approval',
-            'icon' => 'verified',
-            'color' => 'cyan',
-            'bg' => 'bg-cyan-500'
+            'id' => strtolower(str_replace(' ', '_', $st)),
+            'status' => $st,
+            'label' => $ws['label'],
+            'icon' => $ws['icon'],
+            'color' => $cfg['color'],
+            'bg' => $cfg['bg']
         ];
     }
-    
-    $steps[] = [
-        'id' => 'selected_by_hr',
-        'label' => 'Selected by HR',
-        'icon' => 'check_circle',
-        'color' => 'emerald',
-        'bg' => 'bg-emerald-500'
-    ];
-    
-    $steps[] = [
-        'id' => 'confirmation_letter',
-        'label' => 'Confirmation Letter Sent',
-        'icon' => 'mail',
-        'color' => 'lime',
-        'bg' => 'bg-lime-500'
-    ];
 
-    // Determine the current step dynamically based on status (case-insensitive)
-    $status_lc = strtolower($current_status);
-    $test_lc = strtolower($test_status);
-    $current_step_id = 'applied';
-
-    if ($status_lc === 'applied') {
-        if ($test_lc === 'completed') {
-            $current_step_id = 'test_completed';
-        } else {
-            $current_step_id = 'applied';
-        }
-    } elseif ($status_lc === 'test completed') {
-        $current_step_id = 'test_completed';
-    } elseif (in_array($status_lc, ['hr round', 'hr review'])) {
-        $current_step_id = 'hr_review';
-    } elseif ($status_lc === 'hod approval pending') {
-        $current_step_id = $is_pursuing ? 'hod_approval' : 'selected_by_hr';
-    } elseif (in_array($status_lc, ['hod approved', 'hod_approved'])) {
-        $current_step_id = 'selected_by_hr';
-    } elseif ($status_lc === 'selected') {
-        if ($has_letter) {
-            $current_step_id = 'confirmation_letter_completed';
-        } else {
-            $current_step_id = 'confirmation_letter';
-        }
-    } elseif (in_array($status_lc, ['active intern', 'active_intern', 'internship started', 'started'])) {
-        $current_step_id = 'confirmation_letter_completed';
-    }
-
-    // Find the index of the current step in the steps array
-    $current_index = -1;
-    foreach ($steps as $index => $step) {
-        if ($step['id'] === $current_step_id) {
-            $current_index = $index;
-            break;
-        }
-    }
+    // Determine current index in timeline
+    $current_index = getCurrentStepIndex($current_status, $raw_steps);
 
     foreach ($steps as $index => &$step) {
-        if ($current_step_id === 'confirmation_letter_completed') {
-            $step['is_completed'] = true;
-            $step['is_current'] = false;
+        if ($current_status === 'Internship Active' || in_array(strtolower($current_status), ['started', 'active intern', 'internship started'])) {
+              $step['is_completed'] = true;
+              $step['is_current'] = false;
         } else {
             if ($current_index !== -1) {
                 if ($index < $current_index) {
@@ -143,7 +86,6 @@ function renderStatusTimeline($application_id, $conn) {
                     $step['is_current'] = false;
                 }
             } else {
-                // Fallback: Default to first step being current
                 if ($index === 0) {
                     $step['is_completed'] = false;
                     $step['is_current'] = true;
@@ -155,19 +97,6 @@ function renderStatusTimeline($application_id, $conn) {
         }
     }
     unset($step);
-
-    // Status config for history
-    $status_config = [
-        'Applied' => ['bg' => 'bg-slate-500', 'icon' => 'send', 'color' => 'slate'],
-        'Test Completed' => ['bg' => 'bg-purple-500', 'icon' => 'quiz', 'color' => 'purple'],
-        'HR Round' => ['bg' => 'bg-orange-500', 'icon' => 'manage_search', 'color' => 'orange'],
-        'HR Review' => ['bg' => 'bg-orange-500', 'icon' => 'manage_search', 'color' => 'orange'],
-        'HOD Approval Pending' => ['bg' => 'bg-cyan-500', 'icon' => 'pending', 'color' => 'cyan'],
-        'HOD Approved' => ['bg' => 'bg-cyan-500', 'icon' => 'verified', 'color' => 'cyan'],
-        'Selected' => ['bg' => 'bg-emerald-500', 'icon' => 'check_circle', 'color' => 'emerald'],
-        'Active Intern' => ['bg' => 'bg-lime-500', 'icon' => 'mail', 'color' => 'lime'],
-        'Rejected' => ['bg' => 'bg-red-500', 'icon' => 'cancel', 'color' => 'red']
-    ];
 
     // Fetch status history
     $history_sql = "SELECT * FROM application_status_history 
@@ -186,15 +115,9 @@ function renderStatusTimeline($application_id, $conn) {
     $display_status = $current_status;
     if ($current_status === 'HR Round') {
         $display_status = 'HR Review';
-    } elseif ($current_status === 'Active Intern' || ($current_status === 'Selected' && $has_letter)) {
-        $display_status = 'Confirmation Letter Sent';
     }
     
     $header_icon = $status_config[$current_status]['icon'] ?? 'info';
-    if (($current_status === 'Selected' && $has_letter) || $current_status === 'Active Intern') {
-        $header_icon = 'mail';
-    }
-    
     ?>
     <div class="bg-gradient-to-br from-white to-slate-50 rounded-2xl border border-slate-200 shadow-lg overflow-hidden">
         
@@ -215,6 +138,12 @@ function renderStatusTimeline($application_id, $conn) {
                 <span class="material-symbols-outlined text-[14px] align-middle mr-1">schedule</span>
                 Last updated <?php echo formatTimestamp($last_updated); ?>
             </p>
+            <?php if ($has_letter || $letter_emailed): ?>
+            <div class="mt-3 inline-flex items-center gap-2 rounded-full bg-white/20 px-3 py-1 text-xs font-semibold backdrop-blur-sm">
+                <span class="material-symbols-outlined text-[14px]">mail</span>
+                Confirmation Letter: Sent
+            </div>
+            <?php endif; ?>
         </div>
         
         <!-- Progress Timeline -->
@@ -269,26 +198,51 @@ function renderStatusTimeline($application_id, $conn) {
                                     <span class="text-slate-400">○ Pending</span>
                                 <?php endif; ?>
                             </p>
+
+                            <?php if ($step['status'] === 'Selected' && ($has_letter || $letter_emailed)): ?>
+                            <div class="mt-2 rounded-lg border border-emerald-100 bg-emerald-50 p-2.5 text-xs text-emerald-700 space-y-1">
+                                <?php if ($has_letter): ?>
+                                <div class="flex items-center gap-1.5"><span class="material-symbols-outlined text-[14px]">check_circle</span> Confirmation Letter Generated</div>
+                                <?php endif; ?>
+                                <?php if ($letter_emailed): ?>
+                                <div class="flex items-center gap-1.5"><span class="material-symbols-outlined text-[14px]">check_circle</span> Confirmation Letter Emailed</div>
+                                <?php endif; ?>
+                            </div>
+                            <?php endif; ?>
                             
                             <!-- Show timestamp for completed stages from history -->
                             <?php 
                             $step_history = null;
                             foreach ($history as $entry) {
                                 $hist_status = $entry['new_status'];
-                                if ($step['id'] === 'applied' && $hist_status === 'Applied') {
-                                    $step_history = $entry;
-                                } elseif ($step['id'] === 'test_completed' && $hist_status === 'Test Completed') {
-                                    $step_history = $entry;
-                                } elseif ($step['id'] === 'hr_review' && in_array($hist_status, ['HR Round', 'HR Review'])) {
-                                    $step_history = $entry;
-                                } elseif ($step['id'] === 'hod_approval' && in_array($hist_status, ['HOD Approval Pending', 'HOD Approved'])) {
-                                    $step_history = $entry;
-                                } elseif ($step['id'] === 'selected_by_hr' && $hist_status === 'Selected') {
-                                    $step_history = $entry;
-                                } elseif ($step['id'] === 'confirmation_letter' && $hist_status === 'Active Intern') {
-                                    $step_history = $entry;
+                                $hist_status_lower = strtolower($hist_status);
+                                $step_status_lower = strtolower($step['status']);
+                                
+                                $matched = false;
+                                if ($step_status_lower === 'applied' && $hist_status_lower === 'applied') {
+                                    $matched = true;
+                                } elseif ($step_status_lower === 'hr review' && in_array($hist_status_lower, ['hr round', 'hr review'])) {
+                                    $matched = true;
+                                } elseif ($step_status_lower === 'exam mail sent' && in_array($hist_status_lower, ['exam link sent', 'test link sent', 'exam mail sent', 'exam completed', 'test completed', 'test submitted', 'test passed', 'test failed', 'qualified', 'not qualified'])) {
+                                    $matched = true;
+                                } elseif ($step_status_lower === 'shortlisted' && in_array($hist_status_lower, ['shortlisted'])) {
+                                    $matched = true;
+                                } elseif ($step_status_lower === 'hod pending' && in_array($hist_status_lower, ['hod pending', 'hod approval pending', 'forwarded to hod'])) {
+                                    $matched = true;
+                                } elseif ($step_status_lower === 'hod approved' && in_array($hist_status_lower, ['hod approved', 'hod approval'])) {
+                                    $matched = true;
+                                } elseif ($step_status_lower === 'selected' && in_array($hist_status_lower, ['selected', 'hr selected'])) {
+                                    $matched = true;
+                                } elseif ($step_status_lower === 'confirmation letter sent' && $hist_status_lower === 'confirmation letter sent') {
+                                    $matched = true;
+                                } elseif ($step_status_lower === 'project assigned' && $hist_status_lower === 'project assigned') {
+                                    $matched = true;
+                                } elseif ($step_status_lower === 'active intern' && in_array($hist_status_lower, ['internship active', 'started', 'active intern', 'internship started'])) {
+                                    $matched = true;
                                 }
-                                if ($step_history) {
+                                
+                                if ($matched) {
+                                    $step_history = $entry;
                                     break;
                                 }
                             }
@@ -300,26 +254,7 @@ function renderStatusTimeline($application_id, $conn) {
                                 }
                             }
                             
-                            // Show test deadline info for Applied stage
-                            if ($step['id'] === 'applied' && $is_current && $test_status !== 'Completed') {
-                                if ($is_deadline_expired) {
-                                    echo '<div class="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg">';
-                                    echo '<p class="text-xs font-bold text-red-700">⚠️ Test Deadline Expired</p>';
-                                    echo '<p class="text-[10px] text-red-600 mt-0.5">The 48-hour test window has expired. Please contact HR.</p>';
-                                    echo '</div>';
-                                } else {
-                                    echo '<div class="mt-2 p-2 bg-amber-50 border border-amber-200 rounded-lg">';
-                                    echo '<p class="text-xs font-bold text-amber-700">⏱️ Test Deadline</p>';
-                                    echo '<p class="text-[10px] text-amber-600 mt-0.5">Complete within: ' . $hours_left . 'h ' . $minutes_left . 'm</p>';
-                                    echo '<p class="text-[10px] text-amber-500 mt-0.5">Deadline: ' . date('M d, Y \a\t g:i A', $deadline_time) . '</p>';
-                                    echo '</div>';
-                                }
-                            }
-                            
-                            // Show test submitted date for Test Completed stage
-                            if ($step['id'] === 'test_completed' && $test_submitted_date && $is_completed) {
-                                echo '<p class="text-xs text-slate-400 mt-1">Submitted: ' . formatTimestamp($test_submitted_date) . '</p>';
-                            }
+
                             ?>
                         </div>
                     </div>
@@ -336,7 +271,7 @@ function renderStatusTimeline($application_id, $conn) {
                             <p class="text-xs text-red-600 mt-0.5 font-semibold">Application was not successful</p>
                             <?php 
                             foreach ($history as $entry) {
-                                if ($entry['new_status'] === 'Rejected') {
+                                    if ($entry['new_status'] === 'Rejected') {
                                     echo '<p class="text-xs text-slate-400 mt-1">' . formatTimestamp($entry['created_at']) . '</p>';
                                     if (!empty($entry['notes'])) {
                                         echo '<p class="text-xs text-red-600 mt-2 bg-red-50 p-3 rounded-lg border border-red-100">' . htmlspecialchars($entry['notes']) . '</p>';
@@ -360,10 +295,13 @@ function renderStatusTimeline($application_id, $conn) {
                 Complete History
             </h4>
             <div class="space-y-2">
-                <?php foreach ($history as $entry): ?>
+                <?php foreach ($history as $entry): 
+                    $entry_status = $entry['new_status'];
+                    $entry_config = $status_config[$entry_status] ?? ['bg' => 'bg-slate-500', 'icon' => 'info'];
+                ?>
                 <div class="flex items-center gap-3 p-3 bg-white rounded-lg border border-slate-100 hover:shadow-sm transition-shadow">
-                    <div class="w-8 h-8 rounded-lg <?php echo $status_config[$entry['new_status']]['bg'] ?? 'bg-slate-500'; ?> text-white flex items-center justify-center shrink-0">
-                        <span class="material-symbols-outlined text-[16px]"><?php echo $status_config[$entry['new_status']]['icon'] ?? 'info'; ?></span>
+                    <div class="w-8 h-8 rounded-lg <?php echo $entry_config['bg']; ?> text-white flex items-center justify-center shrink-0">
+                        <span class="material-symbols-outlined text-[16px]"><?php echo $entry_config['icon']; ?></span>
                     </div>
                     <div class="flex-1 min-w-0">
                         <p class="font-semibold text-slate-800 text-xs">

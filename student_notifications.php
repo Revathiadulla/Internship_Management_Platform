@@ -68,11 +68,11 @@ $unread_count = isset($unread_row['count']) ? intval($unread_row['count']) : 0;
 
 // Fetch all notifications for page display
 $notifications_sql = "
-    SELECT id, user_id, type, message, is_read, created_at, NULL AS title, NULL AS sender_name, link, 'student' AS source_table
+    SELECT id, user_id, type, message, is_read, created_at, NULL AS title, NULL AS sender_name, link, 'student' AS source_table, NULL AS attachment_path, NULL AS attachment_name, NULL AS attachment_size, NULL AS attachment_type
     FROM student_notifications
     WHERE user_id = '$user_id'
     UNION ALL
-    SELECT n.id, n.user_id, n.type, n.message, n.is_read, n.created_at, n.title, u.full_name AS sender_name, n.link, 'global' AS source_table
+    SELECT n.id, n.user_id, n.type, n.message, n.is_read, n.created_at, n.title, u.full_name AS sender_name, n.link, 'global' AS source_table, n.attachment_path, n.attachment_name, n.attachment_size, n.attachment_type
     FROM notifications n
     LEFT JOIN users u ON u.id = n.sender_id
     WHERE n.user_id = '$user_id'
@@ -291,6 +291,11 @@ $has_active = mysqli_num_rows($active_result) > 0;
                       <span class="material-symbols-outlined text-[16px]">done_all</span> Mark All as Read
                   </button>
               <?php endif; ?>
+              <?php if ($total_notifications > 0): ?>
+                  <button id="btn-clear-all" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm flex items-center gap-1.5">
+                      <span class="material-symbols-outlined text-[16px]">delete_sweep</span> Clear All
+                  </button>
+              <?php endif; ?>
           </div>
       </div>
 
@@ -380,7 +385,17 @@ $has_active = mysqli_num_rows($active_result) > 0;
                                <h4 class="font-bold text-slate-900 text-sm mt-1"><?php echo htmlspecialchars($row['title']); ?></h4>
                            <?php endif; ?>
                            <p class="<?php echo !empty($row['title']) ? 'text-slate-600 text-xs mt-1' : 'font-semibold text-slate-800 text-sm mt-1'; ?> leading-relaxed"><?php echo htmlspecialchars($row['message']); ?></p>
-                           <?php if (!empty($row['sender_name'])): ?>
+                            <?php if (!empty($row['attachment_path'])): ?>
+                                <div class="mt-3 flex items-center gap-2 text-xs bg-slate-50 p-2.5 rounded-xl border border-slate-100 max-w-fit">
+                                    <span class="material-symbols-outlined text-[16px] text-gray-500">attachment</span>
+                                    <span class="font-semibold text-slate-700"><?php echo htmlspecialchars($row['attachment_name']); ?></span>
+                                    <span class="text-gray-400"> (<?php echo round($row['attachment_size'] / 1024, 1); ?> KB)</span>
+                                    <span class="text-slate-300">|</span>
+                                    <a href="<?php echo htmlspecialchars($row['attachment_path']); ?>" target="_blank" class="text-blue-600 font-bold hover:underline">View</a>
+                                    <a href="<?php echo htmlspecialchars($row['attachment_path']); ?>" download class="text-indigo-600 font-bold hover:underline ml-1">Download</a>
+                                </div>
+                            <?php endif; ?>
+                            <?php if (!empty($row['sender_name'])): ?>
                                <p class="text-[11px] text-indigo-600 font-semibold mt-1.5">From: <?php echo htmlspecialchars($row['sender_name']); ?></p>
                            <?php endif; ?>
                            <span class="text-[10px] text-slate-400 font-medium flex items-center gap-1 mt-3">
@@ -389,11 +404,16 @@ $has_active = mysqli_num_rows($active_result) > 0;
                            </span>
                        </div>
 
-                       <?php if (!$is_read): ?>
-                           <button class="btn-mark-single-read self-center text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50/50 hover:bg-blue-50 border border-blue-100 rounded-lg px-3 py-1.5 transition-colors shrink-0 z-10 relative">
-                               Mark Read
-                           </button>
-                       <?php endif; ?>
+                        <div class="flex items-center gap-2 shrink-0 z-10 relative self-center">
+                            <?php if (!$is_read): ?>
+                                <button class="btn-mark-single-read text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50/50 hover:bg-blue-50 border border-blue-100 rounded-lg px-3 py-1.5 transition-colors">
+                                    Mark Read
+                                </button>
+                            <?php endif; ?>
+                            <button class="btn-delete-single text-xs font-bold text-red-600 hover:text-red-700 bg-red-50/50 hover:bg-red-50 border border-red-100 rounded-lg px-3 py-1.5 transition-colors">
+                                Delete
+                            </button>
+                        </div>
                    <?php if (!empty($row['link'])): ?>
                    </a>
                    <?php else: ?>
@@ -428,34 +448,93 @@ $has_active = mysqli_num_rows($active_result) > 0;
         const profileToggle = document.getElementById('profile-toggle');
         const profileDropdown = document.getElementById('profile-dropdown');
 
-        profileToggle.addEventListener('click', (e) => {
-            e.stopPropagation();
-            profileDropdown.classList.toggle('hidden');
-        });
+        if (profileToggle && profileDropdown) {
+            profileToggle.addEventListener('click', (e) => {
+                e.stopPropagation();
+                profileDropdown.classList.toggle('hidden');
+            });
 
-        document.addEventListener('click', (e) => {
-            if (!profileToggle.contains(e.target) && !profileDropdown.contains(e.target)) {
-                profileDropdown.classList.add('hidden');
+            document.addEventListener('click', (e) => {
+                if (!profileToggle.contains(e.target) && !profileDropdown.contains(e.target)) {
+                    profileDropdown.classList.add('hidden');
+                }
+            });
+        }
+
+        // Helper function to send POST requests with Content-Type: application/json
+        async function sendAction(payload) {
+            const response = await fetch("mark_notification_read.php", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(payload)
+            });
+            return await response.json();
+        }
+
+        // Helper count badge decrease locally based on DOM
+        function updateBadgeCounts() {
+            const sideBadge = document.getElementById("sidebar-badge");
+            const navDot = document.getElementById("nav-dot");
+            const pillCount = document.getElementById("unread-pill-count");
+            const markAllButton = document.getElementById("btn-mark-all-read");
+
+            // Count the unread notifications still present in DOM
+            const unreadCards = document.querySelectorAll('.notification-card[data-read="false"]');
+            const currentCount = unreadCards.length;
+
+            if (currentCount === 0) {
+                if (sideBadge) sideBadge.remove();
+                if (navDot) navDot.remove();
+                if (pillCount) {
+                    pillCount.textContent = "0 New";
+                    pillCount.style.display = "none";
+                }
+                if (markAllButton) markAllButton.remove();
+            } else {
+                if (sideBadge) {
+                    sideBadge.textContent = currentCount;
+                }
+                if (pillCount) {
+                    pillCount.textContent = `${currentCount} New`;
+                    pillCount.style.display = "inline-block";
+                }
             }
-        });
+        }
 
-        // Filter Pills toggle logic
-        const filterPills = document.querySelectorAll(".filter-pill");
-        const cards = document.querySelectorAll(".notification-card");
-        const noFilteredNotifs = document.getElementById("no-filtered-notifs");
+        // Helper to check if notifications are empty and show empty state
+        function checkEmptyState() {
+            const container = document.getElementById("notifications-container");
+            const cards = container.querySelectorAll(".notification-card");
+            const clearAllBtn = document.getElementById("btn-clear-all");
+            const markAllButton = document.getElementById("btn-mark-all-read");
+            
+            if (cards.length === 0) {
+                container.innerHTML = `
+                    <div class="py-16 text-center bg-white border border-slate-100 rounded-2xl shadow-sm">
+                        <div class="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <span class="material-symbols-outlined text-slate-300 text-3xl">notifications_off</span>
+                        </div>
+                        <h3 class="font-bold text-slate-700 mb-1">No Notifications Yet</h3>
+                        <p class="text-slate-500 text-sm">We'll alert you as soon as you receive updates regarding your applications!</p>
+                    </div>
+                `;
+                if (clearAllBtn) clearAllBtn.remove();
+                if (markAllButton) markAllButton.remove();
+            }
+        }
 
-        filterPills.forEach(pill => {
-            pill.addEventListener("click", () => {
-                // Set active pill design
-                filterPills.forEach(p => {
-                    p.className = "filter-pill px-4 py-1.5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-bold rounded-full transition-all";
-                });
-                pill.className = "filter-pill px-4 py-1.5 bg-slate-900 text-white text-xs font-bold rounded-full transition-all shadow-sm";
-
-                const filter = pill.getAttribute("data-filter");
+        // Reapply the currently active category filter
+        function reapplyActiveFilter() {
+            const activePill = document.querySelector(".filter-pill.bg-slate-900");
+            if (activePill) {
+                const filter = activePill.getAttribute("data-filter");
+                const dynamicCards = document.querySelectorAll(".notification-card");
+                const noFilteredNotifs = document.getElementById("no-filtered-notifs");
                 let hasMatches = false;
 
-                cards.forEach(card => {
+                dynamicCards.forEach(card => {
                     const type = card.getAttribute("data-type") || "";
                     const read = card.getAttribute("data-read") || "";
 
@@ -481,53 +560,112 @@ $has_active = mysqli_num_rows($active_result) > 0;
                 } else {
                     if (noFilteredNotifs) noFilteredNotifs.classList.remove("hidden");
                 }
+            }
+        }
+
+        // Filter Pills toggle logic
+        const filterPills = document.querySelectorAll(".filter-pill");
+        filterPills.forEach(pill => {
+            pill.addEventListener("click", () => {
+                // Set active pill design
+                filterPills.forEach(p => {
+                    p.className = "filter-pill px-4 py-1.5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-bold rounded-full transition-all";
+                });
+                pill.className = "filter-pill px-4 py-1.5 bg-slate-900 text-white text-xs font-bold rounded-full transition-all shadow-sm";
+                reapplyActiveFilter();
             });
         });
 
-        // Mark Single Notification as Read
-        const singleReadButtons = document.querySelectorAll(".btn-mark-single-read");
-        singleReadButtons.forEach(btn => {
-            btn.addEventListener("click", async (e) => {
-                const card = btn.closest(".notification-card");
-                const notifId = card.getAttribute("data-id");
+        // Mark Single / Delete Single Event Handler via delegation
+        const container = document.getElementById("notifications-container");
+        if (container) {
+            container.addEventListener("click", async (e) => {
+                const readBtn = e.target.closest(".btn-mark-single-read");
+                const deleteBtn = e.target.closest(".btn-delete-single");
 
-                const source = card.getAttribute("data-source") || "student";
+                if (readBtn) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const card = readBtn.closest(".notification-card");
+                    const notifId = card.getAttribute("data-id");
+                    const source = card.getAttribute("data-source") || "student";
 
-                try {
-                    const response = await fetch(`mark_notification_read.php?id=${notifId}&source=${source}`);
-                    const data = await response.json();
+                    try {
+                        const data = await sendAction({
+                            action: "mark_read",
+                            id: notifId,
+                            source: source
+                        });
 
-                    if (data.success) {
-                        // Soft fade new visual indicators
-                        card.setAttribute("data-read", "true");
-                        card.className = card.tagName.toLowerCase() === 'a' 
-                            ? "notification-card block bg-white rounded-2xl border border-slate-100 p-5 transition-all flex items-start gap-4 hover:border-blue-300"
-                            : "notification-card bg-white rounded-2xl border border-slate-100 p-5 transition-all flex items-start gap-4";
-                        
-                        const dot = card.querySelector(".new-dot");
-                        if (dot) dot.remove();
-                        btn.remove();
+                        if (data.success) {
+                            card.setAttribute("data-read", "true");
+                            card.className = card.tagName.toLowerCase() === 'a' 
+                                ? "notification-card block bg-white rounded-2xl border border-slate-100 p-5 transition-all flex items-start gap-4 hover:border-blue-300"
+                                : "notification-card bg-white rounded-2xl border border-slate-100 p-5 transition-all flex items-start gap-4";
+                            
+                            const dot = card.querySelector(".new-dot");
+                            if (dot) dot.remove();
+                            readBtn.remove();
 
-                        // Decrease badge counters smoothly
-                        updateBadgeCounts();
-                    } else {
-                        alert("Error: " + data.message);
+                            updateBadgeCounts();
+                            reapplyActiveFilter();
+                        } else {
+                            alert("Failed to update: " + data.message);
+                        }
+                    } catch (err) {
+                        console.error("AJAX Error: ", err);
+                        alert("Failed to update: Network error");
                     }
-                } catch (err) {
-                    console.error("AJAX Error: ", err);
+                }
+
+                if (deleteBtn) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const card = deleteBtn.closest(".notification-card");
+                    const notifId = card.getAttribute("data-id");
+                    const source = card.getAttribute("data-source") || "student";
+
+                    try {
+                        const data = await sendAction({
+                            action: "delete",
+                            id: notifId,
+                            source: source
+                        });
+
+                        if (data.success) {
+                            // Fade out and remove from DOM
+                            card.style.opacity = '0';
+                            card.style.transform = 'scale(0.95)';
+                            card.style.transition = 'all 0.3s ease';
+                            setTimeout(() => {
+                                card.remove();
+                                updateBadgeCounts();
+                                checkEmptyState();
+                                reapplyActiveFilter();
+                            }, 300);
+                        } else {
+                            alert("Failed to update: " + data.message);
+                        }
+                    } catch (err) {
+                        console.error("AJAX Error: ", err);
+                        alert("Failed to update: Network error");
+                    }
                 }
             });
-        });
+        }
 
         // Mark All Notifications as Read
         const markAllButton = document.getElementById("btn-mark-all-read");
         if (markAllButton) {
-            markAllButton.addEventListener("click", async () => {
+            markAllButton.addEventListener("click", async (e) => {
+                e.preventDefault();
                 try {
-                    const response = await fetch("mark_notification_read.php?all=1");
-                    const data = await response.json();
+                    const data = await sendAction({
+                        action: "mark_all_read"
+                    });
 
                     if (data.success) {
+                        const cards = document.querySelectorAll(".notification-card");
                         cards.forEach(card => {
                             card.setAttribute("data-read", "true");
                             card.className = card.tagName.toLowerCase() === 'a' 
@@ -540,42 +678,44 @@ $has_active = mysqli_num_rows($active_result) > 0;
                         });
 
                         markAllButton.remove();
-                        updateBadgeCounts(true);
+                        updateBadgeCounts();
+                        reapplyActiveFilter();
                     } else {
-                        alert("Error: " + data.message);
+                        alert("Failed to update: " + data.message);
                     }
                 } catch (err) {
                     console.error("AJAX Error: ", err);
+                    alert("Failed to update: Network error");
                 }
             });
         }
 
-        // Help count badge decrease locally
-        function updateBadgeCounts(allRead = false) {
-            const sideBadge = document.getElementById("sidebar-badge");
-            const navDot = document.getElementById("nav-dot");
-            const pillCount = document.getElementById("unread-pill-count");
-
-            if (allRead) {
-                if (sideBadge) sideBadge.remove();
-                if (navDot) navDot.remove();
-                if (pillCount) pillCount.textContent = "0 New";
-            } else {
-                let currentCount = parseInt(pillCount.textContent) || 0;
-                if (currentCount > 0) {
-                    currentCount--;
+        // Clear All Notifications
+        const clearAllBtn = document.getElementById("btn-clear-all");
+        if (clearAllBtn) {
+            clearAllBtn.addEventListener("click", async (e) => {
+                e.preventDefault();
+                if (!confirm("Are you sure you want to delete all notifications?")) {
+                    return;
                 }
+                try {
+                    const data = await sendAction({
+                        action: "clear_all"
+                    });
 
-                if (currentCount === 0) {
-                    if (sideBadge) sideBadge.remove();
-                    if (navDot) navDot.remove();
-                    pillCount.textContent = "0 New";
-                    if (markAllButton) markAllButton.remove();
-                } else {
-                    if (sideBadge) sideBadge.textContent = currentCount;
-                    pillCount.textContent = `${currentCount} New`;
+                    if (data.success) {
+                        const cards = document.querySelectorAll(".notification-card");
+                        cards.forEach(card => card.remove());
+                        updateBadgeCounts();
+                        checkEmptyState();
+                    } else {
+                        alert("Failed to update: " + data.message);
+                    }
+                } catch (err) {
+                    console.error("AJAX Error: ", err);
+                    alert("Failed to update: Network error");
                 }
-            }
+            });
         }
     });
   </script>

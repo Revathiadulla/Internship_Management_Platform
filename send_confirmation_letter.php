@@ -16,7 +16,7 @@ try {
         exit();
     }
 
-    $user_role = $_SESSION['role'];
+    $user_role = strtolower(trim($_SESSION['role'] ?? ''));
     // Only HR and Coordinator and Admin can send confirmation letter
     if ($user_role !== 'hr' && $user_role !== 'coordinator' && $user_role !== 'admin') {
         echo json_encode(['success' => false, 'message' => 'You do not have permission to perform this action']);
@@ -30,7 +30,7 @@ try {
     }
 
     // Fetch application details
-    $app_sql = "SELECT a.id, a.status, a.user_id, a.internship_id, a.internship_name,
+    $app_sql = "SELECT a.id, a.status, a.user_id, a.internship_id, a.internship_name, a.confirmation_letter_path, a.confirmation_letter_sent_at,
                        COALESCE(i.title, a.internship_name) AS internship_title,
                        u.full_name AS student_name, u.email AS student_email
                 FROM internship_applications a
@@ -45,8 +45,15 @@ try {
     }
 
     $app = mysqli_fetch_assoc($app_result);
-    if ($app['status'] !== 'Selected') {
+    $current_status = trim((string) ($app['status'] ?? ''));
+    if (strtolower($current_status) !== 'selected') {
         echo json_encode(['success' => false, 'message' => 'Confirmation letter can only be sent for selected students']);
+        exit();
+    }
+
+    $confirmation_letter_sent = !empty($app['confirmation_letter_path']) || !empty($app['confirmation_letter_sent_at']);
+    if ($confirmation_letter_sent) {
+        echo json_encode(['success' => false, 'message' => 'Confirmation letter already sent.']);
         exit();
     }
 
@@ -103,32 +110,39 @@ try {
     $pdf->SetTextColor(100, 100, 100);
     $pdf->Cell(0, 10, 'This is a system-generated confirmation letter. No signature is required.', 0, 1, 'C');
     
-    // Save PDF temporarily
-    $pdf_filename = 'Confirmation_Letter_' . $app_id . '.pdf';
-    $temp_pdf_path = sys_get_temp_dir() . DIRECTORY_SEPARATOR . $pdf_filename;
+    // Save PDF locally
+    $dir = __DIR__ . '/uploads/offer_letters';
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0755, true);
+    }
+    $pdf_filename = 'Offer_Letter_' . $app_id . '_' . time() . '.pdf';
+    $local_pdf_path = $dir . DIRECTORY_SEPARATOR . $pdf_filename;
     
-    $pdf->Output('F', $temp_pdf_path);
+    $pdf->Output('F', $local_pdf_path);
     
-    // Upload to Cloudinary
+    $relative_pdf_path = 'uploads/offer_letters/' . $pdf_filename;
+    $final_pdf_path = $relative_pdf_path;
+    
+    // Upload to Cloudinary if env vars are present, otherwise fallback to local
     require_once __DIR__ . '/includes/cloudinary_config.php';
     try {
-        $secure_url = uploadToCloudinary($temp_pdf_path, 'offer_letters', true);
+        $cloud_name = getenv('CLOUDINARY_CLOUD_NAME');
+        $api_key    = getenv('CLOUDINARY_API_KEY');
+        $api_secret = getenv('CLOUDINARY_API_SECRET');
+        if (!empty($cloud_name) && !empty($api_key) && !empty($api_secret)) {
+            $secure_url = uploadToCloudinary($local_pdf_path, 'offer_letters', true);
+            if (!empty($secure_url)) {
+                $final_pdf_path = $secure_url;
+            }
+        }
     } catch (Exception $e) {
-        @unlink($temp_pdf_path);
-        echo json_encode(['success' => false, 'message' => 'Failed to upload confirmation letter: ' . $e->getMessage()]);
-        exit();
+        // Fallback to local storage on missing credentials or upload error
+        error_log("Failed to upload confirmation letter to Cloudinary, falling back to local: " . $e->getMessage());
     }
-    
-    // Delete temp file
-    @unlink($temp_pdf_path);
-    
-    // Update DB
-    $esc_pdf_path = mysqli_real_escape_string($conn, $secure_url);
-    mysqli_query($conn, "UPDATE internship_applications SET confirmation_letter_path = '$esc_pdf_path', confirmation_letter_sent_at = NOW() WHERE id = $app_id");
     
     // Attach to email
     $GLOBALS['mail_options_attachments'] = [
-        ['path' => $secure_url, 'name' => $pdf_filename]
+        ['path' => $local_pdf_path, 'name' => $pdf_filename]
     ];
 
     // Notify student via email
@@ -143,11 +157,42 @@ try {
         'action_label' => 'View Application'
     ]);
 
-    if ($sent) {
-        echo json_encode(['success' => true, 'message' => 'Confirmation letter sent successfully.']);
-    } else {
-        echo json_encode(['success' => true, 'message' => 'Confirmation letter generated, but email sending failed.']);
+    if (!$sent) {
+        echo json_encode(['success' => false, 'message' => 'Email could not be sent. The confirmation letter was not marked as sent.']);
+        exit();
     }
+
+    // Update DB only after the email has been sent successfully.
+    $esc_pdf_path = mysqli_real_escape_string($conn, $final_pdf_path);
+    mysqli_query($conn, "UPDATE internship_applications SET confirmation_letter_path = '$esc_pdf_path', confirmation_letter_sent_at = NOW() WHERE id = $app_id");
+
+    $offer_col = mysqli_query($conn, "SHOW COLUMNS FROM internship_applications LIKE 'offer_letter_path'");
+    if ($offer_col && mysqli_num_rows($offer_col) > 0) {
+        mysqli_query($conn, "UPDATE internship_applications SET offer_letter_path = '$esc_pdf_path' WHERE id = $app_id");
+    }
+
+    $confirmation_sent_col = mysqli_query($conn, "SHOW COLUMNS FROM internship_applications LIKE 'confirmation_letter_sent'");
+    if ($confirmation_sent_col && mysqli_num_rows($confirmation_sent_col) > 0) {
+        mysqli_query($conn, "UPDATE internship_applications SET confirmation_letter_sent = 1 WHERE id = $app_id");
+    }
+    
+    // Log the action while keeping the application under the Selected status
+    $user_id = intval($_SESSION['user_id'] ?? 0);
+    $name_sql = "SELECT full_name FROM student_profiles WHERE user_id = $user_id LIMIT 1";
+    $name_res = mysqli_query($conn, $name_sql);
+    $name_row = mysqli_fetch_assoc($name_res);
+    $updated_by_name = $name_row ? mysqli_real_escape_string($conn, $name_row['full_name']) : strtoupper($user_role);
+    $history_notes = mysqli_real_escape_string($conn, 'Confirmation letter generated and emailed.');
+    mysqli_query($conn, "INSERT INTO application_status_history 
+        (application_id, old_status, new_status, updated_by_role, updated_by_name, notes)
+        VALUES ($app_id, 'Selected', 'Selected', '$user_role', '$updated_by_name', '$history_notes')");
+
+    // Insert student notification
+    $notif_msg = mysqli_real_escape_string($conn, "Your confirmation letter has been generated and sent for the internship: $internship_title.");
+    mysqli_query($conn, "INSERT INTO student_notifications (user_id, title, type, message)
+        VALUES ($student_user_id, 'Confirmation Letter Generated', 'success', '$notif_msg')");
+
+    echo json_encode(['success' => true, 'message' => 'Confirmation letter generated and emailed successfully.']);
 } catch (Throwable $e) {
     echo json_encode([
         'success' => false,

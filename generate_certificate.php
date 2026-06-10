@@ -35,7 +35,7 @@ if (!$profile) {
 }
 
 // Fetch active/started internship details
-$intern_sql = "SELECT a.id as app_id, a.applied_date, a.test_score, a.education_status, a.certificate_path,
+$intern_sql = "SELECT a.id as app_id, a.applied_date, a.education_status, a.certificate_path,
                       COALESCE(i.title, a.internship_name) as title,
                       COALESCE(i.duration, '3 Months') as duration,
                       COALESCE(i.mode, 'Remote') as mode,
@@ -68,13 +68,6 @@ $cert_total = 30;
 if (isset($intern['ss_score']) && $intern['ss_score'] !== null) {
     $cert_score = intval($intern['ss_score']);
     $cert_total = intval($intern['ss_total_questions'] ?: 30);
-} else if (isset($intern['test_score']) && $intern['test_score'] !== null) {
-    $p = intval($intern['test_score']);
-    if ($p > 30) {
-        $cert_score = intval(round(($p / 100) * 30));
-    } else {
-        $cert_score = $p;
-    }
 }
 
 $start_date = new DateTime($intern['applied_date']);
@@ -179,7 +172,7 @@ $pdf->Cell(50, 7, $date_range, 0, 0);
 $pdf->Cell(40, 7, $intern['duration'], 0, 0);
 
 // Score value
-$score_text = ($intern['test_score'] !== null && $cert_total > 0) ? $cert_score . '/' . $cert_total . ' (' . round(($cert_score / $cert_total) * 100) . '%)' : 'N/A';
+$score_text = 'N/A';
 $pdf->Cell(50, 7, $score_text, 0, 1);
 
 // Signatures

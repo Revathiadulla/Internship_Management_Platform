@@ -6,7 +6,7 @@ require_role(['hod', 'admin']);
 include "db.php";
 
 // Fetch pending approvals for HOD
-$query = "SELECT a.id as app_id, a.user_id, a.status, a.applied_date, a.test_score,
+$query = "SELECT a.id as app_id, a.user_id, a.status, a.applied_date,
                  COALESCE(i.title, a.internship_name) as title,
                  sp.full_name, sp.college_name, sp.resume_file, sp.resume_url,
                  sp.aadhaar_file, sp.pan_file,
@@ -128,7 +128,7 @@ $result = mysqli_query($conn, $query);
                       <?php echo date('M d, Y', strtotime($app['applied_date'])); ?>
                     </td>
                     <td class="py-4 px-6 font-semibold text-slate-850">
-                      <?php echo isset($app['test_score']) ? $app['test_score'] : 'N/A'; ?>
+                      N/A
                     </td>
                     <td class="py-4 px-6">
                       <span class="inline-flex px-2 py-0.5 rounded text-[10px] font-bold uppercase border bg-green-100 text-green-700 border-green-200">

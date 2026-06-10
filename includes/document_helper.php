@@ -37,8 +37,13 @@ if (!function_exists('getDocumentUrl')) {
         $is_production = !$is_local && (getenv('APP_ENV') === 'production' || strpos($db_host, 'clever-cloud.com') !== false || strpos($db_host, 'render.com') !== false);
 
         if ($is_production) {
-            error_log("Document helper: invalid local path in production: " . $url);
-            return 'unavailable';
+            $local_root = isset($_SERVER['DOCUMENT_ROOT']) ? $_SERVER['DOCUMENT_ROOT'] : __DIR__ . '/..';
+            $file_on_disk = rtrim($local_root, '/\\') . '/' . ltrim($url, '/\\');
+            $file_relative = __DIR__ . '/../' . ltrim($url, '/\\');
+            if (!file_exists($file_on_disk) && !file_exists($file_relative)) {
+                error_log("Document helper: invalid local path in production (file not found): " . $url);
+                return 'unavailable';
+            }
         }
 
         return $url;

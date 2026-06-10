@@ -16,9 +16,11 @@ if ($app_id <= 0) {
 $user_id = current_user_id();
 
 // Fetch application details
-$query = "SELECT a.id, a.status, a.user_id, a.aadhaar_status, a.pan_status, a.education_status,
+$query = "SELECT a.id, a.status, a.user_id, a.aadhaar_status, a.pan_status, a.verification_status, a.education_status,
                  sp.student_type, u.full_name, u.email,
-                 sp.hod_name, sp.hod_email, a.internship_name,
+                 sp.hod_name AS sp_hod_name, sp.hod_email AS sp_hod_email, sp.hod_phone AS sp_hod_phone,
+                 a.hod_name AS app_hod_name, a.hod_email AS app_hod_email, a.hod_phone AS app_hod_phone,
+                 a.internship_name,
                  COALESCE(i.title, a.internship_name) AS internship_title
           FROM internship_applications a
           LEFT JOIN internships i ON a.internship_id = i.id AND a.internship_id > 0
@@ -37,13 +39,24 @@ if ($res->num_rows === 0) {
 $app = $res->fetch_assoc();
 $student_id = intval($app['user_id']);
 $student_name = $app['full_name'] ?? 'Student';
-$student_type = $app['student_type'] ?? 'pursuing';
-$education_status = $app['education_status'] ?? '';
-$is_pursuing = ($student_type === 'pursuing' || $education_status === 'Currently Pursuing' || $education_status === 'Pursuing');
+$student_type = trim((string) ($app['student_type'] ?? ''));
+$education_status = trim((string) ($app['education_status'] ?? ''));
+$is_pursuing = is_pursuing_student($education_status, $student_type);
+$is_passed_out = !$is_pursuing;
 $internship_title = $app['internship_title'] ?? 'Internship';
 
-if ($app['aadhaar_status'] !== 'verified' || $app['pan_status'] !== 'verified') {
+$verification_value = trim((string) ($app['verification_status'] ?? ''));
+$aadhaar_verified = strtolower((string) ($app['aadhaar_status'] ?? '')) === 'verified';
+$pan_verified = strtolower((string) ($app['pan_status'] ?? '')) === 'verified';
+$documents_verified = (strtolower($verification_value) === 'verified') || ($aadhaar_verified && $pan_verified);
+
+if (!$documents_verified) {
     header("Location: hr_applicant_detail.php?app_id=$app_id&error=unverified_docs");
+    exit();
+}
+
+if (!is_exam_sent_status($app['status'])) {
+    header("Location: hr_applicant_detail.php?app_id=$app_id&error=requires_exam_mail");
     exit();
 }
 
@@ -52,8 +65,9 @@ if (!$is_pursuing) {
     exit();
 }
 
-$hod_email = !empty($app['hod_email']) ? trim($app['hod_email']) : '';
-$hod_name = !empty($app['hod_name']) ? trim($app['hod_name']) : 'HOD';
+$hod_email = !empty($app['app_hod_email']) ? trim($app['app_hod_email']) : (!empty($app['sp_hod_email']) ? trim($app['sp_hod_email']) : '');
+$hod_name  = !empty($app['app_hod_name'])  ? trim($app['app_hod_name'])  : (!empty($app['sp_hod_name'])  ? trim($app['sp_hod_name'])  : 'HOD');
+$hod_phone = !empty($app['app_hod_phone']) ? trim($app['app_hod_phone']) : (!empty($app['sp_hod_phone']) ? trim($app['sp_hod_phone']) : '');
 
 if (empty($hod_email)) {
     header("Location: hr_applicant_detail.php?app_id=$app_id&error=no_hod_email");
@@ -64,15 +78,20 @@ if (empty($hod_email)) {
 $hod_token = bin2hex(random_bytes(32));
 
 // Update application status
-$update = $conn->prepare("UPDATE internship_applications SET status = 'Forwarded to HOD', hod_status = 'pending', hod_approval_status = 'Pending', final_status = 'pending', hod_token = ? WHERE id = ?");
+$update = $conn->prepare("UPDATE internship_applications SET status = 'HOD Pending', hod_status = 'pending', hod_approval_status = 'Pending', final_status = 'pending', hod_token = ?, hod_approval_sent_at = NOW() WHERE id = ?");
 $update->bind_param("si", $hod_token, $app_id);
 if ($update->execute()) {
-    log_status_change('internship_applications', $app_id, $app['status'], 'Forwarded to HOD', 'Application forwarded to HOD for approval');
+    log_status_change('internship_applications', $app_id, $app['status'], 'HOD Pending', 'Application forwarded to HOD for approval');
     
     // Notify student
     $notif_title = "Application Forwarded to HOD";
     $notif_msg = "Your application has been forwarded to your HOD ($hod_name) for approval.";
     add_notification($student_id, 'student', $notif_title, $notif_msg, 'info');
+
+    // Notify HR
+    $hr_notif_title = "Application Forwarded to HOD";
+    $hr_notif_msg = "Application #$app_id for student $student_name has been forwarded to HOD ($hod_name) for approval.";
+    add_notification($user_id, 'hr', $hr_notif_title, $hr_notif_msg, 'success');
     
     // Notify HOD via Email
     $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';

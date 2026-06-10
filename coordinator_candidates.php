@@ -54,7 +54,7 @@ if (!empty($search)) {
     $params[] = $search_param;
 }
 
-$sql = "SELECT a.id as app_id, a.id as id, a.status, a.applied_date, a.relevant_skills, a.education_status,
+$sql = "SELECT a.id as app_id, a.id as id, a.status, a.applied_date, a.education_status,
                COALESCE(i.title, a.internship_name) as title, u.full_name as student_name, u.email as student_email, sp.phone, sp.college_name, sp.skills as student_skills, ss.percentage as test_percentage
         FROM internship_applications a
         JOIN users u ON a.user_id = u.id
@@ -155,9 +155,6 @@ mysqli_stmt_close($stmt);
                         </a>
                         <a href="coordinator_candidates.php" class="flex items-center gap-3 bg-blue-50 text-blue-700 border-l-4 border-blue-600 px-3 py-2.5 rounded-r-lg text-sm font-semibold">
                                 <span class="material-symbols-outlined text-[20px]">group</span> Candidates
-                        </a>
-                        <a href="coordinator_generate_test.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
-                                <span class="material-symbols-outlined text-[20px]">quiz</span> Generate Test
                         </a>
                         <a href="coordinator_daily_logs.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
                                 <span class="material-symbols-outlined text-[20px]">monitoring</span> Daily Logs
@@ -302,7 +299,7 @@ mysqli_stmt_close($stmt);
                                         <option value="">All Statuses</option>
                                         <option value="Applied" <?php echo $status_filter === 'Applied' ? 'selected' : ''; ?>>Applied</option>
                                         <option value="Test Completed" <?php echo $status_filter === 'Test Completed' ? 'selected' : ''; ?>>Test Completed</option>
-                                        <option value="HR Round" <?php echo $status_filter === 'HR Round' ? 'selected' : ''; ?>>HR Review</option>
+                                        <option value="HR Review" <?php echo $status_filter === 'HR Review' ? 'selected' : ''; ?>>HR Review</option>
                                         <option value="HOD Approved" <?php echo $status_filter === 'HOD Approved' ? 'selected' : ''; ?>>HOD Approved</option>
                                         <option value="Selected" <?php echo $status_filter === 'Selected' ? 'selected' : ''; ?>>Selected</option>
                                         <option value="Active Intern" <?php echo $status_filter === 'Active Intern' ? 'selected' : ''; ?>>Active Intern</option>
@@ -480,7 +477,7 @@ mysqli_stmt_close($stmt);
                         const d = new Date(app.applied_date);
                         detailAppliedDate.textContent = `Applied on: ${d.toLocaleDateString(undefined, {month: 'short', day: 'numeric', year: 'numeric'})}`;
                         
-                        detailSkills.textContent = app.student_skills || app.relevant_skills || 'No skills listed';
+                        detailSkills.textContent = app.student_skills || 'No skills listed';
 
                         
                         detailsModal.classList.remove('hidden');

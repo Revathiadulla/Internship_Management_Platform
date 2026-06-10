@@ -5,6 +5,7 @@ require_once __DIR__ . '/includes/crypto_helper.php';
 require_hr_or_admin();
 include 'db.php';
 include 'status_utils.php';
+require_once __DIR__ . '/includes/workflow_helper.php';
 require_once __DIR__ . '/includes/cloudinary_config.php';
 
 $app_id = isset($_GET['app_id']) ? intval($_GET['app_id']) : 0;
@@ -106,11 +107,8 @@ $sql = "SELECT
             a.status,
             a.verification_status,
             a.applied_date,
-            a.education_status,
-            a.preferred_duration,
+            a.education_status        AS app_education_status,
             a.preferred_domain,
-            a.relevant_skills,
-            a.reason_for_applying,
             a.department,
             a.graduation_year,
             a.year_of_study           AS app_year_of_study,
@@ -124,10 +122,10 @@ $sql = "SELECT
             a.hod_phone               AS hod_phone,
             a.hod_approval_status     AS hod_approval_status,
             a.hod_token               AS hod_token,
-            a.test_score,
-            a.test_completed_at,
-            a.test_status,
             a.internship_name,
+            a.applied_subtype,
+            a.confirmation_letter_sent_at,
+            a.assigned_project_id,
             COALESCE(NULLIF(i.project_subtype, ''), '') AS i_project_subtype,
             COALESCE(NULLIF(i.project_type, ''), '')    AS i_project_type,
             COALESCE(i.title, a.internship_name)        AS internship_title,
@@ -163,11 +161,13 @@ $sql = "SELECT
             a.aadhaar_original_name   AS app_aadhaar_orig,
             sp.hod_email              AS sp_hod_email,
             sp.hod_name               AS sp_hod_name,
+            sp.hod_phone              AS sp_hod_phone,
             a.aadhaar_status,
             a.pan_status,
             a.hod_status,
             a.final_status,
-            sp.student_type
+            sp.student_type,
+            sp.education_status       AS sp_education_status
         FROM internship_applications a
         LEFT JOIN internships i       ON a.internship_id = i.id AND a.internship_id > 0
         LEFT JOIN student_profiles sp ON a.user_id = sp.user_id
@@ -192,7 +192,7 @@ function is_empty_field($val) {
     return ($trimmed === '' || $trimmed === '-' || strtolower($trimmed) === 'n/a');
 }
 
-// Fetch test details from student_scores
+// Fetch assessment details from student_scores if available.
 $score_row = null;
 $attempts_count = 0;
 if (isset($d['app_id'])) {
@@ -205,9 +205,8 @@ if (isset($d['app_id'])) {
         $score_row = $score_res->fetch_assoc();
         $score_stmt->close();
     }
-    
-    // Prefer using the test_attempt_history table if present to count attempts
-    $attempts_stmt = $conn->prepare("SELECT COUNT(*) as cnt FROM test_attempt_history WHERE application_id = ?");
+
+    $attempts_stmt = $conn->prepare("SELECT COUNT(*) as cnt FROM student_scores WHERE application_id = ?");
     if ($attempts_stmt) {
         $app_id_int = intval($d['app_id']);
         $attempts_stmt->bind_param("i", $app_id_int);
@@ -219,7 +218,7 @@ if (isset($d['app_id'])) {
     }
 }
 
-// Fallback attempt count count by user_id and internship_id
+// Fallback attempt count by user_id and internship_id
 if ($attempts_count === 0 && isset($d['user_id']) && isset($d['internship_id'])) {
     $attempts_stmt = $conn->prepare("SELECT COUNT(*) as cnt FROM student_scores WHERE student_id = ? AND internship_id = ?");
     if ($attempts_stmt) {
@@ -290,21 +289,25 @@ $phone      = $d['sp_phone']        ?: $d['user_phone']        ?: $d['app_phone'
 $college    = $d['sp_college']      ?: $d['app_college']      ?: '—';
 $department = $d['department']      ?: '—';
 $grad_year  = $d['graduation_year']  ?: '—';
-$education_status = $d['education_status'] ?? '';
-$preferred_duration = $d['preferred_duration'] ?: '—';
+$sp_education_status = isset($d['sp_education_status']) ? trim($d['sp_education_status']) : '';
+$app_education_status = isset($d['app_education_status']) ? trim($d['app_education_status']) : '';
+$education_status = $sp_education_status !== '' ? $sp_education_status : $app_education_status;
+$preferred_duration = '—';
 $preferred_domain   = $d['preferred_domain']   ?: '—';
-$relevant_skills    = $d['relevant_skills']    ?: $d['sp_skills']        ?: '—';
-$reason_for_applying = $d['reason_for_applying'] ?: '—';
+$relevant_skills    = $d['sp_skills']        ?: '—';
+$reason_for_applying = '—';
 // Resolve applied internship subtype from best available source
 $applied_internship_subtype = '';
-if (!empty($d['i_project_subtype'])) {
+if (!empty($d['applied_subtype'])) {
+    $applied_internship_subtype = trim($d['applied_subtype']);
+} elseif (!empty($d['i_project_subtype'])) {
     $applied_internship_subtype = trim($d['i_project_subtype']);
 } elseif (!empty($d['internship_name'])) {
     // Extract subtype from internship_name by stripping Intern/Internship suffix
     $applied_internship_subtype = trim(preg_replace('/(\s+Internship|\s+Intern)$/i', '', $d['internship_name']));
 }
-if (empty($applied_internship_subtype) || strtolower($applied_internship_subtype) === 'internship management platform' || strtolower($applied_internship_subtype) === 'imp') {
-    $applied_internship_subtype = 'Not Available';
+if (empty($applied_internship_subtype) || in_array(strtolower($applied_internship_subtype), ['internship management platform', 'imp'], true)) {
+    $applied_internship_subtype = 'Not Assigned';
 }
 
 // Resolve project type
@@ -315,8 +318,29 @@ $internship_duration = !empty($d['internship_duration']) ? trim($d['internship_d
 $internship_mode     = !empty($d['internship_mode'])     ? trim($d['internship_mode'])     : '';
 $internship_skills   = !empty($d['internship_skills'])   ? trim($d['internship_skills'])   : '';
 $applied_date       = $d['applied_date'] ? date('M d, Y', strtotime($d['applied_date'])) : '—';
-$verification       = $d['verification_status'] ?: 'Pending';
+$verification_value = trim((string) ($d['verification_status'] ?? ''));
+$aadhaar_verified = strtolower((string) ($d['aadhaar_status'] ?? '')) === 'verified';
+$pan_verified = strtolower((string) ($d['pan_status'] ?? '')) === 'verified';
+$documents_verified = (strtolower($verification_value) === 'verified') || ($aadhaar_verified && $pan_verified);
+$verification = $documents_verified ? 'Verified' : 'Pending';
 $current_status     = $d['status'] ?: '—';
+$current_status_key = normalize_workflow_status($current_status);
+$is_exam_sent_status = is_exam_sent_status($current_status);
+$is_hod_pending_status = is_hod_pending_status($current_status);
+$is_hod_approved_status = is_hod_approved_status($current_status);
+$is_hod_rejected_status = is_hod_rejected_status($current_status);
+$is_selected_status = is_selected_status($current_status);
+$is_rejected_status = is_rejected_status($current_status);
+$confirmation_letter_ready = (!empty($d['confirmation_letter_path']) || !empty($d['confirmation_letter_sent_at']) || (!empty($d['confirmation_letter_sent']) && (int) $d['confirmation_letter_sent'] === 1) || !empty($d['offer_letter_path']));
+$display_status = $is_selected_status ? ($confirmation_letter_ready ? 'Selected / Confirmation Letter Sent' : 'Selected') : $current_status;
+$hod_name  = !empty($d['hod_name'])  ? trim($d['hod_name'])  : (!empty($d['sp_hod_name'])  ? trim($d['sp_hod_name'])  : '');
+$hod_email = !empty($d['hod_email']) ? trim($d['hod_email']) : (!empty($d['sp_hod_email']) ? trim($d['sp_hod_email']) : '');
+$hod_phone = !empty($d['hod_phone']) ? trim($d['hod_phone']) : (!empty($d['sp_hod_phone']) ? trim($d['sp_hod_phone']) : '');
+
+$student_type = trim((string) ($d['student_type'] ?? ''));
+$is_pursuing = is_pursuing_student($education_status, $student_type);
+$is_passed_out = !$is_pursuing;
+
 $resume             = $d['sp_resume'] ?: $d['app_resume'] ?: '';
 $resume_url         = !empty($d['sp_resume_url']) ? trim($d['sp_resume_url']) : '';
 $raw_resume         = !empty($resume_url) ? $resume_url : $resume;
@@ -463,8 +487,10 @@ if (!empty($_SERVER['HTTP_REFERER']) && strpos($_SERVER['HTTP_REFERER'], 'hr_app
 
 $status_icons = [
     'Applied'        => 'send',
-    'Test Completed' => 'quiz',
-    'HR Round'       => 'manage_search',
+    'HR Review'      => 'rate_review',
+    'Shortlisted'    => 'star',
+    'Exam Mail Sent' => 'mail',
+    'HOD Pending'    => 'hourglass_empty',
     'HOD Approved'   => 'verified_user',
     'Selected'       => 'verified',
     'Rejected'       => 'cancel',
@@ -472,9 +498,11 @@ $status_icons = [
 ];
 $status_colors = [
     'Applied'        => 'bg-blue-100 text-blue-600',
-    'Test Completed' => 'bg-amber-100 text-amber-600',
-    'HR Round'       => 'bg-purple-100 text-purple-600',
-    'HOD Approved'   => 'bg-indigo-100 text-indigo-600',
+    'HR Review'      => 'bg-indigo-100 text-indigo-600',
+    'Shortlisted'    => 'bg-amber-100 text-amber-600',
+    'Exam Mail Sent' => 'bg-purple-100 text-purple-600',
+    'HOD Pending'    => 'bg-orange-100 text-orange-600',
+    'HOD Approved'   => 'bg-teal-100 text-teal-600',
     'Selected'       => 'bg-emerald-100 text-emerald-600',
     'Rejected'       => 'bg-red-100 text-red-600',
     'Pending'        => 'bg-slate-100 text-slate-600',
@@ -546,9 +574,9 @@ $status_colors = [
         <div class="grid gap-3 sm:grid-cols-2">
           <div class="rounded-3xl bg-white border border-slate-200 p-5 shadow-sm">
             <p class="text-xs uppercase tracking-[0.24em] text-slate-400">Current status</p>
-            <div class="mt-3 inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold <?php echo getStatusBadgeClass($current_status); ?>">
+            <div class="mt-3 inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold <?php echo getStatusBadgeClass($display_status); ?>">
               <span class="material-symbols-outlined text-base">info</span>
-              <?php echo htmlspecialchars($current_status); ?>
+              <?php echo htmlspecialchars($display_status); ?>
             </div>
           </div>
           <div class="rounded-3xl bg-white border border-slate-200 p-5 shadow-sm">
@@ -617,117 +645,33 @@ $status_colors = [
               <?php endif; ?>
               <div class="rounded-3xl bg-slate-50 p-4 border border-slate-200">
                 <p class="text-xs uppercase tracking-[0.24em] text-slate-400">Student Type</p>
-                <p class="mt-2 text-sm font-semibold text-slate-900"><?php echo htmlspecialchars(($d['student_type'] === 'passed_out') ? 'Passed Out / Graduated' : 'Pursuing / Current Student'); ?></p>
+                <p class="mt-2 text-sm font-semibold text-slate-900"><?php echo htmlspecialchars(($is_passed_out) ? 'Passed Out / Graduated' : 'Pursuing / Current Student'); ?></p>
               </div>
+              <?php if ($is_pursuing): ?>
+              <div class="rounded-3xl bg-slate-50 p-4 border border-slate-200">
+                <p class="text-xs uppercase tracking-[0.24em] text-slate-400">HOD Name</p>
+                <p class="mt-2 text-sm font-semibold text-slate-900"><?php echo htmlspecialchars($hod_name ?: 'Not Provided'); ?></p>
+              </div>
+              <div class="rounded-3xl bg-slate-50 p-4 border border-slate-200">
+                <p class="text-xs uppercase tracking-[0.24em] text-slate-400">HOD Email</p>
+                <p class="mt-2 text-sm font-semibold text-slate-900">
+                  <?php if (!empty($hod_email)): ?>
+                    <a href="mailto:<?php echo htmlspecialchars($hod_email); ?>" class="text-blue-600 hover:underline"><?php echo htmlspecialchars($hod_email); ?></a>
+                  <?php else: ?>
+                    Not Provided
+                  <?php endif; ?>
+                </p>
+              </div>
+              <div class="rounded-3xl bg-slate-50 p-4 border border-slate-200">
+                <p class="text-xs uppercase tracking-[0.24em] text-slate-400">HOD Phone</p>
+                <p class="mt-2 text-sm font-semibold text-slate-900"><?php echo htmlspecialchars($hod_phone ?: 'Not Provided'); ?></p>
+              </div>
+              <?php endif; ?>
             </div>
           </div>
           <?php endif; ?>
 
-          <!-- Test Result Card -->
-          <div class="rounded-[2rem] bg-white border border-slate-200 p-6 shadow-sm">
-            <div class="flex items-start justify-between gap-4 mb-6">
-              <div>
-                <p class="text-xs uppercase tracking-[0.24em] text-slate-400">Assessment</p>
-                <h2 class="mt-2 text-xl font-semibold text-slate-900">Test Result</h2>
-              </div>
-              <div class="flex items-center gap-2 text-slate-500">
-                <span class="material-symbols-outlined">quiz</span>
-                <span class="text-sm font-semibold">Technical Aptitude</span>
-              </div>
-            </div>
-            
-            <?php
-              // Retrieve test score values with safe fallbacks
-              $test_score_val = null;
-              if ($score_row && isset($score_row['score'])) {
-                  $test_score_val = $score_row['score'];
-              } elseif (isset($d['test_score']) && $d['test_score'] !== null && $d['test_score'] !== '') {
-                  $test_score_val = $d['test_score'];
-              }
 
-              $total_q_val = null;
-              if ($score_row && isset($score_row['total_questions'])) {
-                  $total_q_val = $score_row['total_questions'];
-              }
-
-              // Calculate percentage and status
-              $pct_display = 'N/A';
-              $status_text = 'Test not completed';
-              $status_color = 'bg-amber-50 text-amber-700 border-amber-200';
-              $status_icon = 'warning';
-
-              if ($test_score_val !== null) {
-                  if ($total_q_val === null || intval($total_q_val) === 0) {
-                      $pct_display = 'N/A';
-                      $status_text = 'N/A';
-                      $status_color = 'bg-slate-50 text-slate-650 border-slate-200';
-                      $status_icon = 'help';
-                  } else {
-                      $percentage = (doubleval($test_score_val) / doubleval($total_q_val)) * 100;
-                      $pct_display = round($percentage, 2) . '%';
-                      if ($percentage >= 60) {
-                          $status_text = 'Passed';
-                          $status_color = 'bg-emerald-50 text-emerald-700 border-emerald-200';
-                          $status_icon = 'check_circle';
-                      } else {
-                          $status_text = 'Failed';
-                          $status_color = 'bg-red-50 text-red-750 border-red-250';
-                          $status_icon = 'cancel';
-                      }
-                  }
-              }
-
-              $submitted_at_val = null;
-              if ($score_row && isset($score_row['submitted_at'])) {
-                  $submitted_at_val = $score_row['submitted_at'];
-              } elseif (isset($d['test_completed_at'])) {
-                  $submitted_at_val = $d['test_completed_at'];
-              }
-
-              $date_display = '—';
-              if ($submitted_at_val) {
-                  $date_display = date('d-M-Y', strtotime($submitted_at_val));
-              }
-            ?>
-            <div class="grid gap-4 md:grid-cols-2">
-              <div class="rounded-3xl bg-slate-50 p-4 border border-slate-200">
-                <p class="text-xs uppercase tracking-[0.24em] text-slate-400">Test Score</p>
-                <p class="mt-2 text-sm font-bold text-slate-900">
-                  <?php 
-                    if ($test_score_val === null) {
-                        echo "Test not completed";
-                    } else {
-                        $total_q_display = ($total_q_val === null || intval($total_q_val) === 0) ? 'N/A' : htmlspecialchars($total_q_val);
-                        echo htmlspecialchars($test_score_val) . ' / ' . $total_q_display;
-                    }
-                  ?>
-                </p>
-              </div>
-              
-              <div class="rounded-3xl bg-slate-50 p-4 border border-slate-200">
-                <p class="text-xs uppercase tracking-[0.24em] text-slate-400">Percentage</p>
-                <p class="mt-2 text-sm font-bold text-slate-900"><?php echo htmlspecialchars($pct_display); ?></p>
-              </div>
-
-              <div class="rounded-3xl bg-slate-50 p-4 border border-slate-200">
-                <p class="text-xs uppercase tracking-[0.24em] text-slate-400">Pass/Fail Status</p>
-                <div class="mt-2 inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-bold <?php echo $status_color; ?>">
-                  <span class="material-symbols-outlined text-sm"><?php echo $status_icon; ?></span>
-                  <?php echo htmlspecialchars($status_text); ?>
-                </div>
-              </div>
-
-              <div class="rounded-3xl bg-slate-50 p-4 border border-slate-200">
-                <p class="text-xs uppercase tracking-[0.24em] text-slate-400">Completed On</p>
-                <p class="mt-2 text-sm font-semibold text-slate-900"><?php echo htmlspecialchars($date_display); ?></p>
-              </div>
-
-              <div class="rounded-3xl bg-slate-50 p-4 border border-slate-200 md:col-span-2">
-                <p class="text-xs uppercase tracking-[0.24em] text-slate-400">Number of Attempts</p>
-                <p class="mt-2 text-sm font-bold text-slate-900"><?php echo intval($attempts_count); ?></p>
-              </div>
-            </div>
-          </div>
 
           <div class="rounded-[2rem] bg-white border border-slate-200 p-6 shadow-sm">
             <div class="flex items-start justify-between gap-4 mb-6">
@@ -741,7 +685,7 @@ $status_colors = [
             </div>
             <div class="grid gap-4 md:grid-cols-2">
               <div class="rounded-3xl bg-slate-50 p-4 border border-slate-200">
-                <p class="text-xs uppercase tracking-[0.24em] text-slate-400">Applied Internship Subtype</p>
+                <p class="text-xs uppercase tracking-[0.24em] text-slate-400">Applied Internship</p>
                 <p class="mt-2 text-sm font-semibold text-slate-900"><?php echo htmlspecialchars($applied_internship_subtype); ?></p>
               </div>
               <?php if (!is_empty_field($applied_project_type)): ?>
@@ -765,7 +709,7 @@ $status_colors = [
               <?php if (!is_empty_field($education_status)): ?>
               <div class="rounded-3xl bg-slate-50 p-4 border border-slate-200">
                 <p class="text-xs uppercase tracking-[0.24em] text-slate-400">Education status</p>
-                <p class="mt-2 text-sm font-semibold text-slate-900"><?php echo htmlspecialchars($education_status); ?></p>
+                <p class="mt-2 text-sm font-semibold text-slate-900"><?php echo htmlspecialchars($is_passed_out ? 'Passed Out / Graduated' : 'Pursuing / Current Student'); ?></p>
               </div>
               <?php endif; ?>
               <?php if (!is_empty_field($department)): ?>
@@ -955,7 +899,7 @@ $status_colors = [
             <div class="mt-5 space-y-4">
               <div class="rounded-3xl bg-slate-50 p-4 border border-slate-200">
                 <p class="text-xs uppercase tracking-[0.24em] text-slate-400">Current status</p>
-                <p class="mt-2 text-lg font-semibold text-slate-900"><?php echo htmlspecialchars($current_status); ?></p>
+                <p class="mt-2 text-lg font-semibold text-slate-900"><?php echo htmlspecialchars($display_status); ?></p>
               </div>
               <div class="rounded-3xl bg-slate-50 p-4 border border-slate-200">
                 <p class="text-xs uppercase tracking-[0.24em] text-slate-400">Verification status</p>
@@ -968,11 +912,113 @@ $status_colors = [
                 $hod_email_val   = $d['hod_email'] ?? $d['sp_hod_email'] ?? '';
               ?>
 
-              <?php if ($current_status !== 'Rejected' && $current_status !== 'HOD Rejected'): ?>
+              <?php if (!$is_rejected_status): ?>
                 <div class="mt-5 border-t border-slate-100 pt-5 space-y-3">
                   <p class="text-xs font-bold uppercase tracking-wider text-slate-400">Available Actions</p>
                   
-                  <?php if ($current_status === 'HOD Approval Pending'): ?>
+                  <?php
+                    $can_approve = $documents_verified;
+                  ?>
+
+                  <?php if ($is_selected_status): ?>
+                    <?php $confirmation_letter_sent = (!empty($d['confirmation_letter_path']) || !empty($d['confirmation_letter_sent_at']) || (!empty($d['confirmation_letter_sent']) && (int) $d['confirmation_letter_sent'] === 1)); ?>
+                    <?php $offer_letter_path = trim((string) (!empty($d['offer_letter_path']) ? $d['offer_letter_path'] : (!empty($d['confirmation_letter_path']) ? $d['confirmation_letter_path'] : ''))); ?>
+                    <?php $confirmation_letter_ready = $confirmation_letter_sent || !empty($offer_letter_path); ?>
+                    <?php if ($confirmation_letter_ready): ?>
+                      <a href="<?php echo htmlspecialchars(getDocumentViewUrl($offer_letter_path)); ?>" target="_blank" class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition-all shadow-sm cursor-pointer mb-2">
+                        <span class="material-symbols-outlined text-base">visibility</span>
+                        View Confirmation Letter
+                      </a>
+                      <a href="<?php echo htmlspecialchars($offer_letter_path); ?>" download class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-200 transition-all shadow-sm cursor-pointer">
+                        <span class="material-symbols-outlined text-base">download</span>
+                        Download Confirmation Letter
+                      </a>
+                      <button disabled class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-200 px-4 py-2.5 text-sm font-semibold text-white cursor-not-allowed mt-2">
+                        <span class="material-symbols-outlined text-base">verified</span>
+                        Selected / Confirmation Letter Sent
+                      </button>
+                    <?php else: ?>
+                      <button type="button" 
+                              id="btn-send-conf-letter" 
+                              class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition-all shadow-sm cursor-pointer">
+                        <span class="material-symbols-outlined text-base">mail</span>
+                        Send Confirmation Letter
+                      </button>
+                    <?php endif; ?>
+                  <?php endif; ?>
+
+                  <?php if ($current_status_key === 'applied'): ?>
+                    <?php if ($can_approve): ?>
+                      <button type="button" onclick="if(confirm('Move this candidate to HR Review?')) performTransition('HR Review');" class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition-all shadow-sm cursor-pointer">
+                        <span class="material-symbols-outlined text-base">rate_review</span>
+                        Move to HR Review
+                      </button>
+                    <?php else: ?>
+                      <div class="rounded-2xl bg-amber-50 border border-amber-200 p-4 text-xs">
+                        <p class="font-bold text-amber-700 flex items-center gap-1">
+                          <span class="material-symbols-outlined text-[16px]">warning</span>
+                          Aadhaar &amp; PAN Verification Required
+                        </p>
+                        <p class="mt-1 text-amber-600">Please verify Aadhaar and PAN documents before moving to HR Review.</p>
+                      </div>
+                    <?php endif; ?>
+                  <?php endif; ?>
+
+                  <?php if ($current_status_key === 'hr_review'): ?>
+                    <?php if ($can_approve): ?>
+                      <button type="button" onclick="if(confirm('Are you sure you want to shortlist this candidate?')) performTransition('Shortlisted');" class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition-all shadow-sm cursor-pointer">
+                        <span class="material-symbols-outlined text-base">star</span>
+                        Shortlist Candidate
+                      </button>
+                    <?php else: ?>
+                      <div class="rounded-2xl bg-amber-50 border border-amber-200 p-4 text-xs">
+                        <p class="font-bold text-amber-700 flex items-center gap-1">
+                          <span class="material-symbols-outlined text-[16px]">warning</span>
+                          Aadhaar & PAN Verification Required
+                        </p>
+                        <p class="mt-1 text-amber-600">Please verify Aadhaar and PAN documents to shortlist this candidate.</p>
+                      </div>
+                    <?php endif; ?>
+                  <?php endif; ?>
+
+                  <?php if ($current_status_key === 'shortlisted'): ?>
+                  <?php endif; ?>
+
+                  <?php if ($is_exam_sent_status): ?>
+                    <?php if ($can_approve): ?>
+                      <?php if ($is_pursuing): ?>
+                        <?php if (!empty($hod_email)): ?>
+                          <a href="hr_forward_to_hod.php?app_id=<?php echo $app_id; ?>" onclick="return confirm('Are you sure you want to send HOD approval email?');" class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition-all shadow-sm cursor-pointer">
+                            <span class="material-symbols-outlined text-base">forward</span>
+                            Send HOD Approval
+                          </a>
+                        <?php else: ?>
+                          <div class="rounded-2xl bg-red-50 border border-red-200 p-4 text-xs">
+                            <p class="font-bold text-red-700 flex items-center gap-1">
+                              <span class="material-symbols-outlined text-[16px]">error</span>
+                              HOD email not available.
+                            </p>
+                            <p class="mt-1 text-red-650">HOD details must be updated in candidate profile or application to request HOD approval.</p>
+                          </div>
+                        <?php endif; ?>
+                      <?php elseif ($is_passed_out): ?>
+                        <button type="button" onclick="if(confirm('Are you sure you want to select this candidate?')) performTransition('Selected');" class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 transition-all shadow-sm cursor-pointer">
+                          <span class="material-symbols-outlined text-base">verified</span>
+                          Select Candidate
+                        </button>
+                      <?php endif; ?>
+                    <?php else: ?>
+                      <div class="rounded-2xl bg-amber-50 border border-amber-200 p-4 text-xs">
+                        <p class="font-bold text-amber-700 flex items-center gap-1">
+                          <span class="material-symbols-outlined text-[16px]">warning</span>
+                          Verification Required
+                        </p>
+                        <p class="mt-1 text-amber-600">Please verify the candidate's Aadhaar and PAN documents or confirmation status to proceed.</p>
+                      </div>
+                    <?php endif; ?>
+                  <?php endif; ?>
+
+                  <?php if ($is_hod_pending_status): ?>
                     <div class="rounded-2xl bg-amber-50 border border-amber-200 p-4 text-xs">
                       <p class="font-bold text-amber-700 flex items-center gap-1">
                         <span class="material-symbols-outlined text-[16px]">hourglass_empty</span>
@@ -982,55 +1028,27 @@ $status_colors = [
                     </div>
                   <?php endif; ?>
 
-                  <?php
-                    $student_type = strtolower(trim($d['student_type'] ?? ''));
-                    $is_pursuing = ($student_type === 'pursuing' || $student_type === 'current student' || empty($student_type));
-                    $is_passed_out = ($student_type === 'passed_out' || $student_type === 'passed out');
-                    $can_approve = (($d['aadhaar_status'] ?? '') === 'verified' && ($d['pan_status'] ?? '') === 'verified');
-                  ?>
-
-                  <?php if ($current_status === 'Selected'): ?>
-                    <button type="button" 
-                            id="btn-send-conf-letter" 
-                            class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition-all shadow-sm cursor-pointer">
-                      <span class="material-symbols-outlined text-base">mail</span>
-                      Send Confirmation Letter
-                    </button>
-                    <button disabled class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-200 px-4 py-2.5 text-sm font-semibold text-white cursor-not-allowed">
-                      <span class="material-symbols-outlined text-base">verified</span>
-                      Selected
-                    </button>
-                  <?php endif; ?>
-
-                  <?php if ($current_status === 'HR Review'): ?>
-                    <?php if ($can_approve): ?>
-                      <?php if ($is_pursuing): ?>
-                        <a href="hr_forward_to_hod.php?app_id=<?php echo $app_id; ?>" onclick="return confirm('Are you sure you want to send HOD approval email?');" class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition-all shadow-sm cursor-pointer">
-                          <span class="material-symbols-outlined text-base">forward</span>
-                          Send for HOD Approval
-                        </a>
-                      <?php elseif ($is_passed_out): ?>
-                        <button type="button" onclick="if(confirm('Are you sure you want to select this candidate?')) performTransition('Selected');" class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 transition-all shadow-sm cursor-pointer">
-                          <span class="material-symbols-outlined text-base">verified</span>
-                          Select Candidate
-                        </button>
-                      <?php endif; ?>
-                    <?php endif; ?>
-                  <?php endif; ?>
-
-                  <?php if ($current_status === 'HOD Approved'): ?>
-                    <?php if ($can_approve): ?>
+                  <?php if ($is_hod_approved_status): ?>
+                    <?php if ($can_approve && $is_pursuing): ?>
                       <button type="button" onclick="if(confirm('Are you sure you want to select this candidate?')) performTransition('Selected');" class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 transition-all shadow-sm cursor-pointer">
                         <span class="material-symbols-outlined text-base">verified</span>
                         Select Candidate
                       </button>
+                    <?php elseif (!$can_approve): ?>
+                      <div class="rounded-2xl bg-amber-50 border border-amber-200 p-4 text-xs">
+                        <p class="font-bold text-amber-700 flex items-center gap-1">
+                          <span class="material-symbols-outlined text-[16px]">warning</span>
+                          Aadhaar & PAN Verification Required
+                        </p>
+                        <p class="mt-1 text-amber-600">Please verify the candidate's Aadhaar and PAN documents to proceed with selection.</p>
+                      </div>
                     <?php endif; ?>
                   <?php endif; ?>
 
-                  <?php if ($current_status !== 'Selected'): ?>
+                  <?php if (!$is_selected_status && !$is_rejected_status && !$is_hod_rejected_status): ?>
                     <button type="button" 
                             id="btn-trigger-reject"
-                            class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-100 transition-all border border-red-100 cursor-pointer">
+                            class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-100 transition-all border border-red-100 cursor-pointer mt-2">
                       <span class="material-symbols-outlined text-base">cancel</span>
                       Reject Candidate
                     </button>
@@ -1381,8 +1399,7 @@ $status_colors = [
     if (btnTriggerReject) {
       btnTriggerReject.addEventListener('click', () => {
         rejectionFormContainer.classList.remove('hidden');
-        btnTriggerReject.classList.add('hidden');
-        workflowButtons.forEach(btn => { if (btn) btn.classList.add('hidden'); });
+        workflowButtons.forEach(btn => { if (btn && btn !== btnTriggerReject) btn.classList.add('hidden'); });
       });
     }
 
@@ -1390,7 +1407,7 @@ $status_colors = [
       btnCancelReject.addEventListener('click', () => {
         rejectionFormContainer.classList.add('hidden');
         if (btnTriggerReject) btnTriggerReject.classList.remove('hidden');
-        workflowButtons.forEach(btn => { if (btn) btn.classList.remove('hidden'); });
+        workflowButtons.forEach(btn => { if (btn && btn !== btnTriggerReject) btn.classList.remove('hidden'); });
         rejectionReasonInput.value = '';
       });
     }

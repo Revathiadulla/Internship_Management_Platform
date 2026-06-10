@@ -113,6 +113,8 @@ function getCoordinatorSentNotificationGroups($conn, $coordinator_id, $limit = 5
                    title,
                    type,
                    created_at,
+                   MAX(attachment_path) AS attachment_path,
+                   MAX(attachment_name) AS attachment_name,
                    COUNT(*) AS recipient_count,
                    SUM(is_read) AS read_count
             FROM notifications
@@ -230,8 +232,133 @@ function sendCoordinatorNotification($conn, $sender_id, $title, $message, $type,
     return $sent_count;
 }
 
+function notification_column_exists($conn, $table, $column) {
+    $table_safe = mysqli_real_escape_string($conn, $table);
+    $column_safe = mysqli_real_escape_string($conn, $column);
+    $res = mysqli_query($conn, "SHOW COLUMNS FROM `" . $table_safe . "` LIKE '" . $column_safe . "'");
+    return $res && mysqli_num_rows($res) > 0;
+}
+
+function resolveNotificationTargetUsers($conn, $recipient_type, $recipient_id = 0) {
+    $recipient_type = strtolower(trim($recipient_type));
+    $users = [];
+    $role = '';
+
+    if ($recipient_type === 'all_users') {
+        $stmt = $conn->prepare("SELECT id, full_name, email, role FROM users ORDER BY full_name ASC");
+        $role = 'all';
+    } elseif ($recipient_type === 'students' || $recipient_type === 'student') {
+        $stmt = $conn->prepare("SELECT id, full_name, email, role FROM users WHERE LOWER(role) = 'student' ORDER BY full_name ASC");
+        $role = 'student';
+    } elseif ($recipient_type === 'coordinators' || $recipient_type === 'coordinator') {
+        $stmt = $conn->prepare("SELECT id, full_name, email, role FROM users WHERE LOWER(role) = 'coordinator' ORDER BY full_name ASC");
+        $role = 'coordinator';
+    } elseif ($recipient_type === 'mentors' || $recipient_type === 'mentor') {
+        $stmt = $conn->prepare("SELECT id, full_name, email, role FROM users WHERE LOWER(role) = 'mentor' ORDER BY full_name ASC");
+        $role = 'mentor';
+    } elseif ($recipient_type === 'hr') {
+        $stmt = $conn->prepare("SELECT id, full_name, email, role FROM users WHERE LOWER(role) = 'hr' ORDER BY full_name ASC");
+        $role = 'hr';
+    } elseif ($recipient_type === 'specific_user' || $recipient_type === 'specific') {
+        if ($recipient_id > 0) {
+            $stmt = $conn->prepare("SELECT id, full_name, email, role FROM users WHERE id = ? LIMIT 1");
+            if ($stmt) {
+                $stmt->bind_param('i', $recipient_id);
+            }
+        } else {
+            $stmt = null;
+        }
+    } else {
+        $stmt = null;
+    }
+
+    if ($stmt) {
+        if ($recipient_type === 'specific_user' || $recipient_type === 'specific') {
+            if ($stmt->execute()) {
+                $res = $stmt->get_result();
+                if ($res && $res->num_rows > 0) {
+                    $users[] = $res->fetch_assoc();
+                }
+            }
+        } else {
+            $stmt->execute();
+            $res = $stmt->get_result();
+            while ($row = $res->fetch_assoc()) {
+                $users[] = $row;
+            }
+        }
+        $stmt->close();
+    }
+
+    return ['users' => $users, 'role' => $role];
+}
+
+function sendRoleBasedNotification($conn, $sender_id, $sender_role, $title, $message, $priority = 'medium', $recipient_type = 'all_users', $recipient_id = 0, $send_dashboard = true, $attachment_path = null, $attachment_name = null, $attachment_size = null, $attachment_type = null) {
+    $recipient_data = resolveNotificationTargetUsers($conn, $recipient_type, $recipient_id);
+    $users = $recipient_data['users'] ?? [];
+    $recipient_role = $recipient_data['role'] ?? '';
+
+    if ($send_dashboard !== true || empty($users)) {
+        return ['sent_count' => 0, 'recipient_role' => $recipient_role, 'target_count' => count($users)];
+    }
+
+    $priority_value = 'info';
+    if (in_array(strtolower($priority), ['high', 'urgent'], true)) {
+        $priority_value = 'alert';
+    } elseif (in_array(strtolower($priority), ['medium', 'normal'], true)) {
+        $priority_value = 'reminder';
+    }
+
+    $prefix = '';
+    if (strtolower($priority) === 'high') {
+        $prefix = '[High Priority] ';
+    } elseif (strtolower($priority) === 'urgent') {
+        $prefix = '[Urgent] ';
+    } elseif (strtolower($priority) === 'medium') {
+        $prefix = '[Medium Priority] ';
+    }
+
+    $effective_title = trim($prefix . $title);
+    $batch_key = bin2hex(random_bytes(8));
+
+    $insert_sql = "INSERT INTO notifications (sender_id, sender_role, receiver_id, receiver_role, user_id, role, title, message, type, is_read, batch_key, attachment_path, attachment_name, attachment_size, attachment_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)";
+    $stmt = $conn->prepare($insert_sql);
+    if (!$stmt) {
+        return ['sent_count' => 0, 'recipient_role' => $recipient_role, 'target_count' => count($users)];
+    }
+
+    $sent_count = 0;
+    foreach ($users as $user) {
+        $user_id = intval($user['id'] ?? 0);
+        if ($user_id <= 0) {
+            continue;
+        }
+
+        $receiver_role_value = strtolower(trim($user['role'] ?? $recipient_role ?? ''));
+        $stmt->bind_param('ississsssssssis', $sender_id, $sender_role, $user_id, $receiver_role_value, $user_id, $receiver_role_value, $effective_title, $message, $priority_value, $batch_key, $attachment_path, $attachment_name, $attachment_size, $attachment_type);
+        if ($stmt->execute()) {
+            $sent_count++;
+        }
+    }
+    $stmt->close();
+
+    return ['sent_count' => $sent_count, 'recipient_role' => $recipient_role, 'target_count' => count($users)];
+}
+
 function getNotificationSendTargetLabel($recipient_type) {
     switch ($recipient_type) {
+        case 'all_users':
+            return 'All Users';
+        case 'students':
+            return 'Students';
+        case 'coordinators':
+            return 'Coordinators';
+        case 'mentors':
+            return 'Mentors';
+        case 'hr':
+            return 'HR';
+        case 'specific_user':
+            return 'Specific User';
         case 'all_students':
             return 'All Students';
         case 'specific_student':

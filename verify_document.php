@@ -54,6 +54,21 @@ if ($type === 'aadhaar') {
         $notif_msg = "Your Aadhaar document has been " . $new_status . " by HR.";
         add_notification($student_id, 'student', $notif_title, $notif_msg, ($new_status === 'verified') ? 'success' : 'error');
         
+        // Auto transition and update overall verification status if both verified
+        $check_pan_sql = mysqli_query($conn, "SELECT pan_status, status FROM internship_applications WHERE id = $app_id");
+        $check_pan = mysqli_fetch_assoc($check_pan_sql);
+        if ($new_status === 'verified' && isset($check_pan['pan_status']) && $check_pan['pan_status'] === 'verified') {
+             mysqli_query($conn, "UPDATE internship_applications SET verification_status = 'Verified' WHERE id = $app_id");
+             mysqli_query($conn, "UPDATE student_profiles SET verification_status = 'Verified' WHERE user_id = $student_id");
+             if ($check_pan['status'] === 'Applied') {
+                  mysqli_query($conn, "UPDATE internship_applications SET status = 'HR Review' WHERE id = $app_id");
+                  log_status_change('internship_applications', $app_id, 'Applied', 'HR Review', 'Automatically transitioned to HR Review upon document verification.');
+             }
+        } else {
+             mysqli_query($conn, "UPDATE internship_applications SET verification_status = 'Pending' WHERE id = $app_id");
+             mysqli_query($conn, "UPDATE student_profiles SET verification_status = 'Pending' WHERE user_id = $student_id");
+        }
+
         // Send email
         $subject = "Aadhaar Document " . ucfirst($new_status) . " - IMP";
         $email_body = "<p>Dear $student_name,</p><p>Your Aadhaar document has been " . $new_status . " by HR.</p><p>Best regards,<br>IMP Team</p>";
@@ -77,6 +92,21 @@ if ($type === 'aadhaar') {
         $notif_msg = "Your PAN document has been " . $new_status . " by HR.";
         add_notification($student_id, 'student', $notif_title, $notif_msg, ($new_status === 'verified') ? 'success' : 'error');
         
+        // Auto transition and update overall verification status if both verified
+        $check_aadhaar_sql = mysqli_query($conn, "SELECT aadhaar_status, status FROM internship_applications WHERE id = $app_id");
+        $check_aadhaar = mysqli_fetch_assoc($check_aadhaar_sql);
+        if ($new_status === 'verified' && isset($check_aadhaar['aadhaar_status']) && $check_aadhaar['aadhaar_status'] === 'verified') {
+             mysqli_query($conn, "UPDATE internship_applications SET verification_status = 'Verified' WHERE id = $app_id");
+             mysqli_query($conn, "UPDATE student_profiles SET verification_status = 'Verified' WHERE user_id = $student_id");
+             if ($check_aadhaar['status'] === 'Applied') {
+                  mysqli_query($conn, "UPDATE internship_applications SET status = 'HR Review' WHERE id = $app_id");
+                  log_status_change('internship_applications', $app_id, 'Applied', 'HR Review', 'Automatically transitioned to HR Review upon document verification.');
+             }
+        } else {
+             mysqli_query($conn, "UPDATE internship_applications SET verification_status = 'Pending' WHERE id = $app_id");
+             mysqli_query($conn, "UPDATE student_profiles SET verification_status = 'Pending' WHERE user_id = $student_id");
+        }
+
         // Send email
         $subject = "PAN Document " . ucfirst($new_status) . " - IMP";
         $email_body = "<p>Dear $student_name,</p><p>Your PAN document has been " . $new_status . " by HR.</p><p>Best regards,<br>IMP Team</p>";
@@ -98,17 +128,24 @@ if ($action === 'approve') {
         exit();
     }
     
-    // For pursuing candidates, this page shouldn't allow direct selection, they must be HOD Approved first
-    if ($is_pursuing && $app['status'] !== 'HOD Approved') {
-        header("Location: hr_applicant_detail.php?app_id=$app_id&error=requires_hod");
-        exit();
+    // Validate HOD status for pursuing vs Qualified status for passed_out
+    if ($is_pursuing) {
+        if ($app['status'] !== 'HOD Approved') {
+            header("Location: hr_applicant_detail.php?app_id=$app_id&error=requires_hod");
+            exit();
+        }
+    } else {
+        if ($app['status'] !== 'Qualified') {
+            header("Location: hr_applicant_detail.php?app_id=$app_id&error=requires_qualification");
+            exit();
+        }
     }
     
     // Update status to Selected
     $update = $conn->prepare("UPDATE internship_applications SET status = 'Selected', final_status = 'selected', hr_status = 'Selected', selected_by = ?, selected_at = NOW() WHERE id = ?");
     $update->bind_param("ii", $user_id, $app_id);
     if ($update->execute()) {
-        log_status_change('internship_applications', $app_id, $app['status'], 'Selected', 'Passed-out student directly approved by HR');
+        log_status_change('internship_applications', $app_id, $app['status'], 'Selected', 'Student approved by HR');
         
         // Notify student
         $notif_title = "Internship Selected";

@@ -6,13 +6,16 @@
 
 const APPLICATION_STATUSES = [
     'Applied',
-    'Test Completed',
     'HR Review',
-    'Documents Verified',
-    'HOD Approval Pending',
+    'Shortlisted',
+    'Exam Mail Sent',
+    'HOD Pending',
     'HOD Approved',
-    'HR Round', // optional stage for interview round
     'Selected',
     'Rejected',
+    'Confirmation Letter Sent',
+    'Project Assigned',
+    'Active Intern',
+    'Completed',
 ];
 ?>

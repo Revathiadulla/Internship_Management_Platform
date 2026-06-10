@@ -18,20 +18,8 @@ $delete_col_check = mysqli_query($conn, "SHOW COLUMNS FROM internship_applicatio
 if ($delete_col_check && mysqli_num_rows($delete_col_check) == 0) {
     mysqli_query($conn, "ALTER TABLE internship_applications ADD COLUMN is_deleted TINYINT(1) DEFAULT 0");
 }
-// Ensure test-related columns exist
-$test_cols = [
-    'test_score' => "ALTER TABLE internship_applications ADD COLUMN test_score INT DEFAULT NULL",
-    'test_result' => "ALTER TABLE internship_applications ADD COLUMN test_result VARCHAR(20) DEFAULT NULL",
-    'test_answers' => "ALTER TABLE internship_applications ADD COLUMN test_answers TEXT DEFAULT NULL",
-    'test_submitted_date' => "ALTER TABLE internship_applications ADD COLUMN test_submitted_date DATETIME DEFAULT NULL"
-];
-foreach ($test_cols as $col => $sql) {
-    $col_check = mysqli_query($conn, "SHOW COLUMNS FROM internship_applications LIKE '$col'");
-    if ($col_check && mysqli_num_rows($col_check) == 0) {
-        mysqli_query($conn, $sql);
-    }
-}
 
+$archived_count = (int) (mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as c FROM internship_applications WHERE is_deleted = 1"))['c'] ?? 0);
 // Ensure document verification columns exist in internship_applications
 $verif_cols = [
     'aadhaar_verification_status' => "ALTER TABLE internship_applications ADD COLUMN aadhaar_verification_status VARCHAR(50) DEFAULT 'Pending'",
@@ -68,24 +56,11 @@ foreach ($sp_verif_cols as $col => $sql) {
     }
 }
 
-// Filter and search values
-$status_options       = ['Applied', 'Test Completed', 'Documents Verified', 'HR Round', 'HOD Approval Pending', 'HOD Approved', 'Selected', 'Interview Scheduled', 'Offer Sent', 'Onboarding Completed', 'Rejected'];
+// Use new official statuses
+$status_options       = ['Applied', 'HR Review', 'HOD Approval', 'Selected', 'Project Assignment', 'Active Intern', 'Completed', 'Rejected'];
 $verification_options = ['Pending', 'Verified', 'Rejected'];
-// Determine view mode: 'review' shows only test‑completed applications, 'all' shows every applicant
-$view = isset($_GET['view']) ? trim($_GET['view']) : 'review';
 // Base where clause
-$where_clauses = ["a.is_deleted = 0"]; 
-// Apply view‑specific filter
-if ($view === 'review') {
-    $where_clauses[] = "a.test_score IS NOT NULL";
-}
-// Previously, 'review' filtered to Test Completed and passing score. This is removed to show all.
-// if ($view === 'review') {
-//     $where_clauses[] = "a.status = 'Test Completed'";
-//     $where_clauses[] = "a.test_score >= 60";
-// }
-
-// No additional filter for review mode; show all applications
+$where_clauses = ["a.is_deleted = 0"];
 
 // Existing filters remain unchanged
 $status_filter       = isset($_GET['status'])              ? trim($_GET['status'])              : '';;
@@ -129,29 +104,7 @@ foreach ($where_clauses_no_view as $key => $clause) {
     }
 }
 // Removed outdated exclusion filters for review view
-    // WHERE clause for HR Review tab
-    $where_clauses_review = $where_clauses_no_view;
-    // Show ONLY status = 'HR Review'
-    $where_clauses_review[] = "a.status = 'HR Review'";
-$review_where_sql = implode(' AND ', $where_clauses_review);
-if (empty($review_where_sql)) { $review_where_sql = '1'; }
-// When showing the HR Review tab, apply the same filter to the main query and pagination
-if ($view === 'review') {
-    $where_sql = $review_where_sql; // ensures pagination total and data rows match the count
-}
-
-// WHERE clause for All Applicants tab (no additional view filter)
-$all_where_sql = implode(' AND ', $where_clauses_no_view);
-if (empty($all_where_sql)) { $all_where_sql = '1'; }
-// Count for HR Review tab
-$review_count_sql = "SELECT COUNT(*) as total FROM internship_applications a LEFT JOIN internships i ON a.internship_id = i.id AND a.internship_id > 0 LEFT JOIN student_profiles sp ON a.user_id = sp.user_id WHERE $review_where_sql";
-$review_count_result = mysqli_query($conn, $review_count_sql);
-$review_total = $review_count_result ? (int)mysqli_fetch_assoc($review_count_result)['total'] : 0;
-// Count for All Applicants tab
-$all_count_sql = "SELECT COUNT(*) as total FROM internship_applications a LEFT JOIN internships i ON a.internship_id = i.id AND a.internship_id > 0 LEFT JOIN student_profiles sp ON a.user_id = sp.user_id WHERE $all_where_sql";
-$all_count_result = mysqli_query($conn, $all_count_sql);
-$all_total = $all_count_result ? (int)mysqli_fetch_assoc($all_count_result)['total'] : 0;
-
+    
 // Total count for pagination (same filters, no LIMIT)
 $count_sql    = "SELECT COUNT(*) as total
                  FROM internship_applications a
@@ -177,12 +130,12 @@ if ($_col_check_res && mysqli_num_rows($_col_check_res) > 0) {
 $resume_url_select = $has_resume_url ? "sp.resume_url" : "NULL as resume_url";
 
 $app_sql = "SELECT a.id as app_id, a.user_id, a.status, a.applied_date, a.education_status,
-                   a.test_score, a.test_result,
                    -- Display applied_subtype before assignment; after assignment show the project/posting title
                    CASE WHEN COALESCE(a.assigned_project_id, 0) = 0 THEN COALESCE(NULLIF(a.applied_subtype, ''), '') ELSE COALESCE(i.title, a.internship_name) END as title,
                    COALESCE(i.duration, '') as duration,
                    COALESCE(i.mode, '') as mode,
                    a.verification_status, a.hod_approval_status,
+                   a.confirmation_letter_path, a.confirmation_letter_sent_at, a.confirmation_letter_sent,
                    sp.full_name, sp.email, sp.college_name, sp.course,
                    sp.resume_file, $resume_url_select,
                    sp.aadhaar_file, sp.pan_file,
@@ -192,8 +145,8 @@ $app_sql = "SELECT a.id as app_id, a.user_id, a.status, a.applied_date, a.educat
                    i.project_type, i.project_subtype,
                    a.applied_subtype,
                    a.preferred_domain, a.internship_name,
-                   a.internship_duration, a.preferred_duration
-            FROM internship_applications a
+                   a.internship_duration
+             FROM internship_applications a
             LEFT JOIN internships i       ON a.internship_id = i.id AND a.internship_id > 0
             LEFT JOIN student_profiles sp ON a.user_id = sp.user_id
             WHERE $where_sql
@@ -211,14 +164,10 @@ function paginate_url(int $page, array $filters): string {
     return 'hr_applications.php?' . http_build_query($params);
 }
 
-page_shell_start('applications', 'Applications', 'Review, update status, and manage all internship applications', '<a href="archived_applications.php" class="inline-flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-slate-50 transition-all"><span class="material-symbols-outlined">archive</span> Archived Applications</a>');
+page_shell_start('applications', 'Applications', 'Review, update status, and manage all internship applications', '<a href="archived_applications.php" class="inline-flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-slate-50 transition-all"><span class="material-symbols-outlined">archive</span> Archived Applications <span class="ml-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-600">' . $archived_count . '</span></a>');
 ?>
 
       <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-<div class="flex mb-4 space-x-2">
-  <a href="hr_applications.php?view=review" class="px-4 py-2 rounded <?= $view === 'review' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-800' ?>">HR Review (<?php echo $review_total; ?>)</a>
-  <a href="hr_applications.php?view=all" class="px-4 py-2 rounded <?= $view === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-800' ?>">All Applicants (<?php echo $all_total; ?>)</a>
-</div>
         <form method="get" class="grid gap-4 xl:grid-cols-4">
           <div>
             <label class="block text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Status</label>
@@ -293,11 +242,7 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
           </div>
           <!-- Heading -->
           <h3 class="text-base font-bold text-slate-700 mb-1">
-            <?php if ($view === 'review'): ?>
-                No test completed applications available for HR review.
-            <?php else: ?>
                 <?php echo $has_filters ? 'No applications found' : 'No applications yet'; ?>
-            <?php endif; ?>
           </h3>
           <!-- Subtitle -->
           <p class="text-sm text-slate-400 max-w-sm">
@@ -330,19 +275,8 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
           <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
             <select id="bulk-action-select" class="w-full sm:w-auto border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 bg-white">
               <option value="">Bulk action</option>
-              <optgroup label="Application status">
-                <option value="move_to_test_completed">Move to Test Completed</option>
-                <option value="move_to_hr_round">Move to HR Round</option>
-                <option value="move_to_hod_approved">Move to HOD Approved</option>
-                <option value="select_candidate">Select</option>
-                <option value="reject">Reject</option>
-              </optgroup>
-              <optgroup label="Verification status">
-                <option value="verification_pending">Verification Pending</option>
-                <option value="verify">Verification Verified</option>
-                <option value="verification_rejected">Verification Rejected</option>
-              </optgroup>
-              <option value="delete">Delete</option>
+              <option value="send_confirmation_letter">Send Confirmation Letter</option>
+              <option value="archive">Archive selected</option>
             </select>
             <button id="bulk-action-apply" type="button" class="inline-flex items-center justify-center whitespace-nowrap rounded-lg border border-slate-200 bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed" disabled>Apply</button>
           </div>
@@ -351,10 +285,10 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
           <table class="w-full text-left border-collapse">
             <thead>
               <tr class="bg-slate-50/75 border-b border-slate-100 text-slate-400 text-[11px] font-bold uppercase tracking-wider">
+                <th class="py-4 px-6 w-12"><span class="sr-only">Select</span></th>
                 <th class="py-4 px-6">Student Name</th>
                 <th class="py-4 px-6">Internship Applied</th>
                 <th class="py-4 px-6">Applied Date</th>
-                <th class="py-4 px-6">Test Percentage</th>
                 <th class="py-4 px-6">Current Status</th>
                 <th class="py-4 px-6">Aadhaar Status</th>
                 <th class="py-4 px-6">PAN Status</th>
@@ -365,8 +299,29 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
               <?php while ($app = mysqli_fetch_assoc($app_result)): 
                   $a_status = $app['aadhaar_status'] ?? 'pending';
                   $p_status = $app['pan_status'] ?? 'pending';
+                  $raw_status = trim((string) ($app['status'] ?? ''));
+                  $status_key = strtolower($raw_status);
+                  $status_display = $status_key === 'exam_sent' ? 'Exam Sent' : $raw_status;
+                  $application_status_label = in_array($status_key, ['selected', 'hr selected', 'hr_selected'], true) ? 'Selected' : $status_display;
+                  $letter_sent = !empty($app['confirmation_letter_path']) || !empty($app['confirmation_letter_sent_at']) || (!empty($app['confirmation_letter_sent']) && (int) $app['confirmation_letter_sent'] === 1);
+                  $show_confirmation_status = in_array($status_key, ['selected', 'hr selected', 'hr_selected', 'confirmation letter sent', 'confirmation_letter_sent', 'offer sent', 'offer_sent'], true);
+                  $confirmation_letter_status_label = $letter_sent ? 'Sent' : 'Pending';
+                  $bulk_exam_blocked = in_array($status_key, ['exam_sent', 'exam mail sent', 'test completed', 'test_completed'], true);
               ?>
                 <tr class="hover:bg-slate-50/50 transition-colors">
+                  <td class="py-4 px-6">
+                    <label class="inline-flex items-center text-slate-500">
+                      <input type="checkbox"
+                             data-app-id="<?php echo $app['app_id']; ?>"
+                             data-status="<?php echo htmlspecialchars($raw_status); ?>"
+                             data-student-name="<?php echo htmlspecialchars($app['full_name'] ?? '', ENT_QUOTES); ?>"
+                             data-student-email="<?php echo htmlspecialchars($app['email'] ?? '', ENT_QUOTES); ?>"
+                             data-bulk-disabled="<?php echo $bulk_exam_blocked ? '1' : '0'; ?>"
+                             class="bulk-select-row h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                             <?php echo $bulk_exam_blocked ? 'disabled' : ''; ?> />
+                      <span class="sr-only">Select application</span>
+                    </label>
+                  </td>
                   <!-- Student Name -->
                   <td class="py-4 px-6">
                     <div class="flex items-center gap-3">
@@ -379,6 +334,7 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
                   </td>
                   <td class="py-4 px-6">
                     <?php
+ resolution:
                     // Resolve applied subtype
                     $forbidden_vals = ['awaiting selection', 'assigned project', 'team project', 'imp', 'internship management platform'];
 
@@ -415,7 +371,7 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
                     <p class="font-medium text-slate-800"><?php echo htmlspecialchars($display_subtype); ?></p>
                     <p class="text-xs text-slate-400">
                       <?php 
-                      $disp_dur = !empty($app['duration']) ? trim($app['duration']) : (!empty($app['internship_duration']) ? trim($app['internship_duration']) : (!empty($app['preferred_duration']) ? trim($app['preferred_duration']) : ''));
+                      $disp_dur = !empty($app['duration']) ? trim($app['duration']) : (!empty($app['internship_duration']) ? trim($app['internship_duration']) : '');
                       $disp_mode = !empty($app['mode']) ? trim($app['mode']) : '';
                       
                       if ($disp_dur !== '' && $disp_mode !== '') {
@@ -430,19 +386,19 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
                   <td class="py-4 px-6 text-slate-500 font-medium">
                     <?php echo date('M d, Y', strtotime($app['applied_date'])); ?>
                   </td>
-                  <!-- Test Score -->
-                  <td class="py-4 px-6">
-                      <?php if (!empty($app['test_score'])): ?>
-                        <span class="font-medium text-slate-800"><?php echo $app['test_score']; ?>%</span>
-                      <?php else: ?>
-                        <span class="text-slate-400">N/A</span>
-                      <?php endif; ?>
-                  </td>
                   <!-- Current Status -->
                   <td class="py-4 px-6">
-                    <span class="inline-flex px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wide border uppercase <?php echo getStatusBadgeClass($app['status']); ?>">
-                      <?php echo htmlspecialchars($app['status']); ?>
-                    </span>
+                    <div class="flex flex-col items-start gap-2">
+                      <span class="inline-flex px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wide border uppercase <?php echo getStatusBadgeClass($raw_status); ?>">
+                        Application Status: <?php echo htmlspecialchars($application_status_label); ?>
+                      </span>
+                      <?php if ($show_confirmation_status): ?>
+                      <span class="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-700">
+                        <span class="material-symbols-outlined text-[12px]">mail</span>
+                        Confirmation Letter Status: <?php echo htmlspecialchars($confirmation_letter_status_label); ?>
+                      </span>
+                      <?php endif; ?>
+                    </div>
                   </td>
                   <!-- Aadhaar Status -->
                   <td class="py-4 px-6">
@@ -468,9 +424,14 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
                   </td>
                   <!-- Actions -->
                   <td class="py-4 px-6 text-center">
-                    <a href="hr_applicant_detail.php?app_id=<?php echo $app['app_id']; ?>" class="px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-xs font-semibold hover:bg-blue-100 transition inline-block">
-                      View
-                    </a>
+                    <div class="flex items-center justify-center gap-2">
+                      <a href="hr_applicant_detail.php?app_id=<?php echo $app['app_id']; ?>" class="px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-xs font-semibold hover:bg-blue-100 transition inline-block">
+                        View
+                      </a>
+                      <button type="button" class="archive-app-btn px-3 py-1.5 bg-amber-50 text-amber-700 rounded-lg text-xs font-semibold hover:bg-amber-100 transition inline-block" data-app-id="<?php echo $app['app_id']; ?>" data-name="<?php echo htmlspecialchars($app['full_name'], ENT_QUOTES); ?>" data-status="<?php echo htmlspecialchars($app['status'] ?? '', ENT_QUOTES); ?>">
+                        Archive
+                      </button>
+                    </div>
                   </td>
               <?php endwhile; ?>
             </tbody>
@@ -560,7 +521,7 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
       </div>
 
   <!-- Toast Notification -->
-  <div id="toast" class="fixed top-6 right-6 z-50 bg-white rounded-xl shadow-xl px-5 py-4 border flex items-center gap-3 transform translate-x-[400px] transition-transform duration-500 ease-out hidden">
+  <div id="toast" class="fixed top-6 right-6 z-[60] bg-white rounded-xl shadow-xl px-5 py-4 border flex items-center gap-3 transform translate-x-[400px] transition-transform duration-500 ease-out hidden">
     <div class="w-8 h-8 rounded-lg flex items-center justify-center" id="toast-icon-container">
       <span class="material-symbols-outlined text-[20px]" id="toast-icon">check_circle</span>
     </div>
@@ -681,19 +642,24 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
     const bulkSelectedCount = document.getElementById('bulk-selected-count');
 
     function updateBulkSelectionDisplay() {
-      const selectedRows = bulkRows.filter(row => row.checked);
+      const selectableRows = bulkRows.filter(row => !row.disabled);
+      const selectedRows = selectableRows.filter(row => row.checked);
       const count = selectedRows.length;
       const enabled = count > 0 && bulkActionSelect.value !== '';
       bulkApplyButton.disabled = !enabled;
       bulkSelectedCount.textContent = count > 0 ? `${count} selected` : '';
       bulkSelectedCount.classList.toggle('hidden', count === 0);
-      const allChecked = selectedRows.length === bulkRows.length && bulkRows.length > 0;
+      const allChecked = selectableRows.length > 0 && selectedRows.length === selectableRows.length;
       if (bulkSelectAll) bulkSelectAll.checked = allChecked;
       if (bulkSelectAllTop) bulkSelectAllTop.checked = allChecked;
     }
 
     function setBulkSelection(checked) {
-      bulkRows.forEach(row => row.checked = checked);
+      bulkRows.forEach(row => {
+        if (!row.disabled) {
+          row.checked = checked;
+        }
+      });
       updateBulkSelectionDisplay();
     }
 
@@ -716,30 +682,69 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
     if (bulkActionSelect) {
       bulkActionSelect.addEventListener('change', updateBulkSelectionDisplay);
     }
+    updateBulkSelectionDisplay();
 
     if (bulkApplyButton) {
       bulkApplyButton.addEventListener('click', async function() {
-        const selectedIds = bulkRows.filter(row => row.checked).map(row => row.dataset.appId).filter(Boolean);
+        const selectedIds = bulkRows.filter(row => !row.disabled && row.checked).map(row => row.dataset.appId).filter(Boolean);
+        const selectedRows = bulkRows.filter(row => !row.disabled && row.checked);
         const action = bulkActionSelect.value;
+
         if (selectedIds.length === 0) {
-          showToast('error', 'No Selection', 'Select one or more applications before applying bulk action.');
+          alert('Please select at least one student.');
+          showToast('error', 'No Selection', 'Please select at least one student.');
           return;
         }
         if (!action) {
-          showToast('error', 'Choose Action', 'Choose a bulk action to apply.');
+          alert('Please select an action.');
+          showToast('error', 'Choose Action', 'Please select an action.');
+          return;
+        }
+
+        if (action === 'send_exam_link' || action === 'send_exam_mail') {
+          openBulkExamComposeModal(selectedIds, selectedRows);
+          return;
+        }
+
+        if (action === 'send_confirmation_letter') {
+          const confirmText = `Are you sure you want to send confirmation letters to ${selectedIds.length} selected applicant(s)?`;
+          if (!confirm(confirmText)) {
+            return;
+          }
+
+          try {
+            const formData = new FormData();
+            selectedIds.forEach(id => formData.append('application_ids[]', id));
+            formData.append('action', action);
+
+            const response = await fetch('hr_bulk_action.php', {
+              method: 'POST',
+              body: formData
+            });
+
+            const result = await response.json();
+            if (result.success) {
+              showToast('success', 'Confirmation letters sent', result.message || 'Confirmation letters processed successfully.');
+              setTimeout(() => location.reload(), 1800);
+            } else {
+              showToast('error', 'Failed', result.message || 'Unable to send confirmation letters.');
+            }
+          } catch (error) {
+            showToast('error', 'Error', 'Bulk confirmation letter request failed.');
+            console.error(error);
+          }
           return;
         }
 
         const actionLabelMap = {
-          move_to_test_completed: 'Move to Test Completed',
-          move_to_hr_round: 'Move to HR Round',
           move_to_hod_approved: 'Move to HOD Approved',
           select_candidate: 'Select',
           reject: 'Reject',
           verification_pending: 'Verification Pending',
           verify: 'Verify',
           verification_rejected: 'Verification Rejected',
-          delete: 'Delete'
+          delete: 'Delete',
+          archive: 'Archive'
         };
         const confirmText = `Are you sure you want to perform bulk action "${actionLabelMap[action] || action}" on ${selectedIds.length} application(s)?`;
         if (!confirm(confirmText)) {
@@ -778,31 +783,44 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
       const toastMessage = document.getElementById('toast-message');
       
       if (type === 'success') {
-        toast.classList.remove('border-red-200');
+        toast.classList.remove('border-red-200', 'border-amber-200');
         toast.classList.add('border-green-200');
-        toastIconContainer.classList.remove('bg-red-100');
+        toastIconContainer.classList.remove('bg-red-100', 'bg-amber-100');
         toastIconContainer.classList.add('bg-green-100');
-        toastIcon.classList.remove('text-red-600');
+        toastIcon.classList.remove('text-red-600', 'text-amber-600');
         toastIcon.classList.add('text-green-600');
         toastIcon.textContent = 'check_circle';
-        toastTitle.classList.remove('text-red-600');
+        toastTitle.classList.remove('text-red-600', 'text-amber-600');
         toastTitle.classList.add('text-green-600');
+      } else if (type === 'warning') {
+        toast.classList.remove('border-red-200', 'border-green-200');
+        toast.classList.add('border-amber-200');
+        toastIconContainer.classList.remove('bg-red-100', 'bg-green-100');
+        toastIconContainer.classList.add('bg-amber-100');
+        toastIcon.classList.remove('text-red-600', 'text-green-600');
+        toastIcon.classList.add('text-amber-600');
+        toastIcon.textContent = 'warning';
+        toastTitle.classList.remove('text-red-600', 'text-green-600');
+        toastTitle.classList.add('text-amber-600');
       } else {
-        toast.classList.remove('border-green-200');
+        toast.classList.remove('border-green-200', 'border-amber-200');
         toast.classList.add('border-red-200');
-        toastIconContainer.classList.remove('bg-green-100');
+        toastIconContainer.classList.remove('bg-green-100', 'bg-amber-100');
         toastIconContainer.classList.add('bg-red-100');
-        toastIcon.classList.remove('text-green-600');
+        toastIcon.classList.remove('text-green-600', 'text-amber-600');
         toastIcon.classList.add('text-red-600');
         toastIcon.textContent = 'error';
-        toastTitle.classList.remove('text-green-600');
+        toastTitle.classList.remove('text-green-600', 'text-amber-600');
         toastTitle.classList.add('text-red-600');
       }
       
       toastTitle.textContent = title;
       toastMessage.textContent = message;
+      toastMessage.classList.add('whitespace-pre-line');
       
       toast.classList.remove('hidden');
+      toast.style.display = 'flex';
+      toast.style.opacity = '1';
       setTimeout(() => {
         toast.classList.remove('translate-x-[400px]');
       }, 100);
@@ -811,8 +829,10 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
         toast.classList.add('translate-x-[400px]');
         setTimeout(() => {
           toast.classList.add('hidden');
+          toast.style.display = 'none';
+          toastMessage.classList.remove('whitespace-pre-line');
         }, 500);
-      }, 3000);
+      }, 5000);
     }
   // Reminder email handler
   document.querySelectorAll('.reminder-btn').forEach(btn => {
@@ -944,6 +964,282 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
       }
     });
   });
+
+  document.querySelectorAll('.archive-app-btn').forEach(btn => {
+    btn.addEventListener('click', async function() {
+      const appId = this.dataset.appId;
+      const appName = this.dataset.name || 'this application';
+      const status = (this.dataset.status || '').trim();
+      const protectedStatuses = ['Applied', 'HR Review', 'Shortlisted', 'Exam Mail Sent', 'HOD Pending', 'HOD Approved', 'Selected', 'Project Assigned', 'Active Intern'];
+
+      if (protectedStatuses.includes(status)) {
+        showToast('warning', 'Archive Restricted', 'Only completed or closed applications can be archived.');
+        return;
+      }
+
+      if (!confirm(`Archive ${appName}'s application? It will be moved to the archived list.`)) {
+        return;
+      }
+
+      try {
+        const formData = new FormData();
+        formData.append('app_id', appId);
+
+        const response = await fetch('archive_application.php', {
+          method: 'POST',
+          body: formData
+        });
+
+        const result = await response.json();
+        if (result.success) {
+          showToast('success', 'Archived', result.message || 'Application archived successfully.');
+          setTimeout(() => location.reload(), 1300);
+        } else {
+          showToast('error', 'Archive Failed', result.message || 'Unable to archive application.');
+        }
+      } catch (error) {
+        showToast('error', 'Error', 'Failed to archive application.');
+        console.error(error);
+      }
+    });
+  });
+
+  function getBulkExamBaseUrl() {
+    const pathname = window.location.pathname || '/';
+    const parts = pathname.split('/').filter(Boolean);
+    if (parts.length <= 1) {
+      return window.location.origin;
+    }
+    const appRoot = '/' + parts.slice(0, -1).join('/');
+    return window.location.origin + appRoot;
+  }
+
+  function openBulkExamComposeModal(selectedIds, selectedRows, options = {}) {
+    const modal = document.getElementById('bulk-exam-modal');
+    const form = document.getElementById('bulk-exam-form');
+    const selectedCountEl = document.getElementById('bulk-exam-selected-count');
+    const recipientsEl = document.getElementById('bulk-exam-recipients');
+    const previewEl = document.getElementById('bulk-exam-link-preview');
+    const appIdEl = document.getElementById('bulk-exam-app-id');
+    const subjectInput = document.getElementById('bulk-exam-subject');
+    const messageInput = document.getElementById('bulk-exam-message');
+    const singleRecipientNameInput = form.querySelector('input[name="single_recipient_name"]');
+    const singleRecipientEmailInput = form.querySelector('input[name="single_recipient_email"]');
+
+    if (!modal || !form || !selectedCountEl || !recipientsEl || !previewEl || !subjectInput || !messageInput) {
+      return;
+    }
+
+    const selectedRowsData = selectedRows || bulkRows.filter(row => !row.disabled && row.checked);
+    const singleRecipient = options.recipient || null;
+    const recipients = selectedRowsData
+      .map(row => ({
+        name: row.dataset.studentName || 'Student',
+        email: row.dataset.studentEmail || ''
+      }))
+      .filter(item => item.email);
+
+    selectedCountEl.textContent = `${selectedRowsData.length} student${selectedRowsData.length === 1 ? '' : 's'} selected`;
+    recipientsEl.innerHTML = recipients.length ? recipients.map(item => `<li class="text-sm text-slate-600">${item.name} — ${item.email}</li>`).join('') : '<li class="text-sm text-slate-600">No recipients available.</li>';
+
+    const firstId = (selectedIds || []).find(Boolean);
+    const previewRecipient = singleRecipient || (recipients[0] || null);
+    const previewUrl = firstId ? `${getBulkExamBaseUrl()}/application_status_timeline.php?application_id=${firstId}` : `${getBulkExamBaseUrl()}/application_status_timeline.php?application_id=APPLICATION_ID`;
+    previewEl.textContent = previewUrl;
+    if (appIdEl) {
+      appIdEl.textContent = firstId || '-';
+    }
+    if (singleRecipientNameInput) {
+      singleRecipientNameInput.value = previewRecipient && previewRecipient.name ? previewRecipient.name : '';
+    }
+    if (singleRecipientEmailInput) {
+      singleRecipientEmailInput.value = previewRecipient && previewRecipient.email ? previewRecipient.email : '';
+    }
+
+    if (previewRecipient && previewRecipient.email) {
+      recipientsEl.innerHTML = `<li class="text-sm text-slate-600">${previewRecipient.name} — ${previewRecipient.email}</li>`;
+    }
+
+    subjectInput.value = 'Internship Assessment Update';
+    messageInput.value = [
+      'Dear Student,',
+      '',
+      'Your internship assessment details will be shared separately by the team if required.',
+      'Please follow the latest update in the application portal for next steps.',
+      '',
+      'Regards,',
+      'HR Team'
+    ].join('\n');
+
+    form.querySelector('input[name="selected_count"]').value = selectedRowsData.length;
+    form.querySelectorAll('input[name="application_ids[]"]').forEach(input => input.remove());
+    (selectedIds || []).forEach(id => {
+      const hidden = document.createElement('input');
+      hidden.type = 'hidden';
+      hidden.name = 'application_ids[]';
+      hidden.value = id;
+      form.appendChild(hidden);
+    });
+
+    modal.classList.remove('hidden');
+  }
+
+  document.querySelectorAll('.send-exam-link-btn').forEach(btn => {
+    btn.addEventListener('click', function () {
+      const appId = this.dataset.appId;
+      const studentName = this.dataset.studentName || 'Student';
+      const studentEmail = this.dataset.studentEmail || '';
+      const currentStatus = (this.dataset.status || '').trim().toLowerCase();
+      const blockedStatuses = ['exam_sent', 'exam mail sent', 'test completed', 'test_completed', 'selected', 'rejected'];
+
+      if (!appId || blockedStatuses.includes(currentStatus)) {
+        return;
+      }
+
+      openBulkExamComposeModal([appId], [{
+        dataset: {
+          studentName,
+          studentEmail
+        }
+      }], {
+        recipient: { name: studentName, email: studentEmail }
+      });
+    });
+  });
+
+  // Bulk Exam Form submission handler
+  const bulkExamForm = document.getElementById('bulk-exam-form');
+  if (bulkExamForm) {
+    bulkExamForm.addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const selectedIds = Array.from(this.querySelectorAll('input[name="application_ids[]"]')).map(input => input.value).filter(Boolean);
+      if (selectedIds.length === 0) {
+        showToast('error', 'No Selection', 'Please select at least one student.');
+        return;
+      }
+
+      const submitBtn = document.getElementById('bulk-exam-submit-btn');
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Sending...';
+      
+      try {
+        const formData = new FormData(this);
+        formData.append('action', 'send_exam_link');
+        
+        const response = await fetch('hr_bulk_action.php', {
+          method: 'POST',
+          body: formData
+        });
+
+        let result = {};
+        const responseText = await response.text();
+        try {
+          result = responseText ? JSON.parse(responseText) : {};
+        } catch (parseError) {
+          console.error('Bulk action parse error', parseError, responseText);
+          result = { success: false, title: 'Failed', message: 'No exam links were sent.\nReason: The server returned an invalid response.' };
+        }
+
+        const toastType = result.type || (result.success ? 'success' : 'error');
+        const toastTitle = result.title || (result.success ? 'Success' : 'Failed');
+        let toastMessage = result.message || 'Bulk exam request completed.';
+        const singleRecipientName = this.querySelector('input[name="single_recipient_name"]').value;
+        if (result.success && selectedIds.length === 1 && singleRecipientName) {
+          toastMessage = `Exam link delivered successfully to ${singleRecipientName}.`;
+        } else if (!result.success && selectedIds.length === 1) {
+          toastMessage = `Exam link delivery failed. Reason: ${toastMessage.replace('No exam links were delivered. Reason: ', '')}`;
+        }
+
+        if (result.success) {
+          closeBulkExamModal();
+          showToast(toastType, toastTitle, toastMessage);
+          setTimeout(() => location.reload(), 2200);
+        } else {
+          closeBulkExamModal();
+          showToast(toastType, toastTitle, toastMessage);
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Send Exam Link';
+        }
+      } catch (error) {
+        console.error('Bulk action failed', error);
+        showToast('error', 'Failed', 'Bulk action failed. Please check server error/logs.');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Send Exam Link';
+      }
+    });
+  }
+  
+  window.closeBulkExamModal = function() {
+    const modal = document.getElementById('bulk-exam-modal');
+    const form = document.getElementById('bulk-exam-form');
+    if (modal) modal.classList.add('hidden');
+    if (form) {
+      form.reset();
+      form.querySelectorAll('input[name="application_ids[]"]').forEach(input => input.remove());
+      const selectedCountInput = form.querySelector('input[name="selected_count"]');
+      if (selectedCountInput) {
+        selectedCountInput.value = '0';
+      }
+    }
+  }
 </script>
+
+<!-- Bulk Exam Mail Modal -->
+<div id="bulk-exam-modal" class="fixed inset-0 z-50 overflow-y-auto hidden" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+  <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+    <div class="fixed inset-0 bg-slate-500 bg-opacity-75 transition-opacity" aria-hidden="true" onclick="closeBulkExamModal()"></div>
+    <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+    <div class="inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full border border-slate-100">
+      <form id="bulk-exam-form" enctype="multipart/form-data" class="p-6 space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+          <h3 class="text-lg font-bold text-slate-800" id="modal-title">Compose Exam Email</h3>
+          <button type="button" onclick="closeBulkExamModal()" class="text-slate-400 hover:text-slate-600 transition">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        
+        <div class="space-y-4">
+          <input type="hidden" name="action" value="send_exam_link">
+          <input type="hidden" name="selected_count" value="0">
+          <input type="hidden" name="single_recipient_name" value="">
+          <input type="hidden" name="single_recipient_email" value="">
+
+          <div class="rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <p class="text-xs font-bold uppercase tracking-wider text-slate-500">Recipients</p>
+            <p id="bulk-exam-selected-count" class="mt-1 text-sm font-semibold text-slate-700">0 students selected</p>
+            <p class="mt-2 text-sm text-slate-600"><span class="font-semibold">Application ID:</span> <span id="bulk-exam-app-id">-</span></p>
+            <ul id="bulk-exam-recipients" class="mt-2 space-y-1 list-disc pl-5 text-sm text-slate-600"></ul>
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Subject</label>
+            <input id="bulk-exam-subject" type="text" name="subject" value="Internship Assessment Link" class="w-full rounded-lg border border-slate-200 p-2.5 text-sm text-slate-700 bg-white focus:ring-2 focus:ring-blue-600 focus:border-transparent outline-none transition" required>
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Message</label>
+            <textarea id="bulk-exam-message" name="message" rows="8" class="w-full rounded-lg border border-slate-200 p-2.5 text-sm text-slate-700 bg-white focus:ring-2 focus:ring-blue-600 focus:border-transparent outline-none transition" required></textarea>
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Generated exam link preview</label>
+            <div id="bulk-exam-link-preview" class="rounded-lg border border-blue-100 bg-blue-50 p-2.5 text-sm text-blue-700 break-all"></div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Attachment (optional)</label>
+            <input type="file" name="exam_attachment" accept=".pdf,.doc,.docx,.zip" class="w-full text-xs text-slate-700 file:mr-2 file:py-1 file:px-2 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+          </div>
+        </div>
+        
+        <div class="flex items-center justify-end gap-2 border-t border-slate-100 pt-3">
+          <button type="button" onclick="closeBulkExamModal()" class="px-4 py-2 border border-slate-200 text-slate-600 rounded-lg text-sm font-semibold hover:bg-slate-50 transition">Cancel</button>
+          <button type="submit" id="bulk-exam-submit-btn" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition shadow-sm">Send</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 <?php print_resume_not_found_js(); ?>
 <?php page_shell_end(); ?>

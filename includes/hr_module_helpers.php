@@ -148,15 +148,17 @@ function ensure_module_schema(mysqli $conn): void {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
 
-    // Clean old stages and seed new 6 simplified stages
+    // Seed new workflow stages
     mysqli_query($conn, "DELETE FROM workflow_stages");
     foreach ([
-        'Applied' => 1,
-        'Test Completed' => 2,
-        'HR Round' => 3,
-        'HOD Approved' => 4,
-        'Selected' => 5,
-        'Rejected' => 6,
+        'Applied'       => 1,
+        'HR Review'     => 2,
+        'Shortlisted'   => 3,
+        'Exam Mail Sent'=> 4,
+        'HOD Pending'   => 5,
+        'HOD Approved'  => 6,
+        'Selected'      => 7,
+        'Rejected'      => 8,
     ] as $stage => $order) {
         $stage_safe = mysqli_real_escape_string($conn, $stage);
         mysqli_query($conn, "INSERT INTO workflow_stages (stage_name, sort_order, is_active) VALUES ('$stage_safe', $order, 1)");
@@ -262,6 +264,13 @@ function ensure_module_schema(mysqli $conn): void {
         INDEX idx_mentor_activity (mentor_id),
         FOREIGN KEY (mentor_id) REFERENCES users(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    $_check_ma_log_id = mysqli_query($conn, "SHOW COLUMNS FROM mentor_activity_logs LIKE 'id'");
+    if ($_check_ma_log_id && $_ma_log_id_row = mysqli_fetch_assoc($_check_ma_log_id)) {
+        if (stripos($_ma_log_id_row['Extra'] ?? '', 'auto_increment') === false) {
+            @mysqli_query($conn, "ALTER TABLE mentor_activity_logs MODIFY id INT NOT NULL AUTO_INCREMENT");
+        }
+    }
 
     // Add log_id and status to mentor_feedback
     module_add_column($conn, 'mentor_feedback', 'log_id', "INT DEFAULT NULL");
@@ -514,22 +523,25 @@ function sync_candidates_from_applications(mysqli $conn): void {
 
 function status_badge(string $status): string {
     $classes = [
-        'Active' => 'bg-emerald-50 text-emerald-700 border-emerald-200',
-        'Closed' => 'bg-slate-50 text-slate-700 border-slate-200',
-        'Applied' => 'bg-blue-50 text-blue-700 border-blue-200',
-        'Assessment' => 'bg-amber-50 text-amber-700 border-amber-200',
-        'Test Completed' => 'bg-purple-50 text-purple-700 border-purple-200',
-        'HR Review' => 'bg-purple-50 text-purple-700 border-purple-200',
-        'Interview' => 'bg-cyan-50 text-cyan-700 border-cyan-200',
-        'Interview Scheduled' => 'bg-cyan-50 text-cyan-700 border-cyan-200',
-        'HR Round' => 'bg-indigo-50 text-indigo-700 border-indigo-200',
-        'HOD Approved' => 'bg-teal-50 text-teal-700 border-teal-200',
-        'Selected' => 'bg-emerald-50 text-emerald-700 border-emerald-200',
-        'Approved' => 'bg-emerald-50 text-emerald-700 border-emerald-200',
-        'Offer Sent' => 'bg-lime-50 text-lime-700 border-lime-200',
-        'Onboarding Completed' => 'bg-green-50 text-green-700 border-green-200',
-        'Internship Started' => 'bg-green-50 text-green-700 border-green-200',
-        'Rejected' => 'bg-red-50 text-red-700 border-red-200',
+        'Active'                  => 'bg-emerald-50 text-emerald-700 border-emerald-200',
+        'Closed'                  => 'bg-slate-50 text-slate-700 border-slate-200',
+        'Applied'                 => 'bg-blue-50 text-blue-700 border-blue-200',
+        'HR Review'               => 'bg-indigo-50 text-indigo-700 border-indigo-200',
+        'Shortlisted'             => 'bg-amber-50 text-amber-700 border-amber-200',
+        'Exam Mail Sent'          => 'bg-purple-50 text-purple-700 border-purple-200',
+        'HOD Pending'             => 'bg-orange-50 text-orange-700 border-orange-200',
+        'HOD Approved'            => 'bg-teal-50 text-teal-700 border-teal-200',
+        'Selected'                => 'bg-emerald-50 text-emerald-700 border-emerald-200',
+        'Approved'                => 'bg-emerald-50 text-emerald-700 border-emerald-200',
+        'Offer Sent'              => 'bg-lime-50 text-lime-700 border-lime-200',
+        'Onboarding Completed'    => 'bg-green-50 text-green-700 border-green-200',
+        'Internship Started'      => 'bg-green-50 text-green-700 border-green-200',
+        'Rejected'                => 'bg-red-50 text-red-700 border-red-200',
+        'HOD Rejected'            => 'bg-red-50 text-red-700 border-red-200',
+        // Legacy aliases
+        'Test Completed'          => 'bg-purple-50 text-purple-700 border-purple-200',
+        'Exam Completed'          => 'bg-purple-50 text-purple-700 border-purple-200',
+        'HR Round'                => 'bg-indigo-50 text-indigo-700 border-indigo-200',
     ];
     $class = $classes[$status] ?? 'bg-slate-50 text-slate-700 border-slate-200';
     return '<span class="inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ' . $class . '">' . e($status) . '</span>';
@@ -599,7 +611,7 @@ function hr_sidebar(string $active): void {
         ['Student Logs', 'student_logs.php', 'description', 'student_logs'],
         ['Hiring Requests', 'hr_hiring_requests.php', 'handshake', 'hiring_requests'],
         ['Reports', 'hr_reports.php', 'analytics', 'reports'],
-        ['Users', 'users.php', 'manage_accounts', 'users'],
+        ['Notifications', 'admin_received_notifications.php', 'notifications', 'notifications'],
     ];
     foreach ($items as $item) {
         if (function_exists('can_access_module') && can_access_module($item[3])) {
@@ -629,8 +641,6 @@ function module_search_config(string $active): array {
             return ['archived_applications.php', 'Search archived applications by name or email...'];
         case 'candidates':
             return ['candidates.php', 'Search candidates, skills, or colleges...'];
-        case 'users':
-            return ['users.php', 'Search users by name or email...'];
         default:
             return ['candidates.php', 'Search candidates, skills, or colleges...'];
     }
@@ -1086,6 +1096,7 @@ function mentor_sidebar(string $active): void {
     $items = [
         ['Dashboard', 'mentor_dashboard.php', 'dashboard', 'dashboard'],
         ['Review Daily Logs', 'mentor_daily_logs.php', 'rate_review', 'review_logs'],
+        ['Projects', 'mentor_projects.php', 'folder', 'projects'],
         ['Notifications', 'mentor_notifications.php', 'notifications', 'notifications'],
     ];
 

@@ -26,7 +26,7 @@ function role_default_modules(?string $role): array {
         case 'admin':
             return ['dashboard', 'applications', 'candidates', 'workflows', 'reports', 'users', 'hiring_requests', 'student_logs'];
         case 'hr':
-            return ['dashboard', 'applications', 'candidates', 'workflows', 'reports', 'hiring_requests', 'student_logs'];
+            return ['dashboard', 'applications', 'candidates', 'workflows', 'reports', 'hiring_requests', 'student_logs', 'notifications'];
         case 'recruiter':
             return ['dashboard', 'postings', 'applications', 'candidates'];
         case 'mentor':
@@ -49,6 +49,9 @@ function current_user_permissions(): array {
 function can_access_module(string $module): bool {
     $module = strtolower($module);
     $role = current_user_role();
+    if ($module === 'users') {
+        return ($role === 'admin');
+    }
     if ($role === 'admin') {
         return true;
     }
@@ -60,6 +63,13 @@ function can_access_module(string $module): bool {
 function require_login(string $redirect = 'login.php'): void {
     if (!is_logged_in()) {
         header("Location: {$redirect}?error=" . urlencode("Please log in to continue."));
+        exit();
+    }
+}
+
+function require_student_login(string $redirect = 'login.php'): void {
+    if (!is_logged_in() || current_user_role() !== 'student') {
+        header("Location: {$redirect}?error=" . urlencode("Session expired. Please login again."));
         exit();
     }
 }

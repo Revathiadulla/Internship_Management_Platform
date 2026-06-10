@@ -3,6 +3,7 @@ ob_start();
 session_start();
 include 'db.php';
 include_once __DIR__ . '/includes/mail_helper.php';
+require_once __DIR__ . '/password_validation.php';
 
 $error = '';
 $success = false;
@@ -23,9 +24,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Please fill out all required fields.';
     } elseif ($password !== $confirm_password) {
         $error = 'Passwords do not match.';
-    } elseif (strlen($password) < 8) {
-        $error = 'Password must be at least 8 characters long.';
-    } elseif (!preg_match('/^[0-9]{10}$/', $phone)) {
+    } else {
+        $password_validation = validate_password_strength($password);
+        if (!$password_validation['is_valid']) {
+            $error = implode(' ', $password_validation['errors']);
+        } elseif (!preg_match('/^[0-9]{10}$/', $phone)) {
         $error = 'Phone number must be exactly 10 digits.';
     } else {
         $email_escaped = mysqli_real_escape_string($conn, $email);
@@ -69,6 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 mysqli_rollback($conn);
                 $error = 'Error occurred during registration: ' . $e->getMessage();
             }
+        }
         }
     }
 }
@@ -323,6 +327,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }, 200);
             }, 1600);
         <?php endif; ?>
+
+        const passwordInput = document.getElementById('password');
+        const confirmPasswordInput = document.getElementById('confirm_password');
+        const passwordRequirementsMessage = 'Password must contain at least:\n• 8 characters\n• One uppercase letter\n• One lowercase letter\n• One number\n• One special character';
+        const strongPasswordPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
+
+        const registrationForm = document.querySelector('form');
+        if (registrationForm && passwordInput && confirmPasswordInput) {
+            passwordInput.addEventListener('input', function () {
+                if (this.value && !strongPasswordPattern.test(this.value)) {
+                    this.setCustomValidity(passwordRequirementsMessage);
+                } else {
+                    this.setCustomValidity('');
+                }
+            });
+
+            registrationForm.addEventListener('submit', function (e) {
+                if (!strongPasswordPattern.test(passwordInput.value)) {
+                    e.preventDefault();
+                    passwordInput.setCustomValidity(passwordRequirementsMessage);
+                    passwordInput.reportValidity();
+                    return false;
+                }
+                if (passwordInput.value !== confirmPasswordInput.value) {
+                    e.preventDefault();
+                    confirmPasswordInput.setCustomValidity('Passwords do not match.');
+                    confirmPasswordInput.reportValidity();
+                    return false;
+                }
+                passwordInput.setCustomValidity('');
+                confirmPasswordInput.setCustomValidity('');
+            });
+        }
     </script>
 
 </body>

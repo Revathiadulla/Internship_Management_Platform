@@ -254,7 +254,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 'internship_status = ?'
             ];
             $types = 'sisss';
-            $values = [$team_name, $mentor_id, $team_status, 'Active Intern', 'Active'];
+            $values = [$team_name, $mentor_id, $team_status, 'Project Assigned', 'Pending'];
 
             if ($app_has_project_type) {
                 $set_parts[] = 'project_type = ?';
@@ -303,7 +303,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             ];
             $placeholders = ['?', '?', '?', '?', '?', '?', '?'];
             $types = 'iisssis';
-            $values = [$student_id, $internship_id, 'Active Intern', 'Active', $team_name, $mentor_id, $team_status];
+            $values = [$student_id, $internship_id, 'Project Assigned', 'Pending', $team_name, $mentor_id, $team_status];
 
             if ($app_has_project_type) {
                 $columns[] = 'project_type';
@@ -506,7 +506,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 "team_name = NULL",
                 "mentor_id = NULL",
                 "team_status = 'Active'",
-                "internship_status = 'Pending'"
+                "internship_status = 'Pending'",
+                "status = 'Selected'"
             ];
             if ($app_has_assigned_project_id) {
                 $clear_columns[] = "assigned_project_id = NULL";
@@ -550,8 +551,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                                 }
                             mysqli_stmt_close($upd_team_stmt);
                         }
-                        // Clear existing members
-                        mysqli_query($conn, "DELETE FROM project_team_members WHERE project_team_id = " . intval($project_team_id));
+                        // Keep existing team members; the final selected student list will be reconciled below.
                     } else {
                         // Insert a new project_teams row
                         $ins_team_sql = "INSERT INTO project_teams (team_name, project_type, project_subtype, internship_id, mentor_id, status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)";
@@ -577,7 +577,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $success = false;
             }
 
-            // 2. Re-assign to selected students
+            // 2. Re-assign only the students checked in the final form submission
             $project_title = '';
             $proj_title_res = mysqli_query($conn, "SELECT title FROM internships WHERE id = " . intval($internship_id) . " LIMIT 1");
             if ($proj_title_res) {
@@ -586,8 +586,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             }
 
             if ($success) {
-                foreach ($students as $student_id) {
+                $selected_student_ids = [];
+                foreach ((array) $students as $student_id) {
                     $student_id = intval($student_id);
+                    if ($student_id > 0) {
+                        $selected_student_ids[$student_id] = $student_id;
+                    }
+                }
+
+                $existing_member_ids = [];
+                if (!empty($project_team_id)) {
+                    $existing_members_res = mysqli_query($conn, "SELECT student_id FROM project_team_members WHERE project_team_id = " . intval($project_team_id));
+                    if ($existing_members_res) {
+                        while ($member_row = mysqli_fetch_assoc($existing_members_res)) {
+                            $existing_member_ids[] = intval($member_row['student_id']);
+                        }
+                    }
+                }
+
+                foreach ($selected_student_ids as $student_id) {
                     // Check if student has application
                     $app_chk_sql = "SELECT id FROM internship_applications WHERE user_id = ? AND internship_id = ? LIMIT 1";
                     $app_chk_stmt = mysqli_prepare($conn, $app_chk_sql);
@@ -619,10 +636,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         }
                     }
 
-
                     // Also insert into project_team_members for this team (if available)
                     if ($success && !empty($project_team_id)) {
-                        $member_sql = "INSERT INTO project_team_members (project_team_id, student_id) VALUES (?, ?)";
+                        $member_sql = "INSERT IGNORE INTO project_team_members (project_team_id, student_id) VALUES (?, ?)";
                         $member_stmt = mysqli_prepare($conn, $member_sql);
                         if ($member_stmt) {
                             mysqli_stmt_bind_param($member_stmt, "ii", $project_team_id, $student_id);
@@ -637,6 +653,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         }
                     }
                     mysqli_stmt_close($app_chk_stmt);
+                }
+
+                if ($success && !empty($project_team_id)) {
+                    foreach ($existing_member_ids as $existing_member_id) {
+                        if (!isset($selected_student_ids[$existing_member_id])) {
+                            mysqli_query($conn, "DELETE FROM project_team_members WHERE project_team_id = " . intval($project_team_id) . " AND student_id = " . intval($existing_member_id));
+
+                            $clear_stmt = mysqli_prepare($conn, "UPDATE internship_applications SET team_name = NULL, mentor_id = NULL, team_status = NULL" . ($app_has_project_type ? ", project_type = NULL" : "") . ($app_has_project_subtype ? ", project_subtype = NULL" : "") . ($app_has_assigned_project_id ? ", assigned_project_id = NULL" : "") . ($app_has_team_id ? ", team_id = NULL" : "") . " WHERE user_id = ? AND internship_id = ?");
+                            if ($clear_stmt) {
+                                mysqli_stmt_bind_param($clear_stmt, "ii", $existing_member_id, $internship_id);
+                                if (!_capture_execute($clear_stmt)) {
+                                    $success = false;
+                                }
+                                mysqli_stmt_close($clear_stmt);
+                            } else {
+                                $success = false;
+                            }
+                        }
+                    }
                 }
             }
         } elseif ($action === 'delete_team') {
@@ -664,7 +699,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $clear_columns = [
                 "team_name = NULL",
                 "mentor_id = NULL",
-                "team_status = 'Active'"
+                "team_status = 'Active'",
+                "internship_status = 'Pending'",
+                "status = 'Selected'"
             ];
             if ($app_has_assigned_project_id) {
                 $clear_columns[] = "assigned_project_id = NULL";
@@ -778,27 +815,32 @@ while ($row = mysqli_fetch_assoc($teams_res)) {
 }
 mysqli_stmt_close($teams_stmt);
 
-// Fetch all active students and their applied internships
+// Fetch selected students that can be assigned to a project team, including current team members and eligible unassigned applicants.
 $students_sql = "
     SELECT u.id, u.full_name, u.email, sp.college_name,
-           a.internship_id, a.team_name as assigned_team,
-           a.applied_subtype as applied_subtype,
-           ptm.project_team_id
+           a.id AS application_id,
+           a.internship_id, a.team_name AS assigned_team,
+           COALESCE(NULLIF(TRIM(a.applied_subtype), ''), NULLIF(TRIM(a.internship_name), ''), NULLIF(TRIM(i.project_subtype), '')) AS applied_subtype,
+           a.status,
+           CASE WHEN EXISTS (
+                SELECT 1
+                FROM project_team_members ptm2
+                JOIN project_teams pt2 ON ptm2.project_team_id = pt2.id
+                WHERE ptm2.student_id = u.id
+                  AND pt2.internship_id = a.internship_id
+           ) THEN 1 ELSE 0 END AS assigned_to_any_team
     FROM users u
     JOIN internship_applications a ON u.id = a.user_id
     JOIN internships i ON a.internship_id = i.id
     LEFT JOIN student_profiles sp ON u.id = sp.user_id
-    LEFT JOIN project_team_members ptm ON u.id = ptm.student_id
-    WHERE u.role = 'student' 
+    WHERE u.role = 'student'
       AND i.coordinator_id = $coord_id
-      AND COALESCE(LOWER(a.applied_subtype), '') = COALESCE(LOWER(i.project_subtype), '')
-      AND (COALESCE(LOWER(a.status), '') = 'selected' 
-           OR COALESCE(LOWER(a.final_selection_status), '') = 'selected' 
-           OR COALESCE(LOWER(a.hr_status), '') = 'selected')
-      AND COALESCE(LOWER(a.status), '') NOT IN ('applied', 'test completed', 'hr review', 'hod pending', 'hod approved', 'rejected')
-      AND COALESCE(LOWER(a.final_selection_status), '') NOT IN ('applied', 'test completed', 'hr review', 'hod pending', 'hod approved', 'rejected')
-      AND COALESCE(LOWER(a.hr_status), '') NOT IN ('applied', 'test completed', 'hr review', 'hod pending', 'hod approved', 'rejected')
-    ORDER BY u.full_name ASC
+      AND LOWER(TRIM(COALESCE(a.status, ''))) = 'selected'
+      AND (
+            LOWER(TRIM(COALESCE(a.applied_subtype, ''))) = LOWER(TRIM(COALESCE(i.project_subtype, '')))
+            OR LOWER(TRIM(COALESCE(a.internship_name, ''))) = LOWER(TRIM(COALESCE(i.project_subtype, '')))
+      )
+    ORDER BY assigned_to_any_team DESC, u.full_name ASC
 ";
 $students_res = mysqli_query($conn, $students_sql);
 $students_list = [];
@@ -956,9 +998,6 @@ if ($team_msg_res) {
                         </a>
                         <a href="coordinator_candidates.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
                                 <span class="material-symbols-outlined text-[20px]">group</span> Candidates
-                        </a>
-                        <a href="coordinator_generate_test.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
-                                <span class="material-symbols-outlined text-[20px]">quiz</span> Generate Test
                         </a>
                         <a href="coordinator_daily_logs.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
                                 <span class="material-symbols-outlined text-[20px]">monitoring</span> Daily Logs
@@ -1124,24 +1163,25 @@ if ($team_msg_res) {
                             $team_name_val = $team['team_name'];
                             $team_status_val = $team['team_status'] ?: 'Active';
 
-                            // Get assigned students for this team
-                            $student_stmt = mysqli_prepare($conn, "
-                                SELECT u.id, u.full_name, u.email, sp.college_name 
-                                FROM internship_applications a
-                                JOIN users u ON a.user_id = u.id
+                            // Get assigned students for this team from project_team_members
+                            $team_member_stmt = mysqli_prepare($conn, "
+                                SELECT u.id, u.full_name, u.email, sp.college_name
+                                FROM project_team_members ptm
+                                JOIN users u ON ptm.student_id = u.id
                                 LEFT JOIN student_profiles sp ON u.id = sp.user_id
-                                WHERE a.team_name = ?
+                                WHERE ptm.project_team_id = ?
+                                ORDER BY u.full_name ASC
                             ");
-                            mysqli_stmt_bind_param($student_stmt, "s", $team_name_val);
-                            mysqli_stmt_execute($student_stmt);
-                            $student_res = mysqli_stmt_get_result($student_stmt);
+                            mysqli_stmt_bind_param($team_member_stmt, "i", $team['id']);
+                            mysqli_stmt_execute($team_member_stmt);
+                            $team_member_res = mysqli_stmt_get_result($team_member_stmt);
                             $assigned_students = [];
                             $assigned_ids = [];
-                            while ($s_row = mysqli_fetch_assoc($student_res)) {
+                            while ($s_row = mysqli_fetch_assoc($team_member_res)) {
                                 $assigned_students[] = $s_row;
-                                $assigned_ids[] = $s_row['id'];
+                                $assigned_ids[] = intval($s_row['id']);
                             }
-                            mysqli_stmt_close($student_stmt);
+                            mysqli_stmt_close($team_member_stmt);
 
                             // Status color pill
                             $status_color = match($team_status_val) {
@@ -1210,7 +1250,7 @@ if ($team_msg_res) {
                                     </button>
                                     
                                     <div class="flex gap-2">
-                                        <button type="button" onclick="openEditModal(<?php echo htmlspecialchars(json_encode($team), ENT_QUOTES, 'UTF-8'); ?>, <?php echo htmlspecialchars(json_encode($assigned_ids), ENT_QUOTES, 'UTF-8'); ?>)" 
+                                        <button type="button" onclick="openEditModal(<?php echo htmlspecialchars(json_encode($team), ENT_QUOTES, 'UTF-8'); ?>, <?php echo htmlspecialchars(json_encode($assigned_ids), ENT_QUOTES, 'UTF-8'); ?>, <?php echo htmlspecialchars(json_encode($assigned_students), ENT_QUOTES, 'UTF-8'); ?>)" 
                                                 class="flex-1 bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-700 text-center py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer">
                                             <span class="material-symbols-outlined text-sm">edit</span>
                                             Edit Squad
@@ -1509,6 +1549,7 @@ if ($team_msg_res) {
         const studentsData = <?php echo json_encode($students_list); ?>;
         const teamMessageLogs = <?php echo json_encode($team_message_logs); ?>;
         let currentlyAssignedStudentIds = [];
+        let currentTeamStudentDetails = [];
         let editingTeamId = null;
 
         const modal = document.getElementById('team-modal');
@@ -1721,57 +1762,97 @@ if ($team_msg_res) {
             }
             
             const projectSubtype = (selectedProject.project_subtype || '').trim().toLowerCase();
-            
-            // Filter students: must match internship_id, applied_subtype must match project subtype,
-            // and student must not already be assigned to another team
-            const projectApplicants = studentsData.filter(st => {
-                // Must match this internship
-                if (parseInt(st.internship_id) !== parseInt(internshipId)) return false;
-                
-                // Applied subtype must match (case-insensitive)
-                const stSubtype = (st.applied_subtype || '').trim().toLowerCase();
+
+            const assignedDetails = Array.isArray(currentTeamStudentDetails) ? currentTeamStudentDetails : [];
+            const combinedStudents = [];
+            const seenIds = new Set();
+
+            assignedDetails.forEach(st => {
+                const studentId = parseInt(st.id, 10);
+                if (!studentId || seenIds.has(studentId)) return;
+                seenIds.add(studentId);
+                combinedStudents.push({
+                    ...st,
+                    source: 'assigned',
+                    is_checked: true,
+                    applied_subtype: st.applied_subtype || selectedProject.project_subtype || ''
+                });
+            });
+
+            studentsData.filter(st => {
+                if (parseInt(st.internship_id, 10) !== parseInt(internshipId, 10)) return false;
+
+                const stStatus = (st.status || '').trim().toLowerCase();
+                if (stStatus !== 'selected') return false;
+
+                const stSubtype = ((st.applied_subtype || st.internship_name || '') + '').trim().toLowerCase();
                 if (stSubtype !== projectSubtype) return false;
-                
-                // Exclude students already assigned to another team
-                const stTeamId = st.project_team_id ? parseInt(st.project_team_id) : null;
-                if (stTeamId !== null && stTeamId !== editingTeamId) return false;
-                
+
+                const studentId = parseInt(st.id, 10);
+                if (!studentId || seenIds.has(studentId)) return false;
+
+                const isAssignedElsewhere = parseInt(st.assigned_to_any_team || 0, 10) === 1;
+                if (isAssignedElsewhere) return false;
+
+                seenIds.add(studentId);
+                combinedStudents.push({
+                    ...st,
+                    source: 'eligible',
+                    is_checked: false,
+                    applied_subtype: st.applied_subtype || selectedProject.project_subtype || ''
+                });
                 return true;
             });
             
-            if (projectApplicants.length === 0) {
+            if (combinedStudents.length === 0) {
                 const subtypeName = selectedProject.project_subtype || 'this project';
                 container.innerHTML = `<p class="text-xs text-gray-400 italic">No selected students found for ${subtypeName}.</p>`;
                 return;
             }
             
-            projectApplicants.forEach(st => {
-                const isChecked = currentlyAssignedStudentIds.includes(parseInt(st.id));
-                const checkedAttr = isChecked ? 'checked' : '';
-                
-                let assignmentSpan = '';
-                if (st.assigned_team && st.assigned_team !== '') {
-                    assignmentSpan = `<span class="text-indigo-600 font-bold ml-1">(Assigned to: ${st.assigned_team})</span>`;
+            // Group by applied_subtype
+            const grouped = {};
+            combinedStudents.forEach(st => {
+                const subtype = (st.applied_subtype || selectedProject.project_subtype || 'Unspecified Subtype').trim();
+                if (!grouped[subtype]) {
+                    grouped[subtype] = [];
                 }
-                
-                const html = `
-                    <label class="flex items-start gap-2.5 text-xs text-gray-700 font-medium cursor-pointer py-0.5 hover:bg-gray-100/50 rounded transition-all">
-                        <input type="checkbox" name="students[]" value="${st.id}" ${checkedAttr} class="student-checkbox rounded border-gray-300 text-blue-600 focus:ring-blue-500 mt-0.5 cursor-pointer">
-                        <div class="flex-1">
-                            <p class="font-bold text-gray-800">${st.full_name}</p>
-                            <p class="text-[10px] text-gray-500 font-normal">
-                                ${st.college_name || 'College N/A'}
-                                ${assignmentSpan}
-                            </p>
-                        </div>
-                    </label>
-                `;
-                container.innerHTML += html;
+                grouped[subtype].push(st);
             });
+
+            for (const subtype in grouped) {
+                // Add header for subtype
+                container.innerHTML += `<div class="text-[10px] font-bold text-gray-450 uppercase tracking-wider mt-2 mb-1 border-b border-gray-200 pb-0.5">${subtype}</div>`;
+                
+                grouped[subtype].forEach(st => {
+                    const studentId = parseInt(st.id, 10);
+                    const assignedIds = Array.isArray(currentlyAssignedStudentIds) ? currentlyAssignedStudentIds : [];
+                    const isChecked = st.source === 'assigned' || assignedIds.some(id => parseInt(id, 10) === studentId);
+                    const checkedAttr = isChecked ? 'checked' : '';
+                    const alreadyAssignedBadge = st.source === 'assigned' || isChecked ? '<span class="ml-2 inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">Already Assigned</span>' : '';
+                    
+                    const html = `
+                        <label class="flex items-start gap-2.5 text-xs text-gray-700 font-medium cursor-pointer py-0.5 hover:bg-gray-100/50 rounded transition-all">
+                            <input type="checkbox" name="students[]" value="${studentId}" ${checkedAttr} class="student-checkbox rounded border-gray-300 text-blue-600 focus:ring-blue-500 mt-0.5 cursor-pointer">
+                            <div class="flex-1">
+                                <p class="font-bold text-gray-800">${st.full_name}${alreadyAssignedBadge}</p>
+                                <p class="text-[10px] text-gray-500 font-normal">
+                                    ${st.email || 'Email N/A'}
+                                </p>
+                                <p class="text-[10px] text-gray-500 font-normal">
+                                    ${st.college_name || 'College N/A'}
+                                </p>
+                            </div>
+                        </label>
+                    `;
+                    container.innerHTML += html;
+                });
+            }
         }
 
         function openCreateModal() {
             currentlyAssignedStudentIds = [];
+            currentTeamStudentDetails = [];
             editingTeamId = null;
             modalTitle.textContent = "Create Project Team";
             formAction.value = "create_team";
@@ -1791,8 +1872,13 @@ if ($team_msg_res) {
             modal.classList.add('flex');
         }
 
-        function openEditModal(team, assignedStudentIds) {
-            currentlyAssignedStudentIds = assignedStudentIds;
+        function openEditModal(team, assignedStudentIds, assignedStudentDetails) {
+            currentlyAssignedStudentIds = Array.isArray(assignedStudentIds)
+                ? assignedStudentIds.map(id => parseInt(id, 10)).filter(id => !isNaN(id) && id > 0)
+                : [];
+            currentTeamStudentDetails = Array.isArray(assignedStudentDetails)
+                ? assignedStudentDetails.filter(st => st && (parseInt(st.id, 10) || st.id))
+                : [];
             editingTeamId = parseInt(team.id);
             modalTitle.textContent = "Edit Project Team";
             formAction.value = "edit_team";

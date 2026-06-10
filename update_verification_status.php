@@ -65,24 +65,13 @@ if ($verification_type === 'aadhaar') {
     $msg = "Documents verification status updated to $verification_status";
 }
 
-// Check if BOTH are verified, and if so, auto-update the overall verification status to Verified and application status to "Documents Verified"
-$check_both = mysqli_query($conn, "SELECT aadhaar_verification_status, pan_verification_status FROM internship_applications WHERE id = $app_id");
-$both = mysqli_fetch_assoc($check_both);
+// If both aadhaar + pan are verified, mark overall verification as Verified
 if ($both['aadhaar_verification_status'] === 'Verified' && $both['pan_verification_status'] === 'Verified') {
     mysqli_query($conn, "UPDATE internship_applications SET verification_status = 'Verified' WHERE id = $app_id");
     mysqli_query($conn, "UPDATE student_profiles SET verification_status = 'Verified' WHERE user_id = $student_id");
-    
-    if ($current_app_status === 'Test Completed' || $current_app_status === 'Applied') {
-        mysqli_query($conn, "UPDATE internship_applications SET status = 'Documents Verified' WHERE id = $app_id");
-        // Log in status history
-        mysqli_query($conn, "INSERT INTO application_status_history (application_id, status, changed_by, notes) VALUES ($app_id, 'Documents Verified', $user_id, 'Documents verified by HR')");
-    }
 } elseif ($verification_status === 'Verified' && $verification_type === 'all') {
-    if ($current_app_status === 'Test Completed' || $current_app_status === 'Applied') {
-        mysqli_query($conn, "UPDATE internship_applications SET status = 'Documents Verified' WHERE id = $app_id");
-        // Log in status history
-        mysqli_query($conn, "INSERT INTO application_status_history (application_id, status, changed_by, notes) VALUES ($app_id, 'Documents Verified', $user_id, 'Documents verified by HR')");
-    }
+    // Force verification status update when explicitly marking all as Verified
+    mysqli_query($conn, "UPDATE internship_applications SET verification_status = 'Verified' WHERE id = $app_id");
 }
 
 // Insert audit log for verification status change

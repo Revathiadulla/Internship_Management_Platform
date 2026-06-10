@@ -61,23 +61,14 @@ function executeSetupQuery($conn, $query, $description, &$errors, $is_cli) {
     }
 }
 
-// 1. Check/Add test columns in internship_applications
-$check_cols = mysqli_query($conn, "SHOW COLUMNS FROM internship_applications LIKE 'test_status'");
-if (mysqli_num_rows($check_cols) == 0) {
-    executeSetupQuery($conn, "ALTER TABLE internship_applications ADD COLUMN test_status VARCHAR(50) DEFAULT 'Pending'", "Adding test_status column", $errors, $is_cli);
-    executeSetupQuery($conn, "ALTER TABLE internship_applications ADD COLUMN test_score INT DEFAULT NULL", "Adding test_score column", $errors, $is_cli);
-    executeSetupQuery($conn, "ALTER TABLE internship_applications ADD COLUMN test_attempts INT NOT NULL DEFAULT 0", "Adding test_attempts column", $errors, $is_cli);
-    executeSetupQuery($conn, "ALTER TABLE internship_applications ADD COLUMN max_attempts INT NOT NULL DEFAULT 3", "Adding max_attempts column", $errors, $is_cli);
-    executeSetupQuery($conn, "ALTER TABLE internship_applications ADD COLUMN test_answers TEXT DEFAULT NULL", "Adding test_answers column", $errors, $is_cli);
+// 1. Skip legacy test columns in internship_applications; assessment flow is external to IMP.
+if ($is_cli) {
+    echo "[SKIP] legacy test columns in internship_applications\n";
 } else {
-    if ($is_cli) {
-        echo "[EXISTS] test_status, test_score, test_answers columns\n";
-    } else {
-        echo "<div class='p-3 bg-slate-50 text-slate-700 border border-slate-200 rounded-lg flex items-center justify-between'>
-                <span>test_status, test_score, test_answers columns</span>
-                <span class='font-medium text-slate-500'>[Already exists]</span>
-              </div>";
-    }
+    echo "<div class='p-3 bg-slate-50 text-slate-700 border border-slate-200 rounded-lg flex items-center justify-between'>
+            <span>Legacy test columns skipped for internship_applications</span>
+            <span class='font-medium text-slate-500'>[Skipped]</span>
+          </div>";
 }
 // 1b. Check if name-related columns exist in internship_applications
 $chk_name_cols = mysqli_query($conn, "SHOW COLUMNS FROM internship_applications");
@@ -161,10 +152,15 @@ $new_cols = [
     "year_of_study"       => "VARCHAR(30) DEFAULT NULL",
     "status"              => "VARCHAR(50) DEFAULT 'Applied'",
     "internship_name"     => "VARCHAR(255) DEFAULT NULL",
-    "preferred_duration"  => "VARCHAR(100) DEFAULT NULL",
-    "reason_for_applying" => "TEXT DEFAULT NULL",
-    "relevant_skills"     => "TEXT DEFAULT NULL",
     "certificate_path"    => "VARCHAR(255) DEFAULT NULL",
+    "exam_link"           => "TEXT DEFAULT NULL",
+    "exam_link_sent_at"   => "DATETIME DEFAULT NULL",
+    "exam_status"         => "VARCHAR(50) DEFAULT 'Pending'",
+    "exam_qualified_at"   => "DATETIME DEFAULT NULL",
+    "qualified_by_hr"     => "INT DEFAULT NULL",
+    "confirmation_letter_sent_at" => "DATETIME DEFAULT NULL",
+    "exam_name"           => "VARCHAR(255) DEFAULT NULL",
+    "exam_remarks"        => "TEXT DEFAULT NULL"
 ];
 foreach ($new_cols as $col => $definition) {
     $chk = mysqli_query($conn, "SHOW COLUMNS FROM internship_applications LIKE '$col'");
@@ -196,19 +192,14 @@ $status_history_table = "CREATE TABLE IF NOT EXISTS application_status_history (
 )";
 executeSetupQuery($conn, $status_history_table, "Creating application_status_history table", $errors, $is_cli);
 
-// 4. Add test_submitted_date column if it doesn't exist
-$test_date_check = mysqli_query($conn, "SHOW COLUMNS FROM internship_applications LIKE 'test_submitted_date'");
-if (mysqli_num_rows($test_date_check) == 0) {
-    executeSetupQuery($conn, "ALTER TABLE internship_applications ADD COLUMN test_submitted_date TIMESTAMP NULL DEFAULT NULL AFTER test_status", "Adding test_submitted_date column", $errors, $is_cli);
+// 4. Skip legacy test submission date column.
+if ($is_cli) {
+    echo "[SKIP] legacy test_submitted_date column\n";
 } else {
-    if ($is_cli) {
-        echo "[EXISTS] test_submitted_date column\n";
-    } else {
-        echo "<div class='p-3 bg-slate-50 text-slate-700 border border-slate-200 rounded-lg flex items-center justify-between'>
-                <span>test_submitted_date column</span>
-                <span class='font-medium text-slate-500'>[Already exists]</span>
-              </div>";
-    }
+    echo "<div class='p-3 bg-slate-50 text-slate-700 border border-slate-200 rounded-lg flex items-center justify-between'>
+            <span>Legacy test_submitted_date column skipped</span>
+            <span class='font-medium text-slate-500'>[Skipped]</span>
+          </div>";
 }
 
 // 5. Create email_notifications_log table
@@ -303,8 +294,12 @@ executeSetupQuery($conn, $daily_logs_table, "Creating daily_logs table", $errors
 $student_notif_table = "CREATE TABLE IF NOT EXISTS student_notifications (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
+    title VARCHAR(255) DEFAULT NULL,
     type VARCHAR(50) NOT NULL,
     message TEXT NOT NULL,
+    link VARCHAR(255) DEFAULT NULL,
+    related_id INT DEFAULT NULL,
+    related_type VARCHAR(50) DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     is_read TINYINT(1) DEFAULT 0
 )";

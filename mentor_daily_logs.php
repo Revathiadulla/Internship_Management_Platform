@@ -91,7 +91,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $mentor_name = 'Mentor';
                     }
                     $feedback_title = 'Daily Log Review';
+                    error_log("[REVIEW SUBMIT] INSERT mentor_feedback mentor_id=$mentor_id student_id=$student_id application_id=" . intval($log_row['application_id']));
                     $fb_stmt = $conn->prepare("INSERT INTO mentor_feedback (mentor_id, student_id, internship_id, rating, comments, phase, status, user_id, feedback_title, given_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                    if (!$fb_stmt) {
+                        throw new Exception("Failed to prepare mentor_feedback INSERT: " . $conn->error);
+                    }
                     $fb_stmt->bind_param('iiiisssiss', $mentor_id, $student_id, $log_row['application_id'], $rating, $comments, $phase, $status, $student_id, $feedback_title, $mentor_name);
                     if (!$fb_stmt->execute()) {
                         throw new Exception("Failed to insert mentor feedback: " . $fb_stmt->error);
@@ -123,16 +127,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     // 3. Log activity
                     $act_details = "Reviewed log dated " . $log_date . " for student " . $log_row['full_name'] . " as status: " . $status;
                     log_activity($conn, 'Mentor Log Review', $act_details);
+                    error_log("[REVIEW SUBMIT] INSERT mentor_activity_logs mentor_id=$mentor_id student_id=$student_id log_id=$log_id");
                     $act_stmt = $conn->prepare("INSERT INTO mentor_activity_logs (mentor_id, action_type, student_id, log_id, details) VALUES (?, 'review', ?, ?, ?)");
+                    if (!$act_stmt) {
+                        throw new Exception("Failed to prepare mentor_activity_logs INSERT: " . $conn->error);
+                    }
                     $act_stmt->bind_param('iiis', $mentor_id, $student_id, $log_id, $act_details);
                     if (!$act_stmt->execute()) {
                         throw new Exception("Failed to insert mentor activity log: " . $act_stmt->error);
                     }
-                    
+
                     // 4. Notify student
                     $notif_msg = "Your log for " . date('M d, Y', strtotime($log_date)) . " has been reviewed by your mentor and marked: " . $status;
                     $s_link = "student_daily_log.php";
+                    error_log("[REVIEW SUBMIT] INSERT student_notifications user_id=$student_id action=review");
                     $notif_stmt = $conn->prepare("INSERT INTO student_notifications (user_id, title, type, message, link) VALUES (?, 'Daily Log Reviewed', 'mentor', ?, ?)");
+                    if (!$notif_stmt) {
+                        throw new Exception("Failed to prepare student_notifications INSERT: " . $conn->error);
+                    }
                     $notif_stmt->bind_param('iss', $student_id, $notif_msg, $s_link);
                     if (!$notif_stmt->execute()) {
                         throw new Exception("Failed to notify student: " . $notif_stmt->error);
@@ -245,6 +257,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     // 4. Notify student
                     $notif_msg = "Your log for " . date('M d, Y', strtotime($log_date)) . " has been quick-approved by your mentor.";
                     $s_link = "student_daily_log.php";
+                    error_log("[REVIEW SUBMIT] INSERT student_notifications user_id=$student_id action=quick_approve");
                     $notif_stmt = $conn->prepare("INSERT INTO student_notifications (user_id, title, type, message, link) VALUES (?, 'Daily Log Approved', 'mentor', ?, ?)");
                     $notif_stmt->bind_param('iss', $student_id, $notif_msg, $s_link);
                     if (!$notif_stmt->execute()) {
@@ -281,6 +294,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $s_link = "student_daily_log.php";
                 $notif_stmt = $conn->prepare("INSERT INTO student_notifications (user_id, title, type, message, link) VALUES (?, 'Log submission reminder', 'mentor', ?, ?)");
                 $notif_stmt->bind_param('iss', $student_id, $notif_msg, $s_link);
+                error_log("[REVIEW SUBMIT] INSERT student_notifications user_id=$student_id action=send_reminder");
                 if ($notif_stmt->execute()) {
                     $act_details = "Sent log submission reminder to student #" . $student_id;
                     $act_stmt = $conn->prepare("INSERT INTO mentor_activity_logs (mentor_id, action_type, student_id, log_id, details) VALUES (?, 'reminder', ?, NULL, ?)");

@@ -4,6 +4,7 @@ session_start();
 include "db.php";
 include_once __DIR__ . "/includes/auth.php";
 include_once __DIR__ . "/includes/mail_helper.php";
+require_once __DIR__ . '/password_validation.php';
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
@@ -14,7 +15,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     }
 
     $full_name = isset($_POST['full_name']) ? $_POST['full_name'] : (isset($_POST['fullname']) ? $_POST['fullname'] : '');
-    $email = $_POST['email'];
+    $email = trim(strtolower($_POST['email'] ?? ''));
     $password = $_POST['password'];
     $confirm_password = $_POST['confirm_password'];
     $role = $_POST['role'];
@@ -34,6 +35,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
     if ($password !== $confirm_password) {
         $params = http_build_query(['error' => 'Passwords do not match. Please try again.', 'full_name' => $full_name, 'email' => $email, 'phone' => $phone, 'role' => $role]);
+        header("Location: registration_page.php?" . $params);
+        exit();
+    }
+
+    $password_validation = validate_password_strength($password);
+    if (!$password_validation['is_valid']) {
+        $params = http_build_query(['error' => implode(' ', $password_validation['errors']), 'full_name' => $full_name, 'email' => $email, 'phone' => $phone, 'role' => $role]);
         header("Location: registration_page.php?" . $params);
         exit();
     }
@@ -60,20 +68,33 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
     $hashed_password = password_hash($password, PASSWORD_DEFAULT);
 
-    $status = in_array($role, ['hr', 'mentor', 'coordinator']) ? 'pending_approval' : 'approved';
+    // Roles that require admin approval before they can log in
+    $approval_required_roles = ['hr', 'mentor', 'coordinator', 'company'];
+    $needs_approval = in_array($role, $approval_required_roles);
+    $status         = $needs_approval ? 'pending_approval' : 'approved';
+    $is_active_val  = $needs_approval ? 0 : 1;
+    $approval_status_val = $needs_approval ? 'pending' : 'approved';
 
-    $sql = "INSERT INTO users (full_name, email, password, role, phone, status)
-            VALUES ('" . mysqli_real_escape_string($conn, $full_name) . "', '" . mysqli_real_escape_string($conn, $email) . "', '$hashed_password', '" . mysqli_real_escape_string($conn, $role) . "', '" . mysqli_real_escape_string($conn, $phone) . "', '$status')";
+    $sql = "INSERT INTO users (full_name, email, password, role, phone, status, is_active, approval_status)
+            VALUES ('"
+        . mysqli_real_escape_string($conn, $full_name) . "', '"
+        . mysqli_real_escape_string($conn, $email) . "', '"
+        . $hashed_password . "', '"
+        . mysqli_real_escape_string($conn, $role) . "', '"
+        . mysqli_real_escape_string($conn, $phone) . "', '"
+        . $status . "', "
+        . $is_active_val . ", '"
+        . $approval_status_val . "')";
 
     if (mysqli_query($conn, $sql)) {
-        // Automatically log in the user after successful registration only if approved
         $user_id = mysqli_insert_id($conn);
-        
-        if ($status === 'approved') {
-            $_SESSION['user_id'] = $user_id;
+
+        // Auto-login only for students (approved immediately)
+        if ($status === 'approved' && $role === 'student') {
+            $_SESSION['user_id']   = $user_id;
             $_SESSION['full_name'] = $full_name;
-            $_SESSION['email'] = $email;
-            $_SESSION['role'] = $role;
+            $_SESSION['email']     = $email;
+            $_SESSION['role']      = $role;
         }
 
         if ($role === 'company') {
@@ -81,33 +102,39 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         }
 
         // Send registration notification and email to the registrant
-        $reg_subject = "Welcome to IMP - Account Registration Successful";
-        $reg_message = "Dear $full_name,\n\nWelcome to the Internship Management Platform (IMP)!\n\nYour account has been registered successfully as a " . ucfirst($role) . " with the email address: $email.\n\n" . 
-                       ($role !== 'student' ? "Note: Your account is currently pending administrator approval. You will receive another notification once your account has been approved and activated." : "You can now log in to your student dashboard to complete your profile, browse available internships, and track applications.");
-        notifyUser($user_id, $role, $email, 'Account Registration Successful', $reg_message, [
-            'event' => 'Account Registration',
-            'registered_name' => $full_name,
-            'assigned_role' => ucfirst($role),
-            'status' => ($role !== 'student' ? 'Pending Approval' : 'Active'),
-            'action_url' => 'http://localhost/IMP/login.php',
-            'action_label' => 'Log In to IMP'
+        if ($needs_approval) {
+            $reg_message = "Dear $full_name,\n\nThank you for registering on the Internship Management Platform (IMP) as " . ucfirst($role) . ".\n\nYour registration has been received and is currently under review. An administrator will verify your account and you will receive an approval email once it is activated.\n\nPlease do not attempt to log in until you receive the approval email.\n\nRegards,\nIMP Admin Team";
+        } else {
+            $reg_message = "Dear $full_name,\n\nWelcome to the Internship Management Platform (IMP)!\n\nYour account has been registered successfully as a " . ucfirst($role) . ". You can now log in to your dashboard to get started.\n\nRegards,\nIMP Team";
+        }
+        notifyUser($user_id, $role, $email, 'IMP — Account Registration Received', $reg_message, [
+            'event'          => $needs_approval ? 'Pending Approval' : 'Account Registered',
+            'registered_name'=> $full_name,
+            'assigned_role'  => ucfirst($role),
+            'status'         => $needs_approval ? 'Pending Admin Approval' : 'Active',
+            'action_url'     => 'http://localhost/IMP/login.php',
+            'action_label'   => $needs_approval ? 'Check Status After Approval' : 'Log In to IMP',
         ], 'registration');
 
         // Notify admins of the new user registration
         $admin_res = mysqli_query($conn, "SELECT id, email FROM users WHERE LOWER(role) = 'admin'");
         if ($admin_res) {
-            $admin_title = "New User Registered";
-            $admin_message = "$full_name has registered a new account as " . ucfirst($role) . ".";
+            $admin_title   = $needs_approval
+                ? "New Registration Pending Approval — " . ucfirst($role)
+                : "New User Registered — " . ucfirst($role);
+            $admin_message = $needs_approval
+                ? "$full_name has registered as " . ucfirst($role) . " and is awaiting admin approval. Please review and approve or reject this account."
+                : "$full_name has registered a new account as " . ucfirst($role) . ".";
             while ($admin_row = mysqli_fetch_assoc($admin_res)) {
-                $admin_id = intval($admin_row['id']);
+                $admin_uid   = intval($admin_row['id']);
                 $admin_email = trim($admin_row['email']);
-                notifyUser($admin_id, 'admin', $admin_email, $admin_title, $admin_message, [
-                    'event' => 'New Student Registered',
-                    'user_name' => $full_name,
-                    'user_email' => $email,
+                notifyUser($admin_uid, 'admin', $admin_email, $admin_title, $admin_message, [
+                    'event'         => $needs_approval ? 'Pending Approval Required' : 'New User Registered',
+                    'user_name'     => $full_name,
+                    'user_email'    => $email,
                     'assigned_role' => ucfirst($role),
-                    'action_url' => 'http://localhost/IMP/admin_users.php',
-                    'action_label' => 'Review Users'
+                    'action_url'    => 'http://localhost/IMP/admin_user_approvals.php',
+                    'action_label'  => 'Review Pending Approvals',
                 ], 'new_registration');
             }
         }

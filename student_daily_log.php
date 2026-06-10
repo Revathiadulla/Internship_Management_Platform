@@ -6,7 +6,7 @@ include_once __DIR__ . "/includes/auth.php";
 include_once __DIR__ . "/includes/hr_module_helpers.php";
 
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'student') {
-    header("Location: login.html");
+    header("Location: login.php");
     exit();
 }
 

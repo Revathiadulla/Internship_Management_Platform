@@ -4,6 +4,7 @@ include_once __DIR__ . '/includes/auth.php';
 require_login();
 include 'db.php';
 include_once __DIR__ . '/includes/hr_module_helpers.php';
+require_once __DIR__ . '/password_validation.php';
 ensure_module_schema($conn);
 
 $user_id = current_user_id();
@@ -24,8 +25,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($new_password !== $confirm_password) {
             $errors[] = 'New password and confirmation do not match.';
         }
-        if (strlen($new_password) < 8) {
-            $errors[] = 'New password must be at least 8 characters.';
+        $password_validation = validate_password_strength($new_password);
+        if (!$password_validation['is_valid']) {
+            $errors = array_merge($errors, $password_validation['errors']);
         }
         $stmt = $conn->prepare("SELECT password FROM users WHERE id = ? LIMIT 1");
         $stmt->bind_param('i', $user_id);
@@ -133,4 +135,28 @@ if (!empty($errors)) {
     </div>
     <button class="mt-6 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700">Save settings</button>
 </form>
+<script>
+    const passwordForm = document.querySelector('form[method="post"]');
+    const newPasswordInput = document.querySelector('input[name="new_password"]');
+    const confirmPasswordInput = document.querySelector('input[name="confirm_password"]');
+    if (passwordForm && newPasswordInput && confirmPasswordInput) {
+        passwordForm.addEventListener('submit', function (e) {
+            const requirements = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
+            if (newPasswordInput.value !== '' && !requirements.test(newPasswordInput.value)) {
+                e.preventDefault();
+                newPasswordInput.setCustomValidity('Password must contain at least 8 characters, one uppercase letter, one lowercase letter, one number, and one special character.');
+                newPasswordInput.reportValidity();
+                return false;
+            }
+            if (newPasswordInput.value !== '' && newPasswordInput.value !== confirmPasswordInput.value) {
+                e.preventDefault();
+                confirmPasswordInput.setCustomValidity('Passwords do not match.');
+                confirmPasswordInput.reportValidity();
+                return false;
+            }
+            newPasswordInput.setCustomValidity('');
+            confirmPasswordInput.setCustomValidity('');
+        });
+    }
+</script>
 <?php page_shell_end(); ?>

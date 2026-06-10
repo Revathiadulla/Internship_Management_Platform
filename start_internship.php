@@ -4,7 +4,7 @@ include 'db.php';
 include_once __DIR__ . "/includes/mail_helper.php";
 
 if (!isset($_SESSION['user_id'])) {
-    header("Location: login.html");
+    header("Location: login.php");
     exit();
 }
 
@@ -32,14 +32,14 @@ if (mysqli_num_rows($check_result) == 0) {
 
 $app = mysqli_fetch_assoc($check_result);
 
-// Only allow starting if status is 'Selected'
-if ($app['status'] !== 'Selected') {
-    header("Location: student_applications.php?err=" . urlencode("You can only start an internship after being Selected."));
+// Only allow starting if status is 'Project Assigned'
+if ($app['status'] !== 'Project Assigned') {
+    header("Location: student_applications.php?err=" . urlencode("You can only start an internship after a Project is Assigned."));
     exit();
 }
 
-$old_status = 'Selected';
-$new_status = 'Started';
+$old_status = 'Project Assigned';
+$new_status = 'Internship Active';
 $title_escaped = mysqli_real_escape_string($conn, $app['title']);
 
 // Update status to 'Started'

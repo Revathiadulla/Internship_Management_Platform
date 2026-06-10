@@ -5,6 +5,7 @@ if (!isset($_SESSION['user_id']) || strtolower($_SESSION['role']) !== 'coordinat
     exit();
 }
 include "db.php";
+require_once __DIR__ . '/password_validation.php';
 
 $user_id = $_SESSION['user_id'];
 $success_msg = "";
@@ -85,9 +86,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error_msg = "All password fields are required.";
         } elseif ($new_password !== $confirm_password) {
             $error_msg = "New password and confirmation do not match.";
-        } elseif (strlen($new_password) < 6) {
-            $error_msg = "New password must be at least 6 characters long.";
         } else {
+            $password_validation = validate_password_strength($new_password);
+            if (!$password_validation['is_valid']) {
+                $error_msg = implode(' ', $password_validation['errors']);
+            } else {
             $pwd_query = mysqli_query($conn, "SELECT password FROM users WHERE id = $user_id");
             $pwd_row = mysqli_fetch_assoc($pwd_query);
             
@@ -103,6 +106,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 mysqli_stmt_close($stmt);
             } else {
                 $error_msg = "Incorrect current password.";
+            }
             }
         }
     }
@@ -191,9 +195,6 @@ $profile_photo = $user_data['profile_photo'] ?? '';
                         </a>
                         <a href="coordinator_candidates.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
                                 <span class="material-symbols-outlined text-[20px]">group</span> Candidates
-                        </a>
-                        <a href="coordinator_generate_test.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
-                                <span class="material-symbols-outlined text-[20px]">quiz</span> Generate Test
                         </a>
                         <a href="coordinator_daily_logs.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
                                 <span class="material-symbols-outlined text-[20px]">monitoring</span> Daily Logs
@@ -401,6 +402,29 @@ $profile_photo = $user_data['profile_photo'] ?? '';
         <script>
         document.addEventListener('DOMContentLoaded', function() {
                 // Sidebar Toggle
+                const passwordForm = document.querySelector('form[action="coordinator_profile.php"]');
+                const newPasswordInput = document.querySelector('input[name="new_password"]');
+                const confirmPasswordInput = document.querySelector('input[name="confirm_password"]');
+                if (passwordForm && newPasswordInput && confirmPasswordInput) {
+                    passwordForm.addEventListener('submit', function (e) {
+                        const requirements = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
+                        if (!requirements.test(newPasswordInput.value)) {
+                            e.preventDefault();
+                            newPasswordInput.setCustomValidity('Password must contain at least 8 characters, one uppercase letter, one lowercase letter, one number, and one special character.');
+                            newPasswordInput.reportValidity();
+                            return false;
+                        }
+                        if (newPasswordInput.value !== confirmPasswordInput.value) {
+                            e.preventDefault();
+                            confirmPasswordInput.setCustomValidity('Passwords do not match.');
+                            confirmPasswordInput.reportValidity();
+                            return false;
+                        }
+                        newPasswordInput.setCustomValidity('');
+                        confirmPasswordInput.setCustomValidity('');
+                    });
+                }
+
                 const toggleBtn = document.getElementById('sidebar-toggle');
                 if (toggleBtn) {
                         toggleBtn.addEventListener('click', () => {

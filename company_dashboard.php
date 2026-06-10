@@ -126,12 +126,12 @@ if ($plan_selected === 'Free' && $views_count >= 8 && $views_count < 10) {
 // Recommended Talent Preview: Top 2 candidates based on score
 $recommended_candidates = [];
 $q_rec = mysqli_query($conn, "
-    SELECT c.*, a.test_score, COALESCE(jp.title, a.internship_name) AS project_title, a.reason_for_applying
+    SELECT c.*, COALESCE(jp.title, a.internship_name) AS project_title
     FROM candidates c
     LEFT JOIN internship_applications a ON c.latest_application_id = a.id
     LEFT JOIN job_postings jp ON a.job_posting_id = jp.id
     WHERE c.current_status IN ('Test Completed', 'HR Round', 'HOD Approved', 'Selected')
-    ORDER BY a.test_score DESC, c.updated_at DESC
+    ORDER BY c.updated_at DESC
     LIMIT 2
 ");
 if ($q_rec) {
@@ -170,7 +170,7 @@ $max_skill = max(1, max(array_values($skills_dist)));
 // New Certifications: Candidates who completed tests recently
 $recent_certifications = [];
 $q_recent = mysqli_query($conn, "
-    SELECT c.*, a.test_score, a.applied_date
+    SELECT c.*, a.applied_date
     FROM candidates c
     LEFT JOIN internship_applications a ON c.latest_application_id = a.id
     WHERE c.current_status IN ('Test Completed', 'Selected')
@@ -469,7 +469,7 @@ if ($q_act) {
                                                     <h4 class="font-bold text-gray-900 text-base"><?php echo htmlspecialchars($cand['full_name']); ?></h4>
                                                     <div class="flex items-center gap-1 mt-1">
                                                         <span class="bg-green-50 text-green-700 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider">Certified</span>
-                                                        <span class="text-xs font-black text-gray-900 ml-2"><?php echo htmlspecialchars($cand['test_score'] ?? '100'); ?>%</span>
+                                                        <span class="text-xs font-black text-gray-900 ml-2">N/A</span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -574,7 +574,7 @@ if ($q_act) {
                                         <p class="text-xs font-bold text-gray-900 leading-tight">
                                             <?php echo htmlspecialchars($cert['full_name']); ?> 
                                             <span class="font-medium text-gray-500">certified with score</span> 
-                                            <?php echo htmlspecialchars($cert['test_score'] ?? '90'); ?>%
+                                            N/A
                                         </p>
                                         <p class="text-[10px] text-gray-400 mt-0.5">verified graduate</p>
                                     </div>

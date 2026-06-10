@@ -1,10 +1,10 @@
 <?php
 session_start();
 include "db.php";
-include "questions_pool.php";
+include "status_helper.php";
 
 if (!isset($_SESSION['user_id'])) {
-    header("Location: login.html");
+    header("Location: login.php");
     exit();
 }
 
@@ -25,12 +25,14 @@ $app_sql = "SELECT a.id as app_id,
                    COALESCE(i.duration, '') as duration,
                    COALESCE(i.mode, '') as mode,
                    a.status, a.applied_date,
-                   a.relevant_skills, a.preferred_duration,
-                   a.test_status, a.test_score, a.test_answers, a.education_status, a.test_submitted_date,
-                   a.test_attempts, a.max_attempts,
+                   a.education_status,
+                   a.applied_subtype,
                    i.project_type, i.project_subtype,
                    ss.score as ss_score,
-                   ss.total_questions as ss_total_questions
+                   ss.total_questions as ss_total_questions,
+                   a.exam_link, a.exam_status, a.exam_name, a.exam_remarks,
+                   a.exam_title, a.exam_instructions, a.exam_attachment, a.exam_date, a.exam_time,
+                   a.confirmation_letter_path
             FROM internship_applications a
             LEFT JOIN internships i ON a.internship_id = i.id AND a.internship_id > 0
             LEFT JOIN student_scores ss ON a.id = ss.application_id
@@ -48,7 +50,7 @@ $unread_count = isset($unread_row['count']) ? $unread_row['count'] : 0;
 // Fetch active started internship (Started status)
 $active_sql = "SELECT a.id as app_id 
                FROM internship_applications a 
-               WHERE a.user_id = '$user_id' AND (a.status = 'Started' OR a.status = 'Internship Started' OR a.status = 'Active Intern') 
+               WHERE a.user_id = '$user_id' AND (a.status = 'Started' OR a.status = 'Internship Started' OR a.status = 'Active Intern' OR a.status = 'Internship Active') 
                LIMIT 1";
 $active_result = mysqli_query($conn, $active_sql);
 $has_active = mysqli_num_rows($active_result) > 0;
@@ -264,61 +266,8 @@ $has_active = mysqli_num_rows($active_result) > 0;
             <div class="overflow-x-auto">
               <div class="divide-y divide-slate-100">
                 <?php while ($app = mysqli_fetch_assoc($app_result)): 
-                    // Get status badge styling
-                    $status_colors = [
-                        'Applied' => ['bg' => 'bg-slate-100', 'text' => 'text-slate-700', 'border' => 'border-slate-200', 'icon' => 'send'],
-                        'Test Completed' => ['bg' => 'bg-purple-100', 'text' => 'text-purple-700', 'border' => 'border-purple-200', 'icon' => 'quiz'],
-                        'HR Round' => ['bg' => 'bg-orange-100', 'text' => 'text-orange-700', 'border' => 'border-orange-200', 'icon' => 'manage_search'],
-                        'HOD Approved' => ['bg' => 'bg-cyan-100', 'text' => 'text-cyan-700', 'border' => 'border-cyan-200', 'icon' => 'verified'],
-                        'Selected' => ['bg' => 'bg-emerald-100', 'text' => 'text-emerald-700', 'border' => 'border-emerald-200', 'icon' => 'check_circle'],
-                        'Rejected' => ['bg' => 'bg-red-100', 'text' => 'text-red-700', 'border' => 'border-red-200', 'icon' => 'cancel']
-                    ];
-                    
                     $current_status = $app['status'];
-                    $status_style = $status_colors[$current_status] ?? $status_colors['Applied'];
-                    
-                    // Test deadline logic (48 hours from application)
-                    $applied_time = strtotime($app['applied_date']);
-                    $deadline_time = $applied_time + (48 * 60 * 60); // 48 hours
-                    $current_time = time();
-                    $time_remaining = $deadline_time - $current_time;
-                    $is_deadline_expired = ($time_remaining <= 0);
-                    
-                    // Calculate hours and minutes remaining
-                    $hours_left = floor($time_remaining / 3600);
-                    $minutes_left = floor(($time_remaining % 3600) / 60);
-                    
-                    // Test status logic
-                    $test_status = $app['test_status'] ?? 'Pending';
-                    $test_score = $app['test_score'] ?? 0;
-                    $test_submitted_date = $app['test_submitted_date'] ?? null;
-                    
-                    $raw_score = 0;
-                    $total_qs = 30;
-                    if ($app['ss_score'] !== null) {
-                        $raw_score = intval($app['ss_score']);
-                        $total_qs = intval($app['ss_total_questions'] ?: 30);
-                    } else if (isset($app['test_score'])) {
-                        $p = intval($app['test_score']);
-                        if ($p > 30) {
-                            $raw_score = intval(round(($p / 100) * 30));
-                        } else {
-                            $raw_score = $p;
-                        }
-                    }
-                    
-                    $test_attempts = intval($app['test_attempts'] ?? 0);
-                    $max_attempts = intval($app['max_attempts'] ?? 3);
-                    if ($max_attempts <= 0) {
-                      $max_attempts = 3;
-                    }
-                    $attempts_remaining = max(0, $max_attempts - $test_attempts);
-                    $has_max_attempts = ($test_attempts >= $max_attempts);
-                    $next_attempt_no = min($test_attempts + 1, $max_attempts);
-                    $status_allows_test = in_array($current_status, ['Applied', 'Test Failed']);
-                    $show_start_test = ($status_allows_test && strtolower($test_status) !== 'completed' && strtolower($test_status) !== 'passed' && !$is_deadline_expired && !$has_max_attempts);
-                    $show_test_expired = ($status_allows_test && strtolower($test_status) !== 'completed' && strtolower($test_status) !== 'passed' && $is_deadline_expired);
-                    $show_view_result = (strtolower($test_status) === 'completed' || strtolower($test_status) === 'passed');
+                    $status_info = getStatusBadge($current_status);
                 ?>
                   <div class="p-6 hover:bg-slate-50/50 transition-all duration-200 group">
                     <div class="flex flex-col lg:flex-row lg:items-center gap-6">
@@ -327,16 +276,14 @@ $has_active = mysqli_num_rows($active_result) > 0;
                       <div class="flex-1 min-w-0">
                         <div class="flex items-start gap-4">
                           <?php
-                            $is_selected_or_approved = in_array($app['status'], ['Selected', 'Started', 'Internship Started', 'Active Intern']);
-                            $display_title = $is_selected_or_approved 
+                            $is_assigned = in_array($app['status'], ['Project Assigned', 'Internship Active', 'Started', 'Internship Started', 'Active Intern']);
+                            $display_title = $is_assigned 
                                 ? $app['title'] 
-                                : (!empty($app['project_type']) && !empty($app['project_subtype']) 
-                                    ? $app['project_type'] . ' - ' . $app['project_subtype'] 
+                                : (!empty($app['applied_subtype']) 
+                                    ? $app['applied_subtype'] 
                                     : (!empty($app['project_subtype']) 
                                         ? $app['project_subtype'] 
-                                        : (!empty($app['project_type']) 
-                                            ? $app['project_type'] 
-                                            : $app['title'])));
+                                        : $app['title']));
                           ?>
                           <div class="w-14 h-14 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-xl shrink-0 shadow-md group-hover:shadow-lg transition-shadow">
                             <?php echo strtoupper(substr($display_title, 0, 1)); ?>
@@ -358,32 +305,53 @@ $has_active = mysqli_num_rows($active_result) > 0;
                               <?php endif; ?>
                             </div>
                             
-                            <!-- Test Deadline Warning (Only for Applied/Test Failed status with pending test) -->
-                            <?php if (in_array($current_status, ['Applied', 'Test Failed']) && strtolower($test_status) !== 'completed' && strtolower($test_status) !== 'passed'): ?>
-                              <div class="mt-3 p-3 <?php echo $is_deadline_expired ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'; ?> border rounded-lg">
-                                <div class="flex items-start gap-2">
-                                  <span class="material-symbols-outlined text-[18px] <?php echo $is_deadline_expired ? 'text-red-600' : 'text-amber-600'; ?>">
-                                    <?php echo $is_deadline_expired ? 'error' : 'schedule'; ?>
+                            <!-- Workflow Status Summary -->
+                            <div class="mt-4 border-t border-slate-100 pt-3 grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+
+                              <?php
+                                $is_pursuing = is_pursuing_student($app['education_status'] ?? '', $profile['student_type'] ?? '');
+                              ?>
+                              <?php if ($is_pursuing): ?>
+                              <div>
+                                <span class="text-slate-400 block mb-0.5">HOD Approval</span>
+                                <?php if (in_array($app['status'], ['HOD Approved', 'Selected', 'Project Assigned', 'Internship Active'])): ?>
+                                  <span class="text-emerald-700 font-bold flex items-center gap-1">
+                                    <span class="material-symbols-outlined text-[14px]">check_circle</span> Approved
                                   </span>
-                                  <div class="flex-1">
-                                    <p class="text-xs font-bold <?php echo $is_deadline_expired ? 'text-red-700' : 'text-amber-700'; ?> mb-1">
-                                      <?php echo $is_deadline_expired ? 'Test Deadline Expired' : 'Assessment Test Required'; ?>
-                                    </p>
-                                    <?php if ($is_deadline_expired): ?>
-                                      <p class="text-xs text-red-600">The 48-hour test window has expired. Please contact HR.</p>
-                                    <?php else: ?>
-                                      <p class="text-xs text-amber-600 mb-1">Complete your test within 48 hours of application.</p>
-                                      <p class="text-xs font-bold <?php echo ($hours_left < 6) ? 'text-red-600' : 'text-amber-700'; ?>">
-                                        ⏱️ Time left: <?php echo $hours_left; ?>h <?php echo $minutes_left; ?>m
-                                      </p>
-                                      <p class="text-[10px] text-amber-500 mt-1">
-                                        Deadline: <?php echo date('M d, Y \a\t g:i A', $deadline_time); ?>
-                                      </p>
-                                    <?php endif; ?>
-                                  </div>
-                                </div>
+                                <?php elseif ($app['status'] === 'HOD Approval Pending'): ?>
+                                  <span class="text-amber-700 font-bold flex items-center gap-1">
+                                    <span class="material-symbols-outlined text-[14px]">hourglass_empty</span> Pending
+                                  </span>
+                                <?php else: ?>
+                                  <span class="text-slate-500 font-medium">Not Required</span>
+                                <?php endif; ?>
                               </div>
-                            <?php endif; ?>
+                              <?php endif; ?>
+
+                              <div>
+                                <span class="text-slate-400 block mb-0.5">Confirmation Letter</span>
+                                <?php if (!empty($app['confirmation_letter_path'])): ?>
+                                  <span class="text-emerald-700 font-bold flex items-center gap-1">
+                                    <span class="material-symbols-outlined text-[14px]">check_circle</span> Sent
+                                  </span>
+                                <?php else: ?>
+                                  <span class="text-slate-500 font-medium">Pending</span>
+                                <?php endif; ?>
+                              </div>
+
+                              <div>
+                                <span class="text-slate-400 block mb-0.5">Project Assignment</span>
+                                <?php if (in_array($app['status'], ['Project Assigned', 'Internship Active'])): ?>
+                                  <span class="text-emerald-700 font-bold flex items-center gap-1">
+                                    <span class="material-symbols-outlined text-[14px]">check_circle</span> Assigned
+                                  </span>
+                                <?php else: ?>
+                                  <span class="text-slate-500 font-medium">Pending</span>
+                                <?php endif; ?>
+                              </div>
+                            </div>
+
+
                           </div>
                         </div>
                       </div>
@@ -392,44 +360,13 @@ $has_active = mysqli_num_rows($active_result) > 0;
                       <div class="flex-shrink-0">
                         <div class="text-center">
                           <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Current Status</p>
-                          <span class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border-2 shadow-sm <?php echo $status_style['bg'] . ' ' . $status_style['text'] . ' ' . $status_style['border']; ?>">
-                            <span class="material-symbols-outlined text-[20px]"><?php echo $status_style['icon']; ?></span>
-                            <?php echo htmlspecialchars($current_status); ?>
+                          <span class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border-2 shadow-sm <?php echo $status_info['color']; ?>">
+                            <span class="material-symbols-outlined text-[20px]"><?php echo $status_info['icon']; ?></span>
+                            <?php echo htmlspecialchars($status_info['label']); ?>
                           </span>
                           <p class="text-xs text-slate-500 mt-2 font-medium">
                             Applied on <?php echo date('M d, Y', strtotime($app['applied_date'])); ?>
                           </p>
-                          
-                          <!-- Test Status Badge -->
-                          <?php if (in_array($current_status, ['Applied', 'Test Failed'])): ?>
-                            <div class="mt-3">
-                              <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Test Status</p>
-                              <?php if (strtolower($test_status) === 'completed' || strtolower($test_status) === 'passed'): ?>
-                                <span class="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-bold">
-                                  <span class="material-symbols-outlined text-[14px]">check_circle</span>
-                                  Completed
-                                </span>
-                              <?php elseif ($is_deadline_expired): ?>
-                                <span class="inline-flex items-center gap-1 px-2.5 py-1 bg-red-50 text-red-700 border border-red-200 rounded-lg text-xs font-bold">
-                                  <span class="material-symbols-outlined text-[14px]">cancel</span>
-                                  Expired
-                                </span>
-                              <?php elseif ($current_status === 'Test Failed'): ?>
-                                <span class="inline-flex items-center gap-1 px-2.5 py-1 bg-red-50 text-red-700 border border-red-200 rounded-lg text-xs font-bold">
-                                  <span class="material-symbols-outlined text-[14px]">cancel</span>
-                                  Test Failed
-                                </span>
-                              <?php else: ?>
-                                <span class="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg text-xs font-bold">
-                                  <span class="material-symbols-outlined text-[14px]">pending</span>
-                                  Pending
-                                </span>
-                              <?php endif; ?>
-                              <?php if ($current_status === 'Test Failed' && !$has_max_attempts): ?>
-                                <p class="text-xs text-slate-500 mt-2">Attempt <?php echo $next_attempt_no; ?> of <?php echo $max_attempts; ?> — <?php echo $attempts_remaining; ?> remaining</p>
-                              <?php endif; ?>
-                            </div>
-                          <?php endif; ?>
                           
                           <?php if ($current_status === 'Rejected'): ?>
                             <p class="text-xs text-red-600 mt-1 font-semibold">Not successful</p>
@@ -445,37 +382,21 @@ $has_active = mysqli_num_rows($active_result) > 0;
                           View Details
                         </a>
                         
-                        <?php if ($show_start_test): ?>
-                          <a href="student_test.php?application_id=<?php echo $app['app_id']; ?>" 
-                             class="px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 shadow-sm hover:shadow-md">
-                            <span class="material-symbols-outlined text-[18px]">quiz</span> 
-                            Start Test
+
+                        
+                        <?php if (!empty($app['confirmation_letter_path'])): ?>
+                          <a href="<?php echo htmlspecialchars($app['confirmation_letter_path']); ?>" target="_blank" download
+                             class="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 shadow-sm hover:shadow-md">
+                            <span class="material-symbols-outlined text-[18px]">download</span> 
+                            Letter
                           </a>
-                        <?php elseif ($has_max_attempts): ?>
-                          <button disabled
-                                  class="px-4 py-2.5 bg-red-100 text-red-700 text-sm font-bold rounded-lg cursor-not-allowed flex items-center justify-center gap-2 opacity-90">
-                            <span class="material-symbols-outlined text-[18px]">error</span>
-                            Maximum test attempts reached
-                          </button>
-                        <?php elseif ($show_test_expired): ?>
-                          <button disabled
-                                  class="px-4 py-2.5 bg-slate-200 text-slate-500 text-sm font-bold rounded-lg cursor-not-allowed flex items-center justify-center gap-2 opacity-60">
-                            <span class="material-symbols-outlined text-[18px]">block</span> 
-                            Test Expired
-                          </button>
-                        <?php elseif ($show_view_result): ?>
-                          <button onclick="openResultModal('<?php echo htmlspecialchars($display_title); ?>', <?php echo intval($raw_score); ?>, <?php echo intval($total_qs); ?>, '<?php echo htmlspecialchars($app['test_answers'] ?? '', ENT_QUOTES, 'UTF-8'); ?>')" 
-                                  class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 shadow-sm hover:shadow-md">
-                            <span class="material-symbols-outlined text-[18px]">leaderboard</span> 
-                            View Result
-                          </button>
                         <?php endif; ?>
                         
-                        <?php if ($app['status'] === 'Selected' || $app['status'] === 'HOD Approved'): ?>
+                        <?php if ($app['status'] === 'Project Assigned'): ?>
                           <a href="start_internship.php?app_id=<?php echo $app['app_id']; ?>" 
                              class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 shadow-sm hover:shadow-md">
                             <span class="material-symbols-outlined text-[18px]">rocket_launch</span> 
-                            Start Now
+                            Start Internship
                           </a>
                         <?php endif; ?>
                       </div>
@@ -504,151 +425,9 @@ $has_active = mysqli_num_rows($active_result) > 0;
     </main>
   </div>
 
-  <!-- Test Result Modal Overlay -->
-  <div id="result-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] hidden items-center justify-center p-4 overflow-y-auto">
-    <div class="bg-white rounded-2xl w-full max-w-2xl border border-slate-100 shadow-2xl overflow-hidden transform scale-95 transition-all duration-300" id="result-modal-content">
-      
-      <!-- Modal Header -->
-      <div class="px-6 py-4 bg-gradient-to-r from-blue-50 to-indigo-50/30 border-b border-slate-100 flex justify-between items-center">
-        <div>
-          <span class="text-[10px] font-extrabold uppercase tracking-wider text-blue-600">Assessment Result</span>
-          <h3 class="font-extrabold text-slate-800 text-lg leading-tight" id="result-modal-title">React.js Developer Internship</h3>
-        </div>
-        <button onclick="closeResultModal()" class="w-8 h-8 rounded-full flex items-center justify-center hover:bg-slate-200/50 transition-colors text-slate-400 hover:text-slate-700">
-          <span class="material-symbols-outlined text-[20px]">close</span>
-        </button>
-      </div>
-
-      <!-- Modal Body -->
-      <div class="p-6 space-y-6 max-h-[70vh] overflow-y-auto" id="result-modal-body">
-        <!-- Score Circular Progress or Graphics -->
-        <div class="flex items-center gap-6 bg-slate-50 p-4 rounded-xl border border-slate-100">
-          <div class="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-extrabold text-2xl shrink-0" id="result-modal-score-circle">
-            3/4
-          </div>
-          <div>
-            <h4 class="font-bold text-slate-800 text-sm">Great effort!</h4>
-            <p class="text-xs text-slate-500 mt-0.5" id="result-modal-score-comment">You scored 75% in this domain assessment. Your result has been logged and the hiring managers have been notified.</p>
-          </div>
-        </div>
-
-        <!-- Questions & Answers breakdown -->
-        <div class="space-y-4" id="result-modal-questions">
-          <!-- Dynamic injection of Q&As -->
-        </div>
-      </div>
-
-      <!-- Modal Footer -->
-      <div class="px-6 py-3.5 bg-slate-50 border-t border-slate-100 flex items-center justify-end">
-        <button onclick="closeResultModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-lg shadow-sm transition-all">
-          Close Result
-        </button>
-      </div>
-
-    </div>
-  </div>
-
   <script>
-    const domainQuestions = <?php echo json_encode($all_questions); ?>;
-
-    function getDomainFromTitle(title) {
-        const t = title.toLowerCase();
-        if (t.includes('frontend') || t.includes('react') || t.includes('web')) return 'Frontend Development';
-        if (t.includes('data') || t.includes('python') || t.includes('sql') || t.includes('science')) return 'Data Science';
-        if (t.includes('ui') || t.includes('ux') || t.includes('design')) return 'UI/UX Design';
-        if (t.includes('backend') || t.includes('node') || t.includes('php') || t.includes('database')) return 'Backend Development';
-        return 'General Aptitude';
-    }
-
-    function openResultModal(title, score, totalQuestions, answersJsonStr) {
-        const modal = document.getElementById("result-modal");
-        const modalContent = document.getElementById("result-modal-content");
-        const modalTitle = document.getElementById("result-modal-title");
-        const scoreCircle = document.getElementById("result-modal-score-circle");
-        const scoreComment = document.getElementById("result-modal-score-comment");
-        const questionsContainer = document.getElementById("result-modal-questions");
-
-        modalTitle.textContent = title;
-        scoreCircle.textContent = score + "/" + totalQuestions;
-        
-        const percentage = Math.round((score / totalQuestions) * 100);
-        let comment = `You scored ${score}/${totalQuestions} (${percentage}%). `;
-        if (score === totalQuestions) comment += "Perfect score! Outstanding grasp of the subject matter. Hiring managers have been notified of your exceptional performance.";
-        else if (percentage >= 80) comment += "Excellent job! You demonstrated strong foundational knowledge in this domain. Your response has been saved.";
-        else if (percentage >= 60) comment += "Good attempt. You have solid basics but there is room for improvement. The review committee will review your profile shortly.";
-        else comment += "Test completed. Your scores have been submitted. Focus on key core concepts to build your confidence.";
-
-        scoreComment.textContent = comment;
-
-        // Parse answers
-        let answers = [];
-        try {
-            answers = JSON.parse(answersJsonStr);
-        } catch(e) {
-            console.error("Error parsing answers JSON", e);
-        }
-
-        const domain = getDomainFromTitle(title);
-        const qList = domainQuestions[domain] || domainQuestions["General Aptitude"];
-
-        questionsContainer.innerHTML = "";
-        qList.forEach((q, idx) => {
-            const studentAnsIdx = answers[idx] !== undefined ? parseInt(answers[idx]) : -1;
-            const isCorrect = studentAnsIdx === q.correct;
-            
-            let choicesHtml = "";
-            q.options.forEach((opt, optIdx) => {
-                let bgClass = "border-slate-200 text-slate-600";
-                let iconHtml = "";
-                
-                if (optIdx === q.correct) {
-                    bgClass = "bg-emerald-50 border-emerald-400 text-emerald-800 font-semibold";
-                    iconHtml = '<span class="material-symbols-outlined text-[16px] text-emerald-600 shrink-0">check_circle</span>';
-                } else if (optIdx === studentAnsIdx && !isCorrect) {
-                    bgClass = "bg-red-50 border-red-300 text-red-800 font-semibold";
-                    iconHtml = '<span class="material-symbols-outlined text-[16px] text-red-600 shrink-0">cancel</span>';
-                }
-
-                choicesHtml += `
-                    <div class="flex items-center justify-between px-3.5 py-2.5 rounded-lg border ${bgClass} text-xs transition-all">
-                        <span>${opt}</span>
-                        ${iconHtml}
-                    </div>
-                `;
-            });
-
-            const qBlock = document.createElement("div");
-            qBlock.className = "space-y-2.5 p-4 rounded-xl border border-slate-100 bg-slate-50/30";
-            qBlock.innerHTML = `
-                <div class="flex items-start gap-2.5">
-                    <span class="flex items-center justify-center w-5 h-5 rounded-full ${isCorrect ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'} text-[11px] font-bold shrink-0 mt-0.5">${idx + 1}</span>
-                    <h5 class="font-bold text-slate-800 text-xs leading-snug">${q.q}</h5>
-                </div>
-                <div class="grid grid-cols-1 gap-2 pl-7.5">
-                    ${choicesHtml}
-                </div>
-            `;
-            questionsContainer.appendChild(qBlock);
-        });
-
-        // Open modal
-        modal.classList.remove("hidden");
-        modal.classList.add("flex");
-        setTimeout(() => {
-            modalContent.classList.remove("scale-95");
-            modalContent.classList.add("scale-100");
-        }, 50);
-    }
-
     function closeResultModal() {
-        const modal = document.getElementById("result-modal");
-        const modalContent = document.getElementById("result-modal-content");
-        modalContent.classList.remove("scale-100");
-        modalContent.classList.add("scale-95");
-        setTimeout(() => {
-            modal.classList.remove("flex");
-            modal.classList.add("hidden");
-        }, 150);
+        // No-op (legacy compatibility)
     }
   </script>
 

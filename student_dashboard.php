@@ -1,12 +1,11 @@
 <?php
 session_start();
+require_once __DIR__ . '/includes/auth.php';
 include "db.php";
+include "status_helper.php";
 require_once __DIR__ . '/includes/cloudinary_config.php';
 
-if (!isset($_SESSION['user_id'])) {
-    header("Location: login.html");
-    exit();
-}
+require_student_login();
 
 $user_id = intval($_SESSION['user_id']);
 
@@ -24,6 +23,10 @@ if (!$profile) {
 
 $assigned_project = null;
 $assigned_team = null;
+$team_members = [];
+$team_messages = [];
+$discussion_error = '';
+$discussion_posted = false;
 $has_assigned_project = false;
 $has_direct_assignment = false;
 $has_confirmed_team = false;
@@ -85,6 +88,106 @@ if ($team_assign_res && ($team_assign_row = mysqli_fetch_assoc($team_assign_res)
     }
 }
 
+if ($assigned_team !== null) {
+    mysqli_query($conn, "CREATE TABLE IF NOT EXISTS team_discussion_messages (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        team_id INT NOT NULL,
+        sender_id INT NOT NULL,
+        sender_role VARCHAR(20) NOT NULL DEFAULT 'student',
+        message TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX(team_id),
+        INDEX(sender_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    $team_id = intval($assigned_team['id']);
+    $team_members_stmt = $conn->prepare("SELECT ptm.student_id AS user_id, u.full_name, u.email, sp.college_name, COALESCE(NULLIF(sp.department, ''), NULLIF(sp.course, ''), 'N/A') AS department
+        FROM project_team_members ptm
+        LEFT JOIN users u ON ptm.student_id = u.id
+        LEFT JOIN student_profiles sp ON ptm.student_id = sp.user_id
+        WHERE ptm.project_team_id = ?
+        ORDER BY u.full_name ASC");
+    if ($team_members_stmt) {
+        $team_members_stmt->bind_param('i', $team_id);
+        $team_members_stmt->execute();
+        $team_members_result = $team_members_stmt->get_result();
+        while ($member_row = $team_members_result->fetch_assoc()) {
+            $team_members[] = [
+                'user_id' => intval($member_row['user_id'] ?? 0),
+                'full_name' => $member_row['full_name'] ?? 'Unnamed Member',
+                'email' => $member_row['email'] ?? '',
+                'college_name' => $member_row['college_name'] ?? '',
+                'department' => $member_row['department'] ?? 'N/A',
+            ];
+        }
+        $team_members_stmt->close();
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['team_message_submit'])) {
+        $message_text = trim($_POST['team_message'] ?? '');
+        if ($message_text !== '') {
+            $sender_role = ($assigned_team['mentor_id'] > 0 && $assigned_team['mentor_id'] === $user_id) ? 'mentor' : 'student';
+            $insert_message_stmt = $conn->prepare("INSERT INTO team_discussion_messages (team_id, sender_id, sender_role, message) VALUES (?, ?, ?, ?)");
+            if ($insert_message_stmt) {
+                $insert_message_stmt->bind_param('iiss', $team_id, $user_id, $sender_role, $message_text);
+                if ($insert_message_stmt->execute()) {
+                    $discussion_posted = true;
+                    $recipient_ids = [];
+                    foreach ($team_members as $member) {
+                        $member_user_id = intval($member['user_id'] ?? 0);
+                        if ($member_user_id > 0 && $member_user_id !== $user_id && !in_array($member_user_id, $recipient_ids, true)) {
+                            $recipient_ids[] = $member_user_id;
+                        }
+                    }
+                    if ($assigned_team['mentor_id'] > 0 && $assigned_team['mentor_id'] !== $user_id && !in_array(intval($assigned_team['mentor_id']), $recipient_ids, true)) {
+                        $recipient_ids[] = intval($assigned_team['mentor_id']);
+                    }
+
+                    if (!empty($recipient_ids)) {
+                        $notif_msg = 'New team update from ' . ($profile['full_name'] ?? 'your team') . ': ' . mb_substr($message_text, 0, 100);
+                        $notif_stmt = $conn->prepare("INSERT INTO notifications (user_id, role, title, message, type, link) VALUES (?, ?, ?, ?, ?, ?)");
+                        if ($notif_stmt) {
+                            $notif_title = 'New team update';
+                            $notif_type = 'info';
+                            $notif_link = 'student_dashboard.php#team-discussion';
+                            foreach ($recipient_ids as $recipient_id) {
+                                $recipient_role = (intval($assigned_team['mentor_id']) === intval($recipient_id)) ? 'mentor' : 'student';
+                                $notif_stmt->bind_param('isssss', $recipient_id, $recipient_role, $notif_title, $notif_msg, $notif_type, $notif_link);
+                                $notif_stmt->execute();
+                            }
+                            $notif_stmt->close();
+                        }
+                    }
+                }
+                $insert_message_stmt->close();
+            }
+        } else {
+            $discussion_error = 'Please write a message before posting.';
+        }
+    }
+
+    $team_messages_stmt = $conn->prepare("SELECT tdm.id, tdm.message, tdm.created_at, tdm.sender_role, tdm.sender_id, u.full_name AS sender_name
+        FROM team_discussion_messages tdm
+        LEFT JOIN users u ON tdm.sender_id = u.id
+        WHERE tdm.team_id = ?
+        ORDER BY tdm.created_at ASC");
+    if ($team_messages_stmt) {
+        $team_messages_stmt->bind_param('i', $team_id);
+        $team_messages_stmt->execute();
+        $team_messages_result = $team_messages_stmt->get_result();
+        while ($message_row = $team_messages_result->fetch_assoc()) {
+            $team_messages[] = [
+                'id' => intval($message_row['id']),
+                'message' => $message_row['message'] ?? '',
+                'created_at' => !empty($message_row['created_at']) ? date('M j, Y \a\t g:i A', strtotime($message_row['created_at'])) : '',
+                'sender_role' => $message_row['sender_role'] ?? 'student',
+                'sender_name' => $message_row['sender_name'] ?? '',
+            ];
+        }
+        $team_messages_stmt->close();
+    }
+}
+
 // Fetch student applications
 $app_sql = "SELECT a.id as app_id,
                    a.internship_id,
@@ -93,8 +196,7 @@ $app_sql = "SELECT a.id as app_id,
                    a.applied_subtype,
                    COALESCE(i.duration, '') as duration,
                    COALESCE(i.mode, '') as mode,
-                   a.status, a.applied_date, a.test_status, a.test_score,
-                   a.test_answers, a.education_status, a.preferred_duration,
+                   a.status, a.applied_date, a.education_status,
                    a.team_name, a.mentor_id, a.team_status,
                    a.internship_status,
                    a.assigned_project_id,
@@ -108,7 +210,11 @@ $app_sql = "SELECT a.id as app_id,
                    i.difficulty_level,
                    i.start_date,
                    i.end_date,
-                   a.confirmation_letter_path
+                   a.confirmation_letter_path,
+                   a.exam_status,
+                   a.exam_link,
+                   a.exam_name,
+                   a.exam_remarks
             FROM internship_applications a
             LEFT JOIN internships i ON a.internship_id = i.id AND a.internship_id > 0
             LEFT JOIN users m ON a.mentor_id = m.id
@@ -117,50 +223,75 @@ $app_sql = "SELECT a.id as app_id,
 $app_result = mysqli_query($conn, $app_sql);
 $app_rows = [];
 $app_count = 0;
-$shortlist_count = 0;
 $has_active = false;
 $active_intern = null;
+$active_statuses = ['Started', 'Internship Started', 'Active Intern', 'Internship Active'];
+
+$build_active_intern = function(array $row) {
+    $applied_date = !empty($row['applied_date']) ? $row['applied_date'] : null;
+
+    return [
+        'app_id' => $row['app_id'],
+        'internship_id' => $row['internship_id'] ?: 0,
+        'internship_status' => $row['internship_status'] ?? null,
+        'title' => $row['title'],
+        'applied_subtype' => $row['applied_subtype'] ?? null,
+        'project_subtype' => $row['project_subtype'] ?? null,
+        'duration' => $row['duration'],
+        'mode' => $row['mode'],
+        'status' => $row['status'],
+        'applied_date' => $applied_date,
+        'education_status' => $row['education_status'],
+        'team_name' => $row['team_name'] ?? null,
+        'mentor_name' => $row['mentor_name'] ?? null,
+        'mentor_email' => $row['mentor_email'] ?? null,
+        'team_status' => $row['team_status'] ?? 'Active',
+        'project_desc' => $row['project_desc'] ?? null,
+        'project_type' => $row['project_type'] ?? null,
+        'project_subtype' => $row['project_subtype'] ?? null,
+        'skills' => $row['skills'] ?? null,
+        'technology_stack' => $row['technology_stack'] ?? null,
+        'difficulty_level' => $row['difficulty_level'] ?? null,
+        'start_date' => $row['start_date'] ?? null,
+        'end_date' => $row['end_date'] ?? null,
+        'confirmation_letter_path' => $row['confirmation_letter_path'] ?? null,
+        'exam_status' => $row['exam_status'] ?? null,
+        'exam_link' => $row['exam_link'] ?? null
+    ];
+};
 
 if ($app_result) {
+    $active_app_row = null;
+    $assignment_app_row = null;
+    $selected_app_row = null;
+
     while ($row = mysqli_fetch_assoc($app_result)) {
         $app_rows[] = $row;
-        $st = $row['status'];
-        if ($st === 'Shortlisted' || $st === 'Approved' || $st === 'Accepted' || $st === 'Started' || $st === 'Internship Started' || $st === 'Active Intern') {
-            $shortlist_count++;
+        $st = $row['status'] ?? '';
+
+        if ($assignment_app_row === null && (!empty($row['assigned_project_id']) || !empty($row['team_id']) || !empty($row['team_name']) || !empty($row['mentor_id']))) {
+            $assignment_app_row = $row;
         }
-        if (!$has_active && ($st === 'Started' || $st === 'Internship Started' || $st === 'Active Intern')) {
+
+        if ($selected_app_row === null && $st === 'Selected') {
+            $selected_app_row = $row;
+        }
+
+        if ($active_app_row === null && in_array($st, $active_statuses, true)) {
+            $active_app_row = $row;
             $has_active = true;
-            $active_intern = [
-                'app_id' => $row['app_id'],
-                'internship_id' => $row['internship_id'] ?: 0,
-                'internship_status' => $row['internship_status'] ?? null,
-                'title' => $row['title'],
-                'duration' => $row['duration'],
-                'mode' => $row['mode'],
-                'status' => $row['status'],
-                'applied_date' => $row['applied_date'],
-                'test_score' => $row['test_score'],
-                'education_status' => $row['education_status'],
-                'team_name' => $row['team_name'] ?? null,
-                'mentor_name' => $row['mentor_name'] ?? null,
-                'mentor_email' => $row['mentor_email'] ?? null,
-                'team_status' => $row['team_status'] ?? 'Active',
-                'project_desc' => $row['project_desc'] ?? null,
-                'project_type' => $row['project_type'] ?? null,
-                'project_subtype' => $row['project_subtype'] ?? null,
-                'skills' => $row['skills'] ?? null,
-                'technology_stack' => $row['technology_stack'] ?? null,
-                'difficulty_level' => $row['difficulty_level'] ?? null,
-                'start_date' => $row['start_date'] ?? null,
-                'end_date' => $row['end_date'] ?? null,
-                'confirmation_letter_path' => $row['confirmation_letter_path'] ?? null
-            ];
         }
+
         if (!$has_direct_assignment && (!empty($row['assigned_project_id']) || !empty($row['team_id']))) {
             $has_direct_assignment = true;
         }
     }
     $app_count = count($app_rows);
+
+    $preferred_app_row = $assignment_app_row ?: $active_app_row ?: $selected_app_row ?: ($app_rows[0] ?? null);
+    if ($preferred_app_row !== null) {
+        $active_intern = $build_active_intern($preferred_app_row);
+    }
 }
 
 // Detect if the student is Selected but waiting for coordinator project assignment
@@ -184,11 +315,12 @@ if (!$has_active && $has_direct_assignment && $active_intern === null) {
                 'internship_id' => $row['internship_id'] ?: 0,
                 'internship_status' => $row['internship_status'] ?? 'Assigned',
                 'title' => $row['title'],
+                'applied_subtype' => $row['applied_subtype'] ?? null,
+                'project_subtype' => $row['project_subtype'] ?? null,
                 'duration' => $row['duration'],
                 'mode' => $row['mode'],
                 'status' => $row['status'] ?? 'Assigned',
                 'applied_date' => $row['applied_date'] ?? null,
-                'test_score' => $row['test_score'] ?? null,
                 'education_status' => $row['education_status'] ?? null,
                 'team_name' => $row['team_name'] ?? null,
                 'mentor_name' => $row['mentor_name'] ?? null,
@@ -202,26 +334,30 @@ if (!$has_active && $has_direct_assignment && $active_intern === null) {
                 'difficulty_level' => $row['difficulty_level'] ?? null,
                 'start_date' => $row['start_date'] ?? null,
                 'end_date' => $row['end_date'] ?? null,
-                'confirmation_letter_path' => $row['confirmation_letter_path'] ?? null
+                'confirmation_letter_path' => $row['confirmation_letter_path'] ?? null,
+                'exam_status' => $row['exam_status'] ?? null,
+                'exam_link' => $row['exam_link'] ?? null
             ];
             break;
         }
     }
 }
 
-if (!$has_active && $has_assigned_project) {
+if ($has_assigned_project) {
     $has_active = true;
-    $active_intern = [
-        'app_id' => null,
+    $existing_active = is_array($active_intern) ? $active_intern : [];
+    $active_intern = array_merge($existing_active, [
+        'app_id' => $existing_active['app_id'] ?? null,
         'internship_id' => $assigned_project['internship_id'],
         'internship_status' => 'Assigned',
         'title' => $assigned_project['title'],
+        'applied_subtype' => $assigned_project['project_subtype'] ?? null,
+        'project_subtype' => $assigned_project['project_subtype'] ?? null,
         'duration' => $assigned_project['duration'],
-        'mode' => '',
+        'mode' => $existing_active['mode'] ?? '',
         'status' => 'Assigned',
-        'applied_date' => null,
-        'test_score' => null,
-        'education_status' => null,
+        'applied_date' => $existing_active['applied_date'] ?? null,
+        'education_status' => $existing_active['education_status'] ?? null,
         'team_name' => $assigned_project['team_name'],
         'mentor_name' => $assigned_project['mentor_name'],
         'mentor_email' => $assigned_project['mentor_email'],
@@ -231,10 +367,13 @@ if (!$has_active && $has_assigned_project) {
         'project_subtype' => $assigned_project['project_subtype'],
         'skills' => $assigned_project['skills'],
         'technology_stack' => $assigned_project['technology_stack'],
-        'difficulty_level' => null,
+        'difficulty_level' => $existing_active['difficulty_level'] ?? null,
         'start_date' => $assigned_project['start_date'],
-        'end_date' => $assigned_project['end_date']
-    ];
+        'end_date' => $assigned_project['end_date'],
+        'confirmation_letter_path' => $existing_active['confirmation_letter_path'] ?? null,
+        'exam_status' => $existing_active['exam_status'] ?? null,
+        'exam_link' => $existing_active['exam_link'] ?? null
+    ]);
 }
 
 $total_logs = 0;
@@ -252,7 +391,6 @@ if ($has_active) {
                 'mode' => $active_intern['mode'] ?? '',
                 'status' => $active_intern['status'] ?? 'Assigned',
                 'applied_date' => $active_intern['applied_date'] ?? null,
-                'test_score' => $active_intern['test_score'] ?? null,
                 'education_status' => $active_intern['education_status'] ?? null,
                 'team_name' => $active_intern['team_name'] ?? null,
                 'mentor_name' => $active_intern['mentor_name'] ?? null,
@@ -360,6 +498,11 @@ if ($has_active) {
 $weekly_hours = 0.0;
 $recent_logs  = [];
 $days_active  = 0;
+$internship_state = 'upcoming';
+$state_badge_text = 'Upcoming';
+$state_badge_class = 'bg-amber-50 text-amber-700 border-amber-100';
+$banner_message = 'Your internship is scheduled to start soon. Once it begins, progress and phase updates will appear here.';
+$phase_display = 'Starts soon / Not started';
 if ($has_active) {
     $hours_sql    = "SELECT SUM(time_spent) as total FROM daily_logs WHERE user_id = '$user_id' AND internship_id = '{$active_intern['internship_id']}' AND log_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)";
     $hours_result = mysqli_query($conn, $hours_sql);
@@ -372,12 +515,49 @@ if ($has_active) {
         $recent_logs[] = $log_row;
     }
 
-    $start_date_str = !empty($active_intern['start_date']) ? $active_intern['start_date'] : $active_intern['applied_date'];
-    $date_start  = new DateTime($start_date_str);
+    $start_date_str = !empty($active_intern['start_date']) ? $active_intern['start_date'] : null;
     $date_today  = new DateTime();
-    $days_active = $date_start->diff($date_today)->days + 1;
-    if ($date_today < $date_start) {
-        $days_active = 0;
+    $date_today->setTime(0, 0, 0);
+
+    if (!empty($start_date_str)) {
+        $date_start = new DateTime($start_date_str);
+        $date_start->setTime(0, 0, 0);
+
+        $end_date_obj = !empty($active_intern['end_date']) ? new DateTime($active_intern['end_date']) : clone $date_start;
+        $end_date_obj->setTime(0, 0, 0);
+        if (empty($active_intern['end_date'])) {
+            $end_date_obj->modify('+3 months');
+        }
+
+        if ($date_today < $date_start) {
+            $internship_state = 'upcoming';
+            $state_badge_text = 'Upcoming';
+            $state_badge_class = 'bg-amber-50 text-amber-700 border-amber-100';
+            $banner_message = 'Your internship is scheduled to start soon. Once it begins, progress and phase updates will appear here.';
+            $phase_display = 'Starts soon / Not started';
+            $days_active = 0;
+            $days_left = $date_today->diff($end_date_obj)->days;
+            $progress_pct = 0;
+        } elseif ($date_today > $end_date_obj) {
+            $internship_state = 'completed';
+            $state_badge_text = 'Completed';
+            $state_badge_class = 'bg-emerald-50 text-emerald-700 border-emerald-100';
+            $banner_message = 'Your internship has been completed successfully. You can review your progress and outcomes below.';
+            $phase_display = 'Completed';
+            $days_active = max(0, $date_start->diff($date_today)->days + 1);
+            $days_left = 0;
+            $progress_pct = 100;
+        } else {
+            $internship_state = 'active';
+            $state_badge_text = 'Active Intern';
+            $state_badge_class = 'bg-emerald-50 text-emerald-700 border-emerald-100';
+            $banner_message = 'Your internship has started. Stay consistent, log daily, and grow every day.';
+            $phase_display = $active_intern['current_phase_label'] ?? $phases[$current_phase_num]['label'];
+            $days_active = $date_start->diff($date_today)->days + 1;
+            if ($date_today < $date_start) {
+                $days_active = 0;
+            }
+        }
     }
 }
 
@@ -402,7 +582,7 @@ $all_logs_sql    = "SELECT * FROM daily_logs WHERE user_id = '$user_id' ORDER BY
 $all_logs_result = mysqli_query($conn, $all_logs_sql);
 
 // Fetch application status history for timeline
-$timeline_app_sql = "SELECT a.id as app_id, a.status, a.applied_date, a.test_score, a.education_status,
+$timeline_app_sql = "SELECT a.id as app_id, a.status, a.applied_date, a.education_status,
                             COALESCE(i.title, a.internship_name) as title
                      FROM internship_applications a
                      LEFT JOIN internships i ON a.internship_id = i.id AND a.internship_id > 0
@@ -426,14 +606,29 @@ $feedback_result = mysqli_query($conn, $feedback_sql);
 $feedback_count  = mysqli_num_rows($feedback_result);
 
 // Fetch ALL notifications
+$notification_columns = [];
+$notification_cols_res = mysqli_query($conn, "SHOW COLUMNS FROM notifications");
+if ($notification_cols_res) {
+    while ($notification_col_row = mysqli_fetch_assoc($notification_cols_res)) {
+        $notification_columns[$notification_col_row['Field']] = true;
+    }
+}
+
+$sender_join_sql = isset($notification_columns['sender_id']) ? "LEFT JOIN users u ON u.id = n.sender_id" : '';
+$sender_name_sql = isset($notification_columns['sender_id']) ? 'u.full_name AS sender_name' : 'NULL AS sender_name';
+$attachment_path_sql = isset($notification_columns['attachment_path']) ? 'n.attachment_path' : 'NULL AS attachment_path';
+$attachment_name_sql = isset($notification_columns['attachment_name']) ? 'n.attachment_name' : 'NULL AS attachment_name';
+$attachment_size_sql = isset($notification_columns['attachment_size']) ? 'n.attachment_size' : 'NULL AS attachment_size';
+$attachment_type_sql = isset($notification_columns['attachment_type']) ? 'n.attachment_type' : 'NULL AS attachment_type';
+
 $all_notif_sql    = "
-    SELECT id, user_id, type, message, is_read, created_at, NULL AS title, NULL AS sender_name
+    SELECT id, user_id, type, message, is_read, created_at, NULL AS title, NULL AS sender_name, NULL AS attachment_path, NULL AS attachment_name, NULL AS attachment_size, NULL AS attachment_type, 'student' AS source_table
     FROM student_notifications
     WHERE user_id = '$user_id'
     UNION ALL
-    SELECT n.id, n.user_id, n.type, n.message, n.is_read, n.created_at, n.title, u.full_name AS sender_name
+    SELECT n.id, n.user_id, n.type, n.message, n.is_read, n.created_at, n.title, $sender_name_sql, $attachment_path_sql, $attachment_name_sql, $attachment_size_sql, $attachment_type_sql, 'global' AS source_table
     FROM notifications n
-    LEFT JOIN users u ON u.id = n.sender_id
+    $sender_join_sql
     WHERE n.user_id = '$user_id'
     ORDER BY created_at DESC
 ";
@@ -443,26 +638,43 @@ $all_notif_result = mysqli_query($conn, $all_notif_sql);
 if ($has_active) {
     $phases            = $active_intern['phases'];
     $current_phase_num = $active_intern['current_phase_num'];
-    
-    $start_date_str = !empty($active_intern['start_date']) ? $active_intern['start_date'] : $active_intern['applied_date'];
-    $start_date_obj = new DateTime($start_date_str);
-    
-    $end_date = !empty($active_intern['end_date']) ? new DateTime($active_intern['end_date']) : clone $start_date_obj;
-    if (empty($active_intern['end_date'])) {
+
+    $start_date_str = !empty($active_intern['start_date']) ? $active_intern['start_date'] : null;
+    $start_date_obj = null;
+    if (!empty($start_date_str)) {
+        $start_date_obj = new DateTime($start_date_str);
+        $start_date_obj->setTime(0, 0, 0);
+    }
+
+    $end_date = !empty($active_intern['end_date']) ? new DateTime($active_intern['end_date']) : (clone $start_date_obj ?: new DateTime());
+    if (!empty($active_intern['end_date'])) {
+        $end_date->setTime(0, 0, 0);
+    } elseif ($start_date_obj) {
+        $end_date->setTime(0, 0, 0);
         $end_date->modify('+3 months');
     }
-    
+
     $date_today = new DateTime();
-    $total_days = max(1, $start_date_obj->diff($end_date)->days);
-    
-    if ($date_today < $start_date_obj) {
-        $progress_pct = 0;
+    $date_today->setTime(0, 0, 0);
+
+    if ($start_date_obj) {
+        $total_days = max(1, $start_date_obj->diff($end_date)->days);
+
+        if ($date_today < $start_date_obj) {
+            $progress_pct = 0;
+        } elseif ($date_today > $end_date) {
+            $progress_pct = 100;
+        } else {
+            $progress_pct = min(100, round(($start_date_obj->diff($date_today)->days / $total_days) * 100));
+        }
+
+        $days_left = ($date_today > $end_date) ? 0 : $date_today->diff($end_date)->days;
     } else {
-        $progress_pct = min(100, round(($start_date_obj->diff($date_today)->days / $total_days) * 100));
+        $progress_pct = 0;
+        $days_left = 0;
     }
-    
-    $days_left = ($date_today > $end_date) ? 0 : $date_today->diff($end_date)->days;
-    $is_completed = ($date_today >= $end_date || strtolower($active_intern['status']) === 'completed');
+
+    $is_completed = ($start_date_obj && $date_today > $end_date) || strtolower($active_intern['status']) === 'completed';
 } else {
     $phases            = [];
     $current_phase_num = 0;
@@ -527,9 +739,18 @@ if ($has_active) {
 <?php
 $success_message = '';
 if (isset($_GET['msg'])) {
-    $success_message = $_GET['msg'];
+    $msg_map = [
+        'profile_updated' => 'Profile saved successfully! Welcome to your dashboard.',
+        'profile_saved'   => 'Profile saved successfully!',
+    ];
+    $raw_msg = $_GET['msg'];
+    $success_message = isset($msg_map[$raw_msg]) ? $msg_map[$raw_msg] : htmlspecialchars($raw_msg);
 } elseif (isset($_GET['success'])) {
-    $success_message = 'Daily log submitted successfully.';
+    // Use the actual message from the URL if it's a non-empty string, otherwise fall back to generic
+    $raw_success = trim($_GET['success']);
+    $success_message = ($raw_success !== '' && $raw_success !== '1')
+        ? htmlspecialchars($raw_success)
+        : 'Daily log submitted successfully.';
 } elseif (isset($_GET['deleted'])) {
     $success_message = 'Today’s daily log deleted successfully.';
 } elseif (isset($_GET['edited'])) {
@@ -775,12 +996,12 @@ if (isset($_GET['warning'])) {
         <div>
           <p class="text-blue-200 text-[10px] font-bold uppercase tracking-widest mb-1">Intern Workspace</p>
           <h1 class="text-2xl font-extrabold text-white tracking-tight">Welcome, <?php echo htmlspecialchars($profile['full_name']); ?>! 🎉</h1>
-          <p class="text-blue-200 text-sm mt-1">Your internship has started. Stay consistent, log daily, and grow every day.</p>
+          <p class="text-blue-200 text-sm mt-1"><?php echo htmlspecialchars($banner_message); ?></p>
         </div>
         <div class="shrink-0">
           <span class="flex items-center gap-2 bg-white/20 border border-white/30 px-4 py-2.5 rounded-xl text-white text-sm font-bold">
-            <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
-            Status: Active Intern
+            <span class="w-2.5 h-2.5 rounded-full <?php echo $internship_state === 'active' ? 'bg-emerald-400' : ($internship_state === 'completed' ? 'bg-blue-400' : 'bg-amber-400'); ?> animate-ping"></span>
+            Status: <?php echo htmlspecialchars($state_badge_text); ?>
           </span>
         </div>
       </div>
@@ -794,21 +1015,17 @@ if (isset($_GET['warning'])) {
             <div class="w-11 h-11 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center">
               <span class="material-symbols-outlined text-[24px]">badge</span>
             </div>
-            <span class="px-2.5 py-1 bg-emerald-50 text-emerald-700 text-[10px] font-extrabold rounded-full uppercase border border-emerald-100">Started</span>
+            <span class="px-2.5 py-1 <?php echo htmlspecialchars($state_badge_class); ?> text-[10px] font-extrabold rounded-full uppercase border"><?php echo htmlspecialchars($state_badge_text); ?></span>
           </div>
           <div>
             <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Internship</p>
-            <h3 class="text-base font-extrabold text-slate-800 mt-0.5 leading-snug"><?php echo htmlspecialchars($active_intern['title']); ?></h3>
+            <h3 class="text-base font-extrabold text-slate-800 mt-0.5 leading-snug"><?php echo htmlspecialchars(!empty($active_intern['project_subtype']) ? $active_intern['project_subtype'] : 'Internship Not Assigned'); ?></h3>
           </div>
           <div class="grid grid-cols-2 gap-3 text-xs border-t border-slate-100 pt-4">
             <div><p class="text-slate-400 font-semibold">Start Date</p><p class="font-bold text-slate-700 mt-0.5"><?php echo !empty($active_intern['start_date']) || !empty($active_intern['applied_date']) ? date('M d, Y', strtotime($active_intern['start_date'] ?: $active_intern['applied_date'])) : 'Not available'; ?></p></div>
             <div><p class="text-slate-400 font-semibold">End Date</p><p class="font-bold text-slate-700 mt-0.5"><?php echo $d_end->format('M d, Y'); ?></p></div>
             <div><p class="text-slate-400 font-semibold">Duration</p><p class="font-bold text-slate-700 mt-0.5"><?php echo !empty($active_intern['duration'])?htmlspecialchars($active_intern['duration']):'3 Months'; ?></p></div>
             <div><p class="text-slate-400 font-semibold">Mode</p><p class="font-bold text-slate-700 mt-0.5 capitalize"><?php echo !empty($active_intern['mode'])?htmlspecialchars($active_intern['mode']):'Hybrid'; ?></p></div>
-          </div>
-          <div class="bg-blue-50 border border-blue-100 rounded-xl px-4 py-2.5 flex items-center justify-between text-xs">
-            <span class="text-blue-500 font-semibold">Current Phase</span>
-            <span class="font-extrabold text-blue-800"><?php echo htmlspecialchars($phases[$current_phase_num]['label']); ?></span>
           </div>
           <div>
             <div class="flex justify-between text-xs mb-1.5">
@@ -848,7 +1065,7 @@ if (isset($_GET['warning'])) {
           <div class="bg-blue-50 border border-blue-100 rounded-xl px-4 py-2.5 flex items-center gap-2 text-sm">
             <span class="material-symbols-outlined text-blue-500 text-[18px]">layers</span>
             <span class="text-blue-600 font-semibold text-xs">Current Phase:</span>
-            <span class="font-extrabold text-blue-800 text-xs"><?php echo htmlspecialchars($phases[$current_phase_num]['label']); ?></span>
+            <span class="font-extrabold text-blue-800 text-xs"><?php echo htmlspecialchars($phase_display); ?></span>
           </div>
           <div class="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-4 text-xs">
             <div class="flex items-center gap-2">
@@ -1181,29 +1398,23 @@ if (isset($_GET['warning'])) {
               <tbody class="divide-y divide-slate-50">
                 <?php foreach(array_slice($app_rows,0,5) as $app):
                   $st=$app['status'];
-                  $bg=match(true){
-                    in_array($st,['Started','Active Intern','Internship Started','Selected'])=>'bg-emerald-100 text-emerald-700',
-                    in_array($st,['Approved','Accepted','Shortlisted','HOD Approved'])=>'bg-blue-100 text-blue-700',
-                    in_array($st,['Rejected','Declined'])=>'bg-red-100 text-red-600',
-                    in_array($st,['HR Round','Test Completed','HR Screening'])=>'bg-indigo-100 text-indigo-700',
-                    default=>'bg-slate-100 text-slate-600',
-                  };
+                  $badge_info = getStatusBadge($st);
+                  $bg = $badge_info['color'] . " border";
+                  $label = $badge_info['label'];
                 ?>
                 <tr class="hover:bg-slate-50 transition-colors">
                   <?php
-                    $is_selected_or_approved = in_array($app['status'], ['Selected', 'Started', 'Internship Started', 'Active Intern']);
-                    $display_title = $is_selected_or_approved 
+                    $is_assigned = in_array($app['status'], ['Project Assigned', 'Internship Active', 'Started', 'Internship Started', 'Active Intern']);
+                    $display_title = $is_assigned 
                         ? $app['title'] 
-                        : (!empty($app['project_type']) && !empty($app['project_subtype']) 
-                            ? $app['project_type'] . ' - ' . $app['project_subtype'] 
+                        : (!empty($app['applied_subtype']) 
+                            ? $app['applied_subtype'] 
                             : (!empty($app['project_subtype']) 
                                 ? $app['project_subtype'] 
-                                : (!empty($app['project_type']) 
-                                    ? $app['project_type'] 
-                                    : $app['title'])));
+                                : $app['title']));
                   ?>
                   <td class="py-3 px-3 font-medium text-slate-800 max-w-[180px] truncate"><?php echo htmlspecialchars($display_title); ?></td>
-                  <td class="py-3 px-3"><span class="px-2.5 py-1 rounded-full text-[11px] font-bold <?php echo $bg; ?>"><?php echo htmlspecialchars($st); ?></span></td>
+                  <td class="py-3 px-3"><span class="px-2.5 py-1 rounded-full text-[11px] font-bold <?php echo $bg; ?>"><?php echo htmlspecialchars($label); ?></span></td>
                   <td class="py-3 px-3 text-slate-400 text-xs"><?php echo !empty($app['applied_date']) ? date('M d, Y', strtotime($app['applied_date'])) : 'Not available'; ?></td>
                 </tr>
                 <?php endforeach; ?>
@@ -1220,7 +1431,7 @@ if (isset($_GET['warning'])) {
         <h2 class="text-2xl font-extrabold text-slate-800">Dashboard</h2>
         <p class="text-sm text-slate-400 mt-0.5">Welcome, <?php echo htmlspecialchars($profile['full_name']); ?>! Start your internship journey.</p>
       </div>
-      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 flex items-center gap-3">
           <div class="w-10 h-10 bg-slate-100 text-slate-400 rounded-xl flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-[20px]">badge</span></div>
           <div><p class="text-[10px] text-slate-400 font-bold uppercase tracking-wide">Status</p><p class="text-sm font-extrabold text-slate-400">Not Started</p></div>
@@ -1228,10 +1439,6 @@ if (isset($_GET['warning'])) {
         <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 flex items-center gap-3">
           <div class="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-[20px]">assignment</span></div>
           <div><p class="text-[10px] text-slate-400 font-bold uppercase tracking-wide">Applications</p><p class="text-sm font-extrabold text-slate-800"><?php echo $app_count; ?></p></div>
-        </div>
-        <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 flex items-center gap-3">
-          <div class="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-[20px]">verified</span></div>
-          <div><p class="text-[10px] text-slate-400 font-bold uppercase tracking-wide">Shortlisted</p><p class="text-sm font-extrabold text-slate-800"><?php echo $shortlist_count; ?></p></div>
         </div>
         <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 flex items-center gap-3">
           <div class="w-10 h-10 bg-red-50 text-red-500 rounded-xl flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-[20px]">notifications</span></div>
@@ -1267,29 +1474,23 @@ if (isset($_GET['warning'])) {
               <tbody class="divide-y divide-slate-50">
                 <?php foreach(array_slice($app_rows,0,5) as $app):
                   $st=$app['status'];
-                  $bg=match(true){
-                    in_array($st,['Started','Active Intern','Internship Started','Selected'])=>'bg-emerald-100 text-emerald-700',
-                    in_array($st,['Approved','Accepted','Shortlisted','HOD Approved'])=>'bg-blue-100 text-blue-700',
-                    in_array($st,['Rejected','Declined'])=>'bg-red-100 text-red-600',
-                    in_array($st,['HR Round','Test Completed','HR Screening'])=>'bg-indigo-100 text-indigo-700',
-                    default=>'bg-slate-100 text-slate-600',
-                  };
+                  $badge_info = getStatusBadge($st);
+                  $bg = $badge_info['color'] . " border";
+                  $label = $badge_info['label'];
                 ?>
                 <tr class="hover:bg-slate-50 transition-colors">
                   <?php
-                    $is_selected_or_approved = in_array($app['status'], ['Selected', 'Started', 'Internship Started', 'Active Intern']);
-                    $display_title = $is_selected_or_approved 
+                    $is_assigned = in_array($app['status'], ['Project Assigned', 'Internship Active', 'Started', 'Internship Started', 'Active Intern']);
+                    $display_title = $is_assigned 
                         ? $app['title'] 
-                        : (!empty($app['project_type']) && !empty($app['project_subtype']) 
-                            ? $app['project_type'] . ' - ' . $app['project_subtype'] 
+                        : (!empty($app['applied_subtype']) 
+                            ? $app['applied_subtype'] 
                             : (!empty($app['project_subtype']) 
                                 ? $app['project_subtype'] 
-                                : (!empty($app['project_type']) 
-                                    ? $app['project_type'] 
-                                    : $app['title'])));
+                                : $app['title']));
                   ?>
                   <td class="py-3 px-3 font-medium text-slate-800 max-w-[180px] truncate"><?php echo htmlspecialchars($display_title); ?></td>
-                  <td class="py-3 px-3"><span class="px-2.5 py-1 rounded-full text-[11px] font-bold <?php echo $bg; ?>"><?php echo htmlspecialchars($st); ?></span></td>
+                  <td class="py-3 px-3"><span class="px-2.5 py-1 rounded-full text-[11px] font-bold <?php echo $bg; ?>"><?php echo htmlspecialchars($label); ?></span></td>
                   <td class="py-3 px-3 text-slate-400 text-xs"><?php echo !empty($app['applied_date']) ? date('M d, Y', strtotime($app['applied_date'])) : 'Not available'; ?></td>
                 </tr>
                 <?php endforeach; ?>
@@ -1310,8 +1511,8 @@ if (isset($_GET['warning'])) {
           <p class="text-sm text-slate-400 mt-0.5">Full details of your active internship and application journey</p>
         </div>
         <?php if ($has_active): ?>
-        <span class="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-xs font-bold uppercase tracking-wide">
-          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping inline-block"></span> Active Intern
+        <span class="flex items-center gap-2 px-4 py-2 <?php echo htmlspecialchars($state_badge_class); ?> border rounded-full text-xs font-bold uppercase tracking-wide">
+          <span class="w-2 h-2 rounded-full <?php echo $internship_state === 'active' ? 'bg-emerald-500' : ($internship_state === 'completed' ? 'bg-blue-500' : 'bg-amber-500'); ?> animate-ping inline-block"></span> <?php echo htmlspecialchars($state_badge_text); ?>
         </span>
         <?php elseif ($is_selected && !$has_project_details): ?>
         <span class="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-xs font-bold uppercase tracking-wide">
@@ -1329,7 +1530,18 @@ if (isset($_GET['warning'])) {
           <p class="text-slate-500 text-sm mb-4">You will see project details after coordinator assignment.</p>
           <?php if (!empty($pending_app)): ?>
           <div class="text-left mx-auto inline-block text-sm text-slate-600 mb-4">
-            <p class="mb-1"><span class="font-semibold">Applied Subtype:</span> <?php echo htmlspecialchars($pending_app['applied_subtype'] ?: 'Not specified'); ?></p>
+            <?php 
+              $applied_internship = '';
+              if (!empty($pending_app['applied_subtype'])) {
+                  $applied_internship = trim($pending_app['applied_subtype']);
+              } elseif (!empty($pending_app['project_subtype'])) {
+                  $applied_internship = trim($pending_app['project_subtype']);
+              }
+              if (empty($applied_internship) || in_array(strtolower($applied_internship), ['internship management platform', 'imp'], true)) {
+                  $applied_internship = 'Not Assigned';
+              }
+            ?>
+            <p class="mb-1"><span class="font-semibold">Applied Internship:</span> <?php echo htmlspecialchars($applied_internship); ?></p>
             <p><span class="font-semibold">Application Status:</span> <?php echo htmlspecialchars($pending_app['status'] ?? 'Pending'); ?></p>
           </div>
           <?php endif; ?>
@@ -1341,6 +1553,19 @@ if (isset($_GET['warning'])) {
         </div>
       <?php else:
         $intern_end = clone $end_date;
+        $resolved_applied_date = !empty($active_intern['applied_date']) ? $active_intern['applied_date'] : null;
+        $display_applied_date = !empty($resolved_applied_date) ? date('M d, Y', strtotime($resolved_applied_date)) : null;
+        $display_start_date = !empty($active_intern['start_date']) || !empty($resolved_applied_date) ? date('M d, Y', strtotime($active_intern['start_date'] ?: $resolved_applied_date)) : null;
+        $internship_subtype_display = !empty($active_intern['project_subtype']) ? $active_intern['project_subtype'] : (!empty($active_intern['applied_subtype']) ? $active_intern['applied_subtype'] : 'Internship Not Assigned');
+        $internship_state_label = $internship_state === 'active' ? 'Active' : ($internship_state === 'completed' ? 'Completed' : 'Upcoming');
+        $status_tile_class = $internship_state === 'active' ? 'bg-emerald-50 border-emerald-100' : ($internship_state === 'completed' ? 'bg-blue-50 border-blue-100' : 'bg-amber-50 border-amber-100');
+        $status_text_class = $internship_state === 'active' ? 'text-emerald-700' : ($internship_state === 'completed' ? 'text-blue-700' : 'text-amber-700');
+        $internship_header_subtitle = '';
+        $normalized_subtype = strtolower(trim($internship_subtype_display));
+        $normalized_domain = strtolower(trim($active_intern['domain'] ?? ''));
+        if (!empty($active_intern['domain']) && $normalized_subtype !== 'web development' && $normalized_domain !== $normalized_subtype) {
+            $internship_header_subtitle = htmlspecialchars($active_intern['domain']);
+        }
       ?>
       <div class="grid grid-cols-1 gap-6">
 
@@ -1352,9 +1577,11 @@ if (isset($_GET['warning'])) {
             <!-- Gradient banner -->
             <div class="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-5 flex items-start justify-between gap-4">
               <div>
-                <p class="text-blue-200 text-[10px] font-bold uppercase tracking-widest mb-1">Internship Title</p>
-                <h3 class="text-xl font-extrabold text-white leading-snug"><?php echo htmlspecialchars($active_intern['title']); ?></h3>
-                <p class="text-blue-200 text-xs mt-1"><?php echo htmlspecialchars($active_intern['company_name']); ?> · <?php echo htmlspecialchars($active_intern['domain']); ?></p>
+                <p class="text-blue-200 text-[10px] font-bold uppercase tracking-widest mb-1">Internship</p>
+                <h3 class="text-xl font-extrabold text-white leading-snug"><?php echo htmlspecialchars($internship_subtype_display); ?></h3>
+                <?php if ($internship_header_subtitle !== ''): ?>
+                  <p class="text-blue-200 text-xs mt-1"><?php echo $internship_header_subtitle; ?></p>
+                <?php endif; ?>
               </div>
               <div class="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
                 <span class="material-symbols-outlined text-white text-[26px]">badge</span>
@@ -1364,12 +1591,8 @@ if (isset($_GET['warning'])) {
             <div class="p-6">
               <div class="grid grid-cols-2 md:grid-cols-3 gap-5 text-sm">
                 <div class="bg-slate-50 rounded-xl p-3.5 border border-slate-100">
-                  <p class="text-slate-400 text-[10px] font-bold uppercase tracking-wide mb-1">Applied Date</p>
-                  <p class="font-bold text-slate-800"><?php echo !empty($active_intern['applied_date']) ? date('M d, Y', strtotime($active_intern['applied_date'])) : 'Not available'; ?></p>
-                </div>
-                <div class="bg-slate-50 rounded-xl p-3.5 border border-slate-100">
                   <p class="text-slate-400 text-[10px] font-bold uppercase tracking-wide mb-1">Start Date</p>
-                  <p class="font-bold text-slate-800"><?php echo !empty($active_intern['start_date']) || !empty($active_intern['applied_date']) ? date('M d, Y', strtotime($active_intern['start_date'] ?: $active_intern['applied_date'])) : 'Not available'; ?></p>
+                  <p class="font-bold text-slate-800"><?php echo !empty($display_start_date) ? htmlspecialchars($display_start_date) : 'Not available'; ?></p>
                 </div>
                 <div class="bg-slate-50 rounded-xl p-3.5 border border-slate-100">
                   <p class="text-slate-400 text-[10px] font-bold uppercase tracking-wide mb-1">End Date</p>
@@ -1383,21 +1606,9 @@ if (isset($_GET['warning'])) {
                   <p class="text-slate-400 text-[10px] font-bold uppercase tracking-wide mb-1">Mode</p>
                   <p class="font-bold text-slate-800 capitalize"><?php echo !empty($active_intern['mode']) ? htmlspecialchars($active_intern['mode']) : 'Remote'; ?></p>
                 </div>
-                <div class="bg-blue-50 rounded-xl p-3.5 border border-blue-100">
-                  <p class="text-blue-400 text-[10px] font-bold uppercase tracking-wide mb-1">Current Phase</p>
-                  <p class="font-bold text-blue-700"><?php echo htmlspecialchars($phases[$current_phase_num]['label']); ?></p>
-                  <?php if (!empty($phases[$current_phase_num]['start_date']) && !empty($phases[$current_phase_num]['end_date'])): 
-                    $p_start = date('M d, Y', strtotime($phases[$current_phase_num]['start_date']));
-                    $p_end = date('M d, Y', strtotime($phases[$current_phase_num]['end_date']));
-                    $p_end_dt = new DateTime($phases[$current_phase_num]['end_date']);
-                    $today_dt = new DateTime();
-                    $p_left = ($today_dt > $p_end_dt) ? 0 : $today_dt->diff($p_end_dt)->days;
-                  ?>
-                    <p class="text-slate-500 text-[10px] mt-1 font-semibold"><?php echo $p_start; ?> - <?php echo $p_end; ?></p>
-                    <p class="text-blue-600 text-[10px] font-bold mt-0.5"><?php echo $p_left; ?> days remaining for this phase</p>
-                  <?php else: ?>
-                    <p class="text-slate-500 text-[10px] mt-1 font-semibold">No dates set</p>
-                  <?php endif; ?>
+                <div class="<?php echo $status_tile_class; ?> rounded-xl p-3.5 border">
+                  <p class="text-[10px] font-bold uppercase tracking-wide mb-1">Status</p>
+                  <p class="font-bold <?php echo $status_text_class; ?>"><?php echo htmlspecialchars($internship_state_label); ?></p>
                 </div>
               </div>
               <!-- Progress bar -->
@@ -1565,7 +1776,18 @@ if (isset($_GET['warning'])) {
         <p class="text-slate-400 text-sm mb-4">You will see project details after coordinator assignment.</p>
         <?php if (!empty($pending_app)): ?>
         <div class="text-left mx-auto inline-block text-sm text-slate-600">
-          <p class="mb-1"><span class="font-semibold">Applied Subtype:</span> <?php echo htmlspecialchars($pending_app['applied_subtype'] ?: 'Not specified'); ?></p>
+          <?php 
+            $applied_internship_sec = '';
+            if (!empty($pending_app['applied_subtype'])) {
+                $applied_internship_sec = trim($pending_app['applied_subtype']);
+            } elseif (!empty($pending_app['project_subtype'])) {
+                $applied_internship_sec = trim($pending_app['project_subtype']);
+            }
+            if (empty($applied_internship_sec) || in_array(strtolower($applied_internship_sec), ['internship management platform', 'imp'], true)) {
+                $applied_internship_sec = 'Not Assigned';
+            }
+          ?>
+          <p class="mb-1"><span class="font-semibold">Applied Internship:</span> <?php echo htmlspecialchars($applied_internship_sec); ?></p>
           <p><span class="font-semibold">Application Status:</span> <?php echo htmlspecialchars($pending_app['status'] ?? 'Pending'); ?></p>
         </div>
         <?php endif; ?>
@@ -1621,6 +1843,73 @@ if (isset($_GET['warning'])) {
               <p class="text-slate-400 text-xs font-medium">Mentor</p>
               <p class="font-semibold text-slate-700 mt-0.5"><?php echo htmlspecialchars($active_intern['mentor_name'] ?: 'Not Assigned'); ?></p>
             </div>
+          </div>
+          <div class="pt-4 border-t border-slate-50">
+            <p class="text-slate-400 text-xs font-medium mb-3">Team Collaboration</p>
+            <?php if (!empty($assigned_team)): ?>
+            <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+              <div class="rounded-xl border border-slate-100 bg-slate-50/70 p-4">
+                <div class="flex items-center justify-between mb-3">
+                  <h5 class="text-sm font-semibold text-slate-700">Team Members</h5>
+                  <span class="text-xs font-semibold text-slate-400"><?php echo count($team_members); ?> member<?php echo count($team_members) !== 1 ? 's' : ''; ?></span>
+                </div>
+                <?php if (!empty($team_members)): ?>
+                <div class="space-y-2">
+                  <?php foreach ($team_members as $member): ?>
+                  <div class="flex items-start justify-between gap-3 rounded-lg bg-white px-3 py-2 border border-slate-100">
+                    <div>
+                      <p class="text-sm font-semibold text-slate-700"><?php echo htmlspecialchars($member['full_name'] ?: 'Unnamed Member'); ?></p>
+                      <p class="text-xs text-slate-500"><?php echo htmlspecialchars($member['college_name'] ?: 'College N/A'); ?> • <?php echo htmlspecialchars($member['department'] ?: 'Department N/A'); ?></p>
+                    </div>
+                    <?php if (!empty($member['email'])): ?>
+                    <a href="mailto:<?php echo htmlspecialchars($member['email']); ?>" class="text-xs font-semibold text-indigo-600 hover:text-indigo-800">Email</a>
+                    <?php endif; ?>
+                  </div>
+                  <?php endforeach; ?>
+                </div>
+                <?php else: ?>
+                <p class="text-sm text-slate-500">No team members listed yet.</p>
+                <?php endif; ?>
+              </div>
+
+              <div id="team-discussion" class="rounded-xl border border-slate-100 bg-slate-50/70 p-4">
+                <div class="flex items-center justify-between mb-3">
+                  <h5 class="text-sm font-semibold text-slate-700">Team Discussion</h5>
+                  <span class="text-xs font-semibold text-slate-400"><?php echo count($team_messages); ?> message<?php echo count($team_messages) !== 1 ? 's' : ''; ?></span>
+                </div>
+                <?php if (!empty($discussion_posted)): ?>
+                <div class="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">Message posted successfully.</div>
+                <?php endif; ?>
+                <?php if (!empty($discussion_error)): ?>
+                <div class="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"><?php echo htmlspecialchars($discussion_error); ?></div>
+                <?php endif; ?>
+                <form method="POST" class="space-y-3">
+                  <input type="hidden" name="team_message_submit" value="1">
+                  <textarea name="team_message" rows="3" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 outline-none" placeholder="Share a team update, question, or note with your mentor and teammates"></textarea>
+                  <div class="flex justify-end">
+                    <button type="submit" class="px-3 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700">Post Update</button>
+                  </div>
+                </form>
+                <div class="mt-4 space-y-3 max-h-72 overflow-y-auto pr-1">
+                  <?php if (!empty($team_messages)): ?>
+                  <?php foreach ($team_messages as $message): ?>
+                  <div class="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                    <div class="flex items-center justify-between gap-2 mb-1">
+                      <p class="text-sm font-semibold text-slate-700"><?php echo htmlspecialchars($message['sender_name'] ?: ($message['sender_role'] === 'mentor' ? 'Mentor' : 'Team Member')); ?></p>
+                      <p class="text-[11px] text-slate-400"><?php echo htmlspecialchars($message['created_at']); ?></p>
+                    </div>
+                    <p class="text-sm text-slate-600 whitespace-pre-line"><?php echo htmlspecialchars($message['message']); ?></p>
+                  </div>
+                  <?php endforeach; ?>
+                  <?php else: ?>
+                  <p class="text-sm text-slate-500">No discussion updates yet. Start the conversation below.</p>
+                  <?php endif; ?>
+                </div>
+              </div>
+            </div>
+            <?php else: ?>
+            <p class="text-sm text-slate-500">Your team will appear here once your coordinator assigns one.</p>
+            <?php endif; ?>
           </div>
           <div class="grid grid-cols-1 gap-4 pt-4 border-t border-slate-50 text-sm">
             <div>
@@ -1965,7 +2254,7 @@ if (isset($_GET['warning'])) {
                 $checks = [
                   ['label' => 'Internship Started',      'done' => $has_active],
                   ['label' => 'Daily Logs Submitted',    'done' => $total_logs > 0],
-                  ['label' => 'Assessment Completed',    'done' => !empty($active_intern['test_score'] ?? null)],
+                  ['label' => 'Exam Qualified',          'done' => (!empty($active_intern['exam_status']) && $active_intern['exam_status'] === 'Qualified') || (!empty($active_intern['status']) && $active_intern['status'] === 'Qualified')],
                   ['label' => 'Internship Completed',    'done' => $is_completed],
                 ];
               ?>
@@ -2091,7 +2380,7 @@ if (isset($_GET['warning'])) {
               elseif ($df->i >= 1)    $ta = $df->i . 'm ago';
               else                    $ta = 'Just now';
             ?>
-            <div id="notif-card-<?php echo $nid; ?>" data-id="<?php echo $nid; ?>" data-read="<?php echo $unread ? '0' : '1'; ?>"
+            <div id="notif-card-<?php echo $nid; ?>" data-id="<?php echo $nid; ?>" data-read="<?php echo $unread ? '0' : '1'; ?>" data-source="<?php echo htmlspecialchars($nr['source_table'] ?? 'student'); ?>"
                  class="notif-card group bg-white rounded-2xl border <?php echo $unread ? 'border-blue-200' : 'border-slate-100'; ?> shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 overflow-hidden">
               <div class="flex">
                 <div class="w-1 shrink-0 rounded-l-2xl <?php echo $unread ? $tc['dot'] : 'bg-slate-200'; ?>"></div>
@@ -2111,6 +2400,16 @@ if (isset($_GET['warning'])) {
                       <h4 class="text-sm font-bold text-slate-900 mb-0.5"><?php echo htmlspecialchars($nr['title']); ?></h4>
                     <?php endif; ?>
                     <p class="<?php echo !empty($nr['title']) ? 'text-xs text-slate-600' : 'text-sm text-slate-700 ' . ($unread ? 'font-semibold' : 'font-medium'); ?> leading-snug"><?php echo htmlspecialchars($nr['message']); ?></p>
+                    <?php if (!empty($nr['attachment_path'])): ?>
+                        <div class="mt-3 flex items-center gap-2 text-xs bg-slate-50 p-2.5 rounded-xl border border-slate-100 max-w-fit">
+                            <span class="material-symbols-outlined text-[16px] text-gray-500">attachment</span>
+                            <span class="font-semibold text-slate-700"><?php echo htmlspecialchars($nr['attachment_name']); ?></span>
+                            <span class="text-gray-400"> (<?php echo round($nr['attachment_size'] / 1024, 1); ?> KB)</span>
+                            <span class="text-slate-300">|</span>
+                            <a href="<?php echo htmlspecialchars($nr['attachment_path']); ?>" target="_blank" class="text-blue-600 font-bold hover:underline">View</a>
+                            <a href="<?php echo htmlspecialchars($nr['attachment_path']); ?>" download class="text-indigo-600 font-bold hover:underline ml-1">Download</a>
+                        </div>
+                    <?php endif; ?>
                     <?php if (!empty($nr['sender_name'])): ?>
                       <p class="text-[11px] text-indigo-600 font-semibold mt-1.5">From: <?php echo htmlspecialchars($nr['sender_name']); ?></p>
                     <?php endif; ?>
@@ -2428,8 +2727,10 @@ if (isset($_GET['warning'])) {
   // ── Mark single as read ───────────────────────────────────────────────────
   window.notifMarkRead = async function (id, btn) {
     btn.disabled = true;
+    const card = document.getElementById(`notif-card-${id}`);
+    const source = card ? card.dataset.source : 'student';
     try {
-      const res  = await fetch(`mark_notification_read.php?action=read&id=${id}`);
+      const res  = await fetch(`mark_notification_read.php?action=read&id=${id}&source=${source}`);
       const data = await res.json();
       if (data.success) {
         const card = document.getElementById(`notif-card-${id}`);
@@ -2460,8 +2761,10 @@ if (isset($_GET['warning'])) {
   // ── Delete single ─────────────────────────────────────────────────────────
   window.notifDelete = async function (id, btn) {
     btn.disabled = true;
+    const card = document.getElementById(`notif-card-${id}`);
+    const source = card ? card.dataset.source : 'student';
     try {
-      const res  = await fetch(`mark_notification_read.php?action=delete&id=${id}`);
+      const res  = await fetch(`mark_notification_read.php?action=delete&id=${id}&source=${source}`);
       const data = await res.json();
       if (data.success) {
         const card = document.getElementById(`notif-card-${id}`);

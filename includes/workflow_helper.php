@@ -5,6 +5,114 @@
 
 require_once dirname(__DIR__) . '/db.php'; // assumed existing DB connection $conn
 
+function normalize_education_status($value) {
+    $raw = trim((string) ($value ?? ''));
+    if ($raw === '' || strtolower($raw) === 'null' || strtolower($raw) === 'none') {
+        return '';
+    }
+
+    $normalized = preg_replace('/[^a-z0-9]+/', '', strtolower($raw));
+    $pursuing_values = ['pursuing', 'currentlypursuing', 'currentstudent', 'currentlystudying', 'pursuingstudent', 'pursuingcurrentstudent'];
+    $passed_out_values = ['passedout', 'passedoutstudent', 'graduated', 'graduate', 'graduation', 'completed', 'completedgraduated', 'notpursuing', 'passedoutgraduated'];
+
+    if (in_array($normalized, $pursuing_values, true)) {
+        return 'pursuing';
+    }
+
+    if (in_array($normalized, $passed_out_values, true)) {
+        return 'passed_out';
+    }
+
+    return $normalized;
+}
+
+function is_pursuing_student($education_status, $student_type = null) {
+    $normalized = normalize_education_status($education_status);
+    if ($normalized !== '') {
+        return $normalized === 'pursuing';
+    }
+
+    $student_type_normalized = preg_replace('/[^a-z0-9]+/', '', strtolower((string) ($student_type ?? '')));
+    if ($student_type_normalized !== '') {
+        $pursuing_types = ['pursuing', 'currentstudent', 'currentlypursuing', 'currentlystudying', 'pursuingstudent', 'pursuingcurrentstudent'];
+        $passed_out_types = ['passedout', 'passedoutstudent', 'graduated', 'graduate', 'graduation', 'completed', 'passedoutgraduated'];
+        if (in_array($student_type_normalized, $passed_out_types, true)) {
+            return false;
+        }
+        if (in_array($student_type_normalized, $pursuing_types, true)) {
+            return true;
+        }
+    }
+
+    return true;
+}
+
+function is_passed_out_student($education_status, $student_type = null) {
+    return !is_pursuing_student($education_status, $student_type);
+}
+
+function normalize_workflow_status($value) {
+    $raw = trim((string) ($value ?? ''));
+    if ($raw === '' || strtolower($raw) === 'null' || strtolower($raw) === 'none') {
+        return '';
+    }
+
+    $key = preg_replace('/[^a-z0-9]+/', '_', strtolower($raw));
+    $map = [
+        'applied' => 'applied',
+        'hr_review' => 'hr_review',
+        'hr_reviews' => 'hr_review',
+        'shortlisted' => 'shortlisted',
+        'exam_sent' => 'exam_sent',
+        'exam_mail_sent' => 'exam_sent',
+        'exam_mail' => 'exam_sent',
+        'exam_sent_mail' => 'exam_sent',
+        'hod_pending' => 'hod_pending',
+        'hod_approval_pending' => 'hod_pending',
+        'hod_approval' => 'hod_pending',
+        'hod_pending_approval' => 'hod_pending',
+        'hod_approved' => 'hod_approved',
+        'hod_approval_approved' => 'hod_approved',
+        'hod_rejected' => 'hod_rejected',
+        'hod_rejection_rejected' => 'hod_rejected',
+        'selected' => 'selected',
+        'confirmation_letter_sent' => 'selected',
+        'offer_sent' => 'selected',
+        'rejected' => 'rejected',
+    ];
+
+    return $map[$key] ?? $key;
+}
+
+function is_status_key($status, $expected) {
+    return normalize_workflow_status($status) === normalize_workflow_status($expected);
+}
+
+function is_exam_sent_status($status) {
+    return normalize_workflow_status($status) === 'exam_sent';
+}
+
+function is_hod_pending_status($status) {
+    return normalize_workflow_status($status) === 'hod_pending';
+}
+
+function is_hod_approved_status($status) {
+    return normalize_workflow_status($status) === 'hod_approved';
+}
+
+function is_hod_rejected_status($status) {
+    return normalize_workflow_status($status) === 'hod_rejected';
+}
+
+function is_selected_status($status) {
+    return normalize_workflow_status($status) === 'selected';
+}
+
+function is_rejected_status($status) {
+    $normalized = normalize_workflow_status($status);
+    return in_array($normalized, ['rejected', 'hod_rejected'], true);
+}
+
 /**
  * Ensure the `status_audit` table exists and its `id` column is safe.
  */
@@ -157,12 +265,45 @@ function log_status_change($entity, $entity_id, $old_status, $new_status, $extra
 function add_workflow_log($name, $action, $userId, $details = null) {
     global $conn;
     ensure_workflow_logs_schema();
-    $stmt = $conn->prepare(
-        "INSERT INTO workflow_logs (workflow_name, action, performed_by, details) VALUES (?,?,?,?)"
-    );
-    $stmt->bind_param('ssis', $name, $action, $userId, $details);
-    $stmt->execute();
-    $stmt->close();
+
+    try {
+        $existingColumns = [];
+        $colsRes = $conn->query("SHOW COLUMNS FROM workflow_logs");
+        if ($colsRes) {
+            while ($col = $colsRes->fetch_assoc()) {
+                $existingColumns[] = $col['Field'];
+            }
+        }
+
+        $safeName = trim((string) ($name ?? ''));
+        $safeAction = trim((string) ($action ?? ''));
+        $safeUserId = intval($userId);
+        $safeDetails = trim((string) ($details ?? ''));
+
+        if (in_array('workflow_name', $existingColumns, true) && in_array('action', $existingColumns, true) && in_array('performed_by', $existingColumns, true) && in_array('details', $existingColumns, true)) {
+            $stmt = $conn->prepare("INSERT INTO workflow_logs (workflow_name, action, performed_by, details) VALUES (?,?,?,?)");
+            if (!$stmt) {
+                throw new Exception($conn->error);
+            }
+            $stmt->bind_param('ssis', $safeName, $safeAction, $safeUserId, $safeDetails);
+            $stmt->execute();
+            $stmt->close();
+            return true;
+        }
+
+        $notes = $safeName . '|' . $safeAction . '|' . $safeDetails;
+        $stmt = $conn->prepare("INSERT INTO workflow_logs (application_id, candidate_id, old_status, new_status, changed_by, notes) VALUES (0, ?, ?, ?, ?, ?)");
+        if (!$stmt) {
+            throw new Exception($conn->error);
+        }
+        $stmt->bind_param('issis', $safeUserId, $safeAction, $safeName, $safeUserId, $notes);
+        $stmt->execute();
+        $stmt->close();
+        return true;
+    } catch (Throwable $e) {
+        error_log('Workflow log insert failed: ' . $e->getMessage());
+        return false;
+    }
 }
 
 /**

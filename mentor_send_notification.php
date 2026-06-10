@@ -1,6 +1,9 @@
 <?php
 session_start();
 include "db.php";
+require_once "includes/auth.php";
+require_once "includes/mail_helper.php";
+require_once "includes/notification_attachment_helper.php";
 
 // 1. Verify role = mentor
 if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'mentor') {
@@ -15,8 +18,29 @@ $subject = trim($_POST['subject'] ?? '');
 $message = trim($_POST['message'] ?? '');
 
 if ($team_id <= 0 || empty($subject) || empty($message) || empty($student_id_raw)) {
-    header("Location: mentor_notifications.php?error_msg=" . urlencode("All fields are required."));
+    $err = "All fields are required.";
+    if (isset($_POST['ajax'])) {
+        echo json_encode(['success' => false, 'message' => $err]);
+    } else {
+        header("Location: mentor_notifications.php?error_msg=" . urlencode($err));
+    }
     exit();
+}
+
+// Process file upload if any
+$attachment_data = null;
+if (isset($_FILES['attachment']) && $_FILES['attachment']['error'] !== UPLOAD_ERR_NO_FILE) {
+    $upload_err = '';
+    $attachment_res = validateAndUploadNotificationAttachment($_FILES['attachment'], $upload_err);
+    if ($attachment_res === false) {
+        if (isset($_POST['ajax'])) {
+            echo json_encode(['success' => false, 'message' => $upload_err]);
+        } else {
+            header("Location: mentor_notifications.php?error_msg=" . urlencode($upload_err));
+        }
+        exit();
+    }
+    $attachment_data = $attachment_res;
 }
 
 // Fetch mentor name
@@ -62,7 +86,12 @@ if ($student_id_raw === 'all') {
 }
 
 if (empty($students)) {
-    header("Location: mentor_notifications.php?error_msg=" . urlencode("No valid students found in the selected team assigned to you."));
+    $err = "No valid students found in the selected team assigned to you.";
+    if (isset($_POST['ajax'])) {
+        echo json_encode(['success' => false, 'message' => $err]);
+    } else {
+        header("Location: mentor_notifications.php?error_msg=" . urlencode($err));
+    }
     exit();
 }
 
@@ -77,36 +106,64 @@ foreach ($students as $student) {
     // Insert dashboard notification
     $s_link = "student_notifications.php";
     $notif_stmt = $conn->prepare("
-        INSERT INTO notifications (user_id, sender_id, role, title, message, type, is_read, created_at, link)
-        VALUES (?, ?, 'student', ?, ?, 'mentor_message', 0, NOW(), ?)
+        INSERT INTO notifications (user_id, sender_id, role, title, message, type, is_read, created_at, link, attachment_path, attachment_name, attachment_size, attachment_type)
+        VALUES (?, ?, 'student', ?, ?, 'mentor_message', 0, NOW(), ?, ?, ?, ?, ?)
     ");
     if ($notif_stmt) {
-        $notif_stmt->bind_param("iisss", $dest_student_id, $mentor_id, $subject, $message, $s_link);
+        $a_path = $attachment_data ? $attachment_data['path'] : null;
+        $a_name = $attachment_data ? $attachment_data['name'] : null;
+        $a_size = $attachment_data ? intval($attachment_data['size']) : null;
+        $a_type = $attachment_data ? $attachment_data['type'] : null;
+        $notif_stmt->bind_param("iisssssis", $dest_student_id, $mentor_id, $subject, $message, $s_link, $a_path, $a_name, $a_size, $a_type);
         $notif_stmt->execute();
         $notif_stmt->close();
     }
 
-    // Attempt email sending
-    $email_subject = "[IMP Mentor Notification] " . $subject;
-    $email_body = "Hello " . $student_name . ",\n\n" . $message . "\n\nRegards,\n" . $mentor_name . "\nMentor - Internship Management Platform";
-    $headers = "From: no-reply@imp.com\r\n" .
-               "Reply-To: no-reply@imp.com\r\n" .
-               "X-Mailer: PHP/" . phpversion();
+    // Set email attachment if provided
+    if ($attachment_data) {
+        $fullPath = __DIR__ . '/' . $attachment_data['path'];
+        if (file_exists($fullPath)) {
+            $GLOBALS['mail_options_attachments'] = [[
+                'path' => $fullPath,
+                'name' => $attachment_data['name']
+            ]];
+        }
+    }
 
-    // Check if mail server is set up, or suppress warning and capture success
-    if (!empty($student_email)) {
-        @$mail_sent = mail($student_email, $email_subject, $email_body, $headers);
+    // Attempt email sending
+    if (!empty($student_email) && filter_var($student_email, FILTER_VALIDATE_EMAIL)) {
+        $email_err = '';
+        $mail_sent = sendEmailNotification($student_email, "[IMP Mentor Notification] " . $subject, $message, [
+            'recipient_name' => $student_name,
+            'event'          => 'Mentor Notification',
+            'action_url'     => 'http://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . '/IMP/student_notifications.php',
+            'action_label'   => 'View Notifications',
+        ], $email_err);
+
         if (!$mail_sent) {
             $email_failed = true;
         }
     } else {
         $email_failed = true;
     }
+
+    // Clear email attachments global state
+    if ($attachment_data) {
+        unset($GLOBALS['mail_options_attachments']);
+    }
 }
 
-if ($email_failed) {
-    header("Location: mentor_notifications.php?success_msg=" . urlencode("Dashboard notification sent. Email could not be sent because mail server is not configured."));
+if (isset($_POST['ajax'])) {
+    if ($email_failed) {
+        echo json_encode(['success' => true, 'message' => "Dashboard notification sent. Email could not be sent (check mail server setup)."]);
+    } else {
+        echo json_encode(['success' => true, 'message' => "Notification sent successfully."]);
+    }
 } else {
-    header("Location: mentor_notifications.php?success_msg=" . urlencode("Notification sent successfully."));
+    if ($email_failed) {
+        header("Location: mentor_notifications.php?success_msg=" . urlencode("Dashboard notification sent. Email could not be sent (check mail server setup)."));
+    } else {
+        header("Location: mentor_notifications.php?success_msg=" . urlencode("Notification sent successfully."));
+    }
 }
 exit();

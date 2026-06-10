@@ -8,6 +8,7 @@ try {
     session_start();
     include "db.php";
     include_once __DIR__ . "/includes/mail_helper.php";
+    include_once __DIR__ . "/includes/workflow_helper.php";
 
     // Check if user is logged in
     if (!isset($_SESSION['user_id']) || !isset($_SESSION['role'])) {
@@ -16,10 +17,10 @@ try {
     }
 
 $user_id = $_SESSION['user_id'];
-$user_role = $_SESSION['role'];
+$user_role = strtolower(trim($_SESSION['role'] ?? ''));
 
-// Only HR and Coordinator can update status
-if ($user_role !== 'hr' && $user_role !== 'coordinator') {
+// Only HR, Coordinator and Admin can update status
+if ($user_role !== 'hr' && $user_role !== 'coordinator' && $user_role !== 'admin') {
     echo json_encode(['success' => false, 'message' => 'You do not have permission to update application status']);
     exit();
 }
@@ -39,7 +40,8 @@ $app_sql = "SELECT a.id, a.status, a.education_status, a.hod_name, a.hod_email, 
                    a.hod_approval_status, a.user_id, a.internship_id, a.internship_name,
                    COALESCE(i.title, a.internship_name) AS internship_title,
                    u.full_name AS student_name, u.email AS student_email,
-                   sp.hod_name AS sp_hod_name, sp.hod_email AS sp_hod_email, sp.hod_phone AS sp_hod_phone
+                   sp.hod_name AS sp_hod_name, sp.hod_email AS sp_hod_email, sp.hod_phone AS sp_hod_phone,
+                   sp.student_type
             FROM internship_applications a
             LEFT JOIN internships i ON a.internship_id = i.id AND a.internship_id > 0
             LEFT JOIN users u ON a.user_id = u.id
@@ -54,6 +56,7 @@ if (!$app_result || mysqli_num_rows($app_result) == 0) {
 
 $app = mysqli_fetch_assoc($app_result);
 $old_status       = $app['status'];
+$old_status_key   = normalize_workflow_status($old_status);
 $education_status = $app['education_status'] ?? '';
 $student_user_id  = intval($app['user_id']);
 $internship_title = $app['internship_title'] ?? 'Internship';
@@ -64,24 +67,47 @@ $hod_name  = !empty($app['hod_name'])  ? $app['hod_name']  : ($app['sp_hod_name'
 $hod_email = !empty($app['hod_email']) ? $app['hod_email'] : ($app['sp_hod_email'] ?? '');
 $hod_phone = !empty($app['hod_phone']) ? $app['hod_phone'] : ($app['sp_hod_phone'] ?? '');
 
-// Validate status transition based on role
 $allowed_statuses = [];
 if ($user_role === 'hr') {
-    $allowed_statuses = ['HR Review', 'HOD Approval Pending', 'Selected', 'Rejected', 'Test Completed', 'HR Round'];
-} elseif ($user_role === 'coordinator') {
-    $allowed_statuses = ['HR Review', 'HOD Approval Pending', 'Selected', 'Rejected', 'Test Completed', 'HR Round', 'Active Intern'];
+    $allowed_statuses = ['Applied', 'HR Review', 'Shortlisted', 'Exam Mail Sent', 'HOD Pending', 'HOD Approved', 'Selected', 'Rejected'];
+} elseif ($user_role === 'coordinator' || $user_role === 'admin') {
+    $allowed_statuses = ['Applied', 'HR Review', 'Shortlisted', 'Exam Mail Sent', 'HOD Pending', 'HOD Approved', 'Selected', 'Project Assigned', 'Active Intern', 'Rejected', 'Completed'];
 }
+
+// Log status transition attempt
+$log_dir = __DIR__ . '/logs';
+if (!file_exists($log_dir)) {
+    mkdir($log_dir, 0777, true);
+}
+$permission_result = in_array($new_status, $allowed_statuses) ? 'Allowed' : 'Denied';
+$timestamp = date('Y-m-d H:i:s');
+$log_entry = "[$timestamp] User ID: $user_id | Role: $user_role | App ID: $app_id | Current Status: $old_status | Target Status: $new_status | Permission Result: $permission_result\n";
+file_put_contents($log_dir . '/workflow_debug.log', $log_entry, FILE_APPEND);
 
 if (!in_array($new_status, $allowed_statuses)) {
     echo json_encode(['success' => false, 'message' => 'Invalid status transition']);
     exit();
 }
 
+// Enforce status flow constraints
+if ($new_status === 'Selected') {
+    if (!in_array($old_status_key, ['exam_sent', 'hod_approved', 'selected'], true)) {
+        echo json_encode(['success' => false, 'message' => 'Cannot select candidate before sending exam mail or completing HOD approval.']);
+        exit();
+    }
+}
+if ($new_status === 'HOD Pending') {
+    if (!is_exam_sent_status($old_status)) {
+        echo json_encode(['success' => false, 'message' => 'Cannot request HOD approval before sending exam mail.']);
+        exit();
+    }
+}
+
 // ── HOD Approval Email flow ────────────────────────────────────────────────
-if ($new_status === 'HOD Approval Pending') {
-    // Only applicable for Currently Pursuing students
-    if ($education_status !== 'Currently Pursuing' && $education_status !== 'Pursuing') {
-        echo json_encode(['success' => false, 'message' => 'HOD approval is only required for Currently Pursuing students']);
+if ($new_status === 'HOD Pending') {
+    // Only applicable for currently pursuing students
+    if (is_passed_out_student($education_status, $app['student_type'] ?? null)) {
+        echo json_encode(['success' => false, 'message' => 'HOD approval is not required for passed-out or graduated students']);
         exit();
     }
 
@@ -94,9 +120,9 @@ if ($new_status === 'HOD Approval Pending') {
     $hod_token = bin2hex(random_bytes(32));
     $esc_token = mysqli_real_escape_string($conn, $hod_token);
 
-    // Update application with HOD Approval Pending and token
+    // Update application with HOD Pending and token
     $update_hod_sql = "UPDATE internship_applications SET
-        status = 'HOD Approval Pending',
+        status = 'HOD Pending',
         hod_approval_status = 'Pending',
         hod_status = 'pending',
         hod_token = '$esc_token',
@@ -186,7 +212,7 @@ if ($new_status === 'HOD Approval Pending') {
     $notes_escaped = mysqli_real_escape_string($conn, "HOD approval email sent to: $hod_email");
     mysqli_query($conn, "INSERT INTO application_status_history 
         (application_id, old_status, new_status, updated_by_role, updated_by_name, notes)
-        VALUES ($app_id, '$old_status', 'HOD Approval Pending', '$user_role', '$updated_by_name', '$notes_escaped')");
+        VALUES ($app_id, '$old_status', 'HOD Pending', '$user_role', '$updated_by_name', '$notes_escaped')");
 
     // Notify the student
     $student_subject = "Your application is pending HOD approval";
@@ -204,23 +230,32 @@ if ($new_status === 'HOD Approval Pending') {
     mysqli_query($conn, "INSERT INTO student_notifications (user_id, title, type, message)
         VALUES ($student_user_id, 'HOD Approval Requested', 'info', '$notif_msg')");
 
-    echo json_encode(['success' => true, 'message' => "HOD approval email sent to $hod_email. Status updated to HOD Approval Pending."]);
+    echo json_encode(['success' => true, 'message' => "HOD approval email sent to $hod_email. Status updated to HOD Pending."]);
     exit();
 }
 
-// ── Block direct selection of Pursuing students without HOD approval ────────
-if ($new_status === 'Selected' && ($education_status === 'Currently Pursuing' || $education_status === 'Pursuing')) {
-    $current_hod_status = $app['hod_approval_status'] ?? 'Pending';
-    if ($current_hod_status !== 'Approved' && $app['status'] !== 'HOD Approved') {
-        echo json_encode(['success' => false, 'message' => 'Cannot select this student. HOD approval is required for Pursuing students. Please send HOD approval email first.']);
-        exit();
+// ── Block direct selection of pursuing students without HOD approval ────────────
+if ($new_status === 'Selected') {
+    $is_pursuing_be = is_pursuing_student($education_status, $app['student_type'] ?? null);
+
+    if ($is_pursuing_be) {
+        $current_hod_status = $app['hod_approval_status'] ?? '';
+        if (strtolower($current_hod_status) !== 'approved' && $old_status !== 'HOD Approved') {
+            echo json_encode(['success' => false, 'message' => 'Cannot select this candidate. Please complete HOD approval first (Send for HOD Approval → HOD Approved → then Select).']);
+            exit();
+        }
     }
 }
 
 // ── Standard status update ────────────────────────────────────────────────
-$new_status_escaped = mysqli_real_escape_string($conn, $new_status);
-$selected_at_sql = ($new_status === 'Selected') ? ", selected_by = $user_id, selected_at = NOW()" : '';
-$final_status_sql = ($new_status === 'Selected' || $new_status === 'Rejected') ? ", final_selection_status = '$new_status_escaped'" : '';
+$normalized_status = $new_status;
+if (in_array(strtolower(trim($new_status)), ['confirmation letter sent', 'confirmation_letter_sent', 'offer sent', 'offer_sent'])) {
+    $normalized_status = 'Selected';
+}
+
+$new_status_escaped = mysqli_real_escape_string($conn, $normalized_status);
+$selected_at_sql  = ($normalized_status === 'Selected') ? ", selected_by = $user_id, selected_at = NOW()" : '';
+$final_status_sql = ($normalized_status === 'Selected' || $normalized_status === 'Rejected') ? ", final_selection_status = '$new_status_escaped'" : '';
 $update_sql = "UPDATE internship_applications SET status = '$new_status_escaped' $selected_at_sql $final_status_sql WHERE id = $app_id";
 
 if (mysqli_query($conn, $update_sql)) {
@@ -253,115 +288,52 @@ if (mysqli_query($conn, $update_sql)) {
     $notes_escaped = mysqli_real_escape_string($conn, $notes ?: "Status updated by $user_role");
     $history_sql = "INSERT INTO application_status_history 
                         (application_id, old_status, new_status, updated_by_role, updated_by_name, notes) 
-                    VALUES ($app_id, '$old_status', '$new_status', '$user_role', '$updated_by_name', '$notes_escaped')";
+                    VALUES ($app_id, '$old_status', '$new_status_escaped', '$user_role', '$updated_by_name', '$notes_escaped')";
     mysqli_query($conn, $history_sql);
 
     // Post-update actions
-    $student_subject = "Application Update: $new_status";
-    $student_message = "Dear $student_name,\n\nYour internship application for \"$internship_title\" has been updated to \"$new_status\".\n\nPlease log in to the platform for the latest details and next steps.\n\nBest regards,\nIMP Team";
+    $student_subject = "Application Update: $normalized_status";
+    $student_message = "Dear $student_name,\n\nYour internship application for \"$internship_title\" has been updated to \"$normalized_status\".\n\nPlease log in to the platform for the latest details and next steps.\n\nBest regards,\nIMP Team";
     $notif_title = 'Application Status Updated';
     $notif_type = 'info';
-    $notif_msg = "Your application status has changed to \"$new_status\".";
+    $notif_msg = "Your application status has changed to \"$normalized_status\".";
 
-    switch ($new_status) {
+    switch ($normalized_status) {
         case 'HR Review':
             $student_subject = "Your application is under HR review";
             $student_message = "Dear $student_name,\n\nYour application for \"$internship_title\" is now under HR review. We will notify you once there is an update.\n\nBest regards,\nIMP Team";
             $notif_title = 'HR Review';
             break;
-        case 'HR Round':
-            $student_subject = "Your application has moved to the HR Round";
-            $student_message = "Dear $student_name,\n\nGood news! Your application for \"$internship_title\" has progressed to the HR Round. Please stay prepared for next steps.\n\nBest regards,\nIMP Team";
-            $notif_title = 'HR Round';
-            break;
-        case 'Test Completed':
-            $student_subject = "Your application status is now Test Completed";
-            $student_message = "Dear $student_name,\n\nYour application for \"$internship_title\" is now marked as Test Completed. We will review the results and update you shortly.\n\nBest regards,\nIMP Team";
-            $notif_title = 'Test Completed';
+        case 'Shortlisted':
+            $student_subject = "Your application has been shortlisted";
+            $student_message = "Dear $student_name,\n\nYour application for \"$internship_title\" has been shortlisted and will be considered for the next phase of the internship process.\n\nWe will update you with the next steps soon.\n\nBest regards,\nIMP Team";
+            $notif_title = 'Shortlisted';
             $notif_type = 'success';
+            break;
+        case 'Exam Mail Sent':
+            $student_subject = "Exam Details for " . $internship_title;
+            $student_message = "Dear $student_name,\n\nYour application for \"$internship_title\" has progressed and the HR team has sent you the exam details. Please check your dashboard.\n\nBest regards,\nIMP Team";
+            $notif_title = 'Exam Mail Sent';
+            $notif_type  = 'info';
+            $notif_msg   = "Your exam details have been sent. Please check your dashboard.";
             break;
         case 'Selected':
             $student_subject = "Congratulations! You have been selected for the internship";
-            $student_message = "Dear $student_name,\n\nWe are pleased to inform you that you have been selected for the internship: \"$internship_title\". Please find your Confirmation Letter attached.\n\nNote: Project allocation, team formation, and mentor assignment will be communicated separately by the Coordinator.\n\nBest regards,\nIMP Team";
+            $student_message = "Dear $student_name,\n\nWe are pleased to inform you that you have been selected for the internship: \"$internship_title\".\n\nThe HR team will send your confirmation letter separately once it is ready.\n\nPlease note: Project allocation, team formation, and mentor assignment will be communicated separately by the Coordinator.\n\nBest regards,\nIMP Team";
             $notif_title = 'Internship Selected';
             $notif_type = 'success';
-
-            // Generate PDF
-            require_once __DIR__ . '/includes/fpdf.php';
-            $pdf = new FPDF();
-            $pdf->AddPage();
-            
-            // Header
-            $pdf->SetFont('Arial', 'B', 24);
-            $pdf->SetTextColor(0, 74, 198); // Blue
-            $pdf->Cell(0, 15, 'IMP', 0, 1, 'C');
-            $pdf->SetFont('Arial', 'B', 14);
-            $pdf->SetTextColor(50, 50, 50);
-            $pdf->Cell(0, 10, 'Internship Management Platform', 0, 1, 'C');
-            $pdf->Ln(10);
-            
-            // Title
-            $pdf->SetFont('Arial', 'B', 16);
-            $pdf->SetTextColor(0, 0, 0);
-            $pdf->Cell(0, 10, 'INTERNSHIP SELECTION CONFIRMATION LETTER', 0, 1, 'C');
-            $pdf->Ln(10);
-            
-            // Details
-            $pdf->SetFont('Arial', '', 12);
-            $ref_no = 'IMP/' . date('Y') . '/' . str_pad($app_id, 4, '0', STR_PAD_LEFT);
-            $pdf->Cell(0, 8, 'Reference No: ' . $ref_no, 0, 1);
-            $pdf->Cell(0, 8, 'Date: ' . date('F j, Y'), 0, 1);
-            $pdf->Ln(5);
-            
-            $pdf->Cell(0, 8, 'Student Name: ' . $student_name, 0, 1);
-            $pdf->Cell(0, 8, 'Student Email: ' . ($app['student_email'] ?? ''), 0, 1);
-            $pdf->Cell(0, 8, 'Application ID: ' . $app_id, 0, 1);
-            $pdf->Cell(0, 8, 'Status: SELECTED', 0, 1);
-            $pdf->Ln(10);
-            
-            // Body
-            $pdf->SetFont('Arial', '', 12);
-            $msg = "Dear $student_name,\n\nWe are pleased to inform you that your application for the internship position \"$internship_title\" has been successful. You have been officially selected for this role.\n\nPlease note: Project allocation, team formation, and mentor assignment will be communicated separately by the Coordinator. You do not need to take any action regarding these assignments until further notice.\n\nCongratulations on your selection!";
-            $pdf->MultiCell(0, 8, $msg);
-            $pdf->Ln(20);
-            
-            // Signature
-            $pdf->SetFont('Arial', 'B', 12);
-            $pdf->Cell(0, 8, 'Best Regards,', 0, 1);
-            $pdf->Cell(0, 8, 'HR Team, IMP', 0, 1);
-            $pdf->Ln(10);
-            
-            $pdf->SetFont('Arial', 'I', 10);
-            $pdf->SetTextColor(100, 100, 100);
-            $pdf->Cell(0, 10, 'This is a system-generated confirmation letter. No signature is required.', 0, 1, 'C');
-            
-            // Save PDF temporarily
-            $pdf_filename = 'Confirmation_Letter_' . $app_id . '.pdf';
-            $temp_pdf_path = sys_get_temp_dir() . DIRECTORY_SEPARATOR . $pdf_filename;
-            
-            $pdf->Output('F', $temp_pdf_path);
-            
-            // Upload to Cloudinary
-            require_once __DIR__ . '/includes/cloudinary_config.php';
-            try {
-                $secure_url = uploadToCloudinary($temp_pdf_path, 'offer_letters', true);
-            } catch (Exception $e) {
-                @unlink($temp_pdf_path);
-                echo json_encode(['success' => false, 'message' => 'Failed to upload confirmation letter: ' . $e->getMessage()]);
-                exit();
-            }
-            
-            // Delete temp file
-            @unlink($temp_pdf_path);
-            
-            // Update DB
-            $esc_pdf_path = mysqli_real_escape_string($conn, $secure_url);
-            mysqli_query($conn, "UPDATE internship_applications SET confirmation_letter_path = '$esc_pdf_path', confirmation_letter_sent_at = NOW() WHERE id = $app_id");
-            
-            // Attach to email
-            $GLOBALS['mail_options_attachments'] = [
-                ['path' => $secure_url, 'name' => $pdf_filename]
-            ];
+            break;
+        case 'Project Assigned':
+            $student_subject = "Project Assigned";
+            $student_message = "Dear $student_name,\n\nYour project and mentor have been assigned for \"$internship_title\". Please log in to your dashboard to start the internship.\n\nBest regards,\nIMP Team";
+            $notif_title = 'Project Assigned';
+            $notif_type = 'success';
+            break;
+        case 'Internship Active':
+            $student_subject = "Your internship is now active";
+            $student_message = "Dear $student_name,\n\nYour internship for \"$internship_title\" is now active. Please log your daily logs regularly.\n\nBest regards,\nIMP Team";
+            $notif_title = 'Internship Active';
+            $notif_type = 'success';
             break;
         case 'Rejected':
             $student_subject = "Update: Internship application not selected";
@@ -386,7 +358,8 @@ if (mysqli_query($conn, $update_sql)) {
 
     $notif_msg = mysqli_real_escape_string($conn, $notif_msg);
     mysqli_query($conn, "INSERT INTO student_notifications (user_id, title, type, message) VALUES ($student_user_id, '$notif_title', '$notif_type', '$notif_msg')");
-    echo json_encode(['success' => true, 'message' => "Application status updated to $new_status."]); 
+    $response_message = ($normalized_status === 'Selected') ? 'Candidate selected successfully.' : "Application status updated to $new_status.";
+    echo json_encode(['success' => true, 'message' => $response_message]); 
     exit();
 } else {
     echo json_encode(['success' => false, 'message' => 'Failed to update status: ' . mysqli_error($conn)]);

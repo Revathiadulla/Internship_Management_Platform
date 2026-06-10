@@ -1,5 +1,7 @@
 <?php
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 if (!isset($_SESSION['user_id']) || !isset($_SESSION['role']) || strtolower($_SESSION['role']) !== 'admin') {
     header("Location: login.php?error=" . urlencode("Unauthorized access. Admin role required."));
     exit();
@@ -221,7 +223,7 @@ $assigned_pct = $total_students > 0 ? round(($active_internships / $total_studen
                       <div class="px-4 py-3 text-center text-xs text-gray-400">No notifications.</div>
                   <?php else: ?>
                       <?php foreach ($admin_latest_notifications as $notif): ?>
-                          <a href="admin_received_notifications.php" class="block px-4 py-2.5 hover:bg-gray-50 transition-colors">
+                          <a href="admin_notifications.php" class="block px-4 py-2.5 hover:bg-gray-50 transition-colors">
                               <div class="flex justify-between items-start gap-1">
                                   <span class="text-[9px] font-bold uppercase tracking-wider text-gray-400"><?php echo htmlspecialchars($notif['title']); ?></span>
                                   <?php if (!$notif['is_read']): ?>
@@ -235,7 +237,7 @@ $assigned_pct = $total_students > 0 ? round(($active_internships / $total_studen
                   <?php endif; ?>
               </div>
               <div class="border-t border-gray-100 pt-1 text-center">
-                  <a href="admin_received_notifications.php" class="block py-2 text-xs font-bold text-blue-600 hover:text-blue-800">View all notifications</a>
+                  <a href="admin_notifications.php" class="block py-2 text-xs font-bold text-blue-600 hover:text-blue-800">View all notifications</a>
               </div>
           </div>
       </div>
@@ -286,8 +288,8 @@ $assigned_pct = $total_students > 0 ? round(($active_internships / $total_studen
             <button onclick="window.location.href='admin_users.php'" class="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium hover:bg-gray-50 hover:shadow-md transition-all shadow-sm cursor-pointer">
               <span class="material-symbols-outlined text-lg">person_add</span> Manage Users
             </button>
-            <button onclick="window.location.href='manual_message.php'" class="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium hover:bg-blue-700 hover:shadow-md transition-all shadow-sm cursor-pointer">
-              <span class="material-symbols-outlined text-lg">chat</span> Send Message
+            <button onclick="window.location.href='admin_notifications.php?tab=compose'" class="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium hover:bg-blue-700 hover:shadow-md transition-all shadow-sm cursor-pointer">
+              <span class="material-symbols-outlined text-lg">notifications</span> Add Notifications
             </button>
           </div>
         </div>

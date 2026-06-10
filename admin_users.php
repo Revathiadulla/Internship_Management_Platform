@@ -5,6 +5,7 @@ if (!isset($_SESSION['user_id']) || !isset($_SESSION['role']) || strtolower($_SE
     exit();
 }
 include "db.php";
+require_once __DIR__ . '/password_validation.php';
 
 // Fetch admin notifications unread count for badge
 $admin_unread_res = mysqli_query($conn, "SELECT COUNT(*) as count FROM notifications WHERE user_id = " . intval($_SESSION['user_id']) . " AND role = 'admin' AND is_read = 0");
@@ -30,6 +31,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (empty($name) || empty($email) || empty($role) || empty($password)) {
                 $error_msg = "Please fill in all required fields.";
             } else {
+                $password_validation = validate_password_strength($password);
+                if (!$password_validation['is_valid']) {
+                    $error_msg = implode(' ', $password_validation['errors']);
+                } else {
                 // Check if email already exists
                 $stmt = mysqli_prepare($conn, "SELECT id FROM users WHERE email = ?");
                 mysqli_stmt_bind_param($stmt, "s", $email);
@@ -49,6 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
                 mysqli_stmt_close($stmt);
+                }
             }
         }
 
@@ -66,6 +72,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (empty($name) || empty($email) || empty($role) || $id <= 0) {
                 $error_msg = "Please fill in all required fields.";
             } else {
+                if ($password !== '') {
+                    $password_validation = validate_password_strength($password);
+                    if (!$password_validation['is_valid']) {
+                        $error_msg = implode(' ', $password_validation['errors']);
+                    }
+                }
+                if ($error_msg === '') {
                 // Check for email collision (excluding current user)
                 $stmt = mysqli_prepare($conn, "SELECT id FROM users WHERE email = ? AND id != ?");
                 mysqli_stmt_bind_param($stmt, "si", $email, $id);
@@ -91,6 +104,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $error_msg = "Failed to update user. Database error.";
                     }
                     mysqli_stmt_close($stmt);
+                }
                 }
             }
         }
@@ -141,12 +155,12 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_profile') {
     $uid = intval($_GET['id']);
     
     // Fetch basic user details
-    $user_res = mysqli_query($conn, "SELECT id, full_name, email, role FROM users WHERE id = $uid LIMIT 1");
+    $user_res = mysqli_query($conn, "SELECT id, full_name, email, role, status, phone, registered_date FROM users WHERE id = $uid LIMIT 1");
     if ($user_res && $user = mysqli_fetch_assoc($user_res)) {
-        $user['status'] = 'Active';
+        $user['status'] = $user['status'] ?: 'Active';
         $user['subscription_status'] = 'N/A';
-        $user['phone'] = 'N/A';
-        $user['created_at'] = 'N/A';
+        $user['phone'] = !empty($user['phone']) ? $user['phone'] : 'N/A';
+        $user['registered_date'] = !empty($user['registered_date']) ? $user['registered_date'] : null;
         $role = strtolower($user['role']);
         $data = ['success' => true, 'user' => $user, 'role' => $role];
         
@@ -159,9 +173,32 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_profile') {
             }
             $data['profile'] = $profile;
             
-            // Fetch student applications
+            // Fetch student applications and resolve the applied internship label
             $apps = [];
-            $apps_res = mysqli_query($conn, "SELECT a.*, COALESCE(i.title, 'General Internship') as title FROM internship_applications a LEFT JOIN internships i ON a.internship_id = i.id WHERE a.user_id = $uid ORDER BY a.id DESC");
+            $has_applied_subtype = mysqli_num_rows(mysqli_query($conn, "SHOW COLUMNS FROM internship_applications LIKE 'applied_subtype'")) > 0;
+            $has_project_subtype_id = mysqli_num_rows(mysqli_query($conn, "SHOW COLUMNS FROM internship_applications LIKE 'project_subtype_id'")) > 0;
+            $has_project_subtype = mysqli_num_rows(mysqli_query($conn, "SHOW COLUMNS FROM internship_applications LIKE 'project_subtype'")) > 0;
+            $has_internship_title = mysqli_num_rows(mysqli_query($conn, "SHOW COLUMNS FROM internship_applications LIKE 'internship_title'")) > 0;
+            $join_clause = "LEFT JOIN internships i ON a.internship_id = i.id";
+            if ($has_project_subtype_id) {
+                $join_clause = "LEFT JOIN project_subtypes ps ON a.project_subtype_id = ps.id LEFT JOIN internships i ON a.internship_id = i.id";
+            }
+            $applied_label_parts = [];
+            if ($has_applied_subtype) {
+                $applied_label_parts[] = "NULLIF(a.applied_subtype, '')";
+            }
+            if ($has_project_subtype_id) {
+                $applied_label_parts[] = "NULLIF(ps.subtype_name, '')";
+            }
+            if ($has_project_subtype) {
+                $applied_label_parts[] = "NULLIF(a.project_subtype, '')";
+            }
+            if ($has_internship_title) {
+                $applied_label_parts[] = "NULLIF(a.internship_title, '')";
+            }
+            $applied_label_parts[] = "NULLIF(i.title, '')";
+            $applied_label_expr = 'COALESCE(' . implode(', ', $applied_label_parts) . ", 'General Internship')";
+            $apps_res = mysqli_query($conn, "SELECT a.*, $applied_label_expr AS applied_internship FROM internship_applications a $join_clause WHERE a.user_id = $uid ORDER BY a.id DESC");
             if ($apps_res) {
                 while ($row = mysqli_fetch_assoc($apps_res)) $apps[] = $row;
             }
@@ -264,11 +301,12 @@ $params = [];
 $types = "";
 
 if (!empty($search)) {
-    $where_clauses[] = "(full_name LIKE ? OR email LIKE ?)";
+    $where_clauses[] = "(full_name LIKE ? OR email LIKE ? OR phone LIKE ?)";
     $search_val = "%" . $search . "%";
     $params[] = $search_val;
     $params[] = $search_val;
-    $types .= "ss";
+    $params[] = $search_val;
+    $types .= "sss";
 }
 
 if (!empty($role_filter)) {
@@ -299,7 +337,7 @@ if ($page > $total_pages) $page = $total_pages;
 $offset = ($page - 1) * $limit;
 
 // Fetch users
-$users_query = "SELECT id, full_name, email, role, status FROM users" . $where_sql . " ORDER BY id DESC LIMIT ? OFFSET ?";
+$users_query = "SELECT id, full_name, email, phone, role, status, registered_date FROM users" . $where_sql . " ORDER BY id DESC LIMIT ? OFFSET ?";
 $users_stmt = mysqli_prepare($conn, $users_query);
 
 $bind_types = $types . "ii";
@@ -311,8 +349,7 @@ $users_res = mysqli_stmt_get_result($users_stmt);
 $users_list = [];
 while ($row = mysqli_fetch_assoc($users_res)) {
     $row['subscription_status'] = 'N/A';
-    $row['phone'] = 'N/A';
-    $row['created_at'] = 'N/A';
+    $row['phone'] = !empty($row['phone']) ? $row['phone'] : 'N/A';
     $users_list[] = $row;
 }
 mysqli_stmt_close($users_stmt);
@@ -548,7 +585,7 @@ $header_photo = $header_user['profile_photo'] ?? '';
                           </span>
                         <?php endif; ?>
                       </td>
-                      <td class="px-6 py-4 text-gray-400 text-xs font-semibold"><?php echo date('M d, Y', strtotime($user['created_at'])); ?></td>
+                      <td class="px-6 py-4 text-gray-400 text-xs font-semibold"><?php echo (!empty($user['registered_date']) && strtotime($user['registered_date']) > 0) ? date('M d, Y', strtotime($user['registered_date'])) : 'Not Available'; ?></td>
                       <td class="px-6 py-4 text-right space-x-2">
                         <button onclick="viewUserProfile(<?php echo $user['id']; ?>, '<?php echo htmlspecialchars($user['role']); ?>')" class="text-blue-600 hover:text-blue-800 text-xs font-bold cursor-pointer" title="View Profile">Profile</button>
                         <button onclick='openEditModal(<?php echo json_encode($user); ?>)' class="text-gray-600 hover:text-gray-800 text-xs font-bold cursor-pointer">Edit</button>
@@ -974,9 +1011,10 @@ $header_photo = $header_user['profile_photo'] ?? '';
         
         let dateVal = app.applied_date ? new Date(app.applied_date).toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'}) : 'N/A';
         
+        const internshipName = app.applied_internship || app.title || 'N/A';
         return `
           <tr class="hover:bg-gray-50/50">
-            <td class="px-4 py-3 font-bold text-gray-900">${escapeHtml(app.title)}</td>
+            <td class="px-4 py-3 font-bold text-gray-900">${escapeHtml(internshipName)}</td>
             <td class="px-4 py-3 text-gray-400 text-xs">${dateVal}</td>
             <td class="px-4 py-3">
               <span class="px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${statusCls}">
@@ -992,7 +1030,7 @@ $header_photo = $header_user['profile_photo'] ?? '';
           <table class="w-full text-left text-xs text-gray-600">
             <thead class="bg-gray-50 text-gray-500 uppercase font-bold text-[9px] tracking-wider border-b border-gray-100">
               <tr>
-                <th class="px-4 py-2.5">Internship Position</th>
+                <th class="px-4 py-2.5">Applied Internship</th>
                 <th class="px-4 py-2.5">Applied Date</th>
                 <th class="px-4 py-2.5">Status</th>
               </tr>

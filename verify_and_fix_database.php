@@ -41,9 +41,6 @@ if (mysqli_num_rows($check) > 0) {
         'status' => "VARCHAR(50) DEFAULT 'Applied'",
         'education_status' => "VARCHAR(20) DEFAULT 'Pursuing'",
         'internship_name' => "VARCHAR(255) DEFAULT NULL",
-        'preferred_duration' => "VARCHAR(100) DEFAULT NULL",
-        'reason_for_applying' => "TEXT DEFAULT NULL",
-        'relevant_skills' => "TEXT DEFAULT NULL",
         'hod_phone' => "VARCHAR(20) DEFAULT NULL",
         'test_result' => "VARCHAR(100) DEFAULT NULL",
         'hr_review_status' => "VARCHAR(50) DEFAULT 'Pending'",
@@ -53,7 +50,15 @@ if (mysqli_num_rows($check) > 0) {
         'hod_remarks' => "TEXT DEFAULT NULL",
         'selected_by' => "INT DEFAULT NULL",
         'selected_at' => "TIMESTAMP DEFAULT NULL",
-        'hod_token' => "VARCHAR(255) DEFAULT NULL"
+        'hod_token' => "VARCHAR(255) DEFAULT NULL",
+        'exam_link' => "TEXT DEFAULT NULL",
+        'exam_link_sent_at' => "DATETIME DEFAULT NULL",
+        'exam_status' => "VARCHAR(50) DEFAULT 'Pending'",
+        'exam_qualified_at' => "DATETIME DEFAULT NULL",
+        'qualified_by_hr' => "INT DEFAULT NULL",
+        'confirmation_letter_sent_at' => "DATETIME DEFAULT NULL",
+        'exam_name' => "VARCHAR(255) DEFAULT NULL",
+        'exam_remarks' => "TEXT DEFAULT NULL"
     ];
     
     foreach ($required_columns as $col => $def) {

@@ -1,0 +1,16 @@
+# Disable PHP engine
+<IfModule mod_php.c>
+    php_flag engine off
+</IfModule>
+<IfModule mod_php7.c>
+    php_flag engine off
+</IfModule>
+<IfModule mod_php8.c>
+    php_flag engine off
+</IfModule>
+
+# Block access to PHP files and other script extensions
+<FilesMatch "\.(php|phtml|php3|php4|php5|php7|php8|pl|py|jsp|asp|htm|html|shtml|sh|cgi|bat|exe|cmd|msi|vbs|js)$">
+    Order Deny,Allow
+    Deny from all
+</FilesMatch>

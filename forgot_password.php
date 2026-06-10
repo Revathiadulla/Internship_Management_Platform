@@ -331,8 +331,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $confirm_password = $_POST['confirm_password'] ?? '';
         $email = $_SESSION['reset_email'];
         
-        if (strlen($password) < 6) {
-            $error_msg = "Password must be at least 6 characters long.";
+        $password_validation = validate_password_strength($password);
+        if (!$password_validation['is_valid']) {
+            $error_msg = implode(' ', $password_validation['errors']);
         } elseif ($password !== $confirm_password) {
             $error_msg = "Passwords do not match.";
         } else {
@@ -744,6 +745,29 @@ $step = $_SESSION['reset_step'];
         }
         setupVisibilityToggle('new-password', 'toggle-pwd-1');
         setupVisibilityToggle('confirm-password', 'toggle-pwd-2');
+
+        const newPasswordInput = document.getElementById('new-password');
+        const confirmPasswordInput = document.getElementById('confirm-password');
+        const resetPasswordForm = document.querySelector('form[action="forgot_password.php"]');
+        if (resetPasswordForm && newPasswordInput && confirmPasswordInput) {
+            resetPasswordForm.addEventListener('submit', function (e) {
+                const requirements = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
+                if (!requirements.test(newPasswordInput.value)) {
+                    e.preventDefault();
+                    newPasswordInput.setCustomValidity('Password must contain at least 8 characters, one uppercase letter, one lowercase letter, one number, and one special character.');
+                    newPasswordInput.reportValidity();
+                    return false;
+                }
+                if (newPasswordInput.value !== confirmPasswordInput.value) {
+                    e.preventDefault();
+                    confirmPasswordInput.setCustomValidity('Passwords do not match.');
+                    confirmPasswordInput.reportValidity();
+                    return false;
+                }
+                newPasswordInput.setCustomValidity('');
+                confirmPasswordInput.setCustomValidity('');
+            });
+        }
     </script>
 <script src="js/alerts.js"></script>
 </body>

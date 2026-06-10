@@ -3,7 +3,7 @@ session_start();
 include "db.php";
 
 if (!isset($_SESSION['user_id'])) {
-    header("Location: login.html");
+    header("Location: login.php");
     exit();
 }
 
@@ -16,7 +16,7 @@ $profile     = mysqli_fetch_assoc($profile_res);
 if (!$profile) { header("Location: student_profile_form.php"); exit(); }
 
 // Fetch active/started internship
-$intern_sql = "SELECT a.id as app_id, a.applied_date, a.test_score, a.education_status,
+$intern_sql = "SELECT a.id as app_id, a.applied_date, a.education_status,
                       COALESCE(i.title, a.internship_name) as title,
                       COALESCE(i.duration, '3 Months') as duration,
                       COALESCE(i.mode, 'Remote') as mode,
@@ -37,8 +37,7 @@ if ($has_intern) {
     if (isset($intern['ss_score']) && $intern['ss_score'] !== null) {
         $cert_score = intval($intern['ss_score']);
         $cert_total = intval($intern['ss_total_questions'] ?: 30);
-    } else if (isset($intern['test_score']) && $intern['test_score'] !== null) {
-        $p = intval($intern['test_score']);
+    } else {
         if ($p > 30) {
             $cert_score = intval(round(($p / 100) * 30));
         } else {
@@ -261,7 +260,7 @@ $unread_count = intval($unread_row['c'] ?? 0);
                 </div>
                 <div class="text-right">
                   <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Assessment Score</p>
-                  <p class="font-bold text-slate-800 text-sm"><?php echo ($has_intern && $intern['test_score'] !== null && $cert_total > 0) ? $cert_score . '/' . $cert_total . ' — ' . round(($cert_score / $cert_total) * 100) . '%' : 'N/A'; ?></p>
+                  <p class="font-bold text-slate-800 text-sm">N/A</p>
                 </div>
               </div>
 
@@ -360,7 +359,7 @@ $unread_count = intval($unread_row['c'] ?? 0);
               </div>
               <div class="bg-slate-50 rounded-xl p-3 text-center">
                 <p class="text-[10px] text-slate-400 font-bold uppercase">Test Score</p>
-                <p class="text-base font-black text-slate-800 mt-0.5"><?php echo ($has_intern && $intern['test_score'] !== null) ? $cert_score . '/' . $cert_total : '—'; ?></p>
+                <p class="text-base font-black text-slate-800 mt-0.5">—</p>
               </div>
             </div>
           </div>

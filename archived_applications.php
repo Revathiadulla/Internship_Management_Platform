@@ -10,6 +10,7 @@ ensure_module_schema($conn);
 // Filter and search values
 $status_options       = ['Applied', 'Test Completed', 'Interview Scheduled', 'HR Round', 'HOD Approved', 'Selected', 'Offer Sent', 'Onboarding Completed', 'Rejected'];
 $verification_options = ['Pending', 'Verified', 'Rejected'];
+$archived_count = (int) (mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as c FROM internship_applications WHERE is_deleted = 1"))['c'] ?? 0);
 $status_filter       = isset($_GET['status'])              ? trim($_GET['status'])              : '';
 $verification_filter = isset($_GET['verification_status']) ? trim($_GET['verification_status']) : '';
 $title_filter        = isset($_GET['title'])               ? trim($_GET['title'])               : '';
@@ -85,7 +86,7 @@ function paginate_url(int $page, array $filters): string {
     return 'archived_applications.php?' . http_build_query($params);
 }
 
-page_shell_start('archived_applications', 'Archived Applications', 'View and restore deleted or archived internship applications', '<a href="hr_applications.php" class="inline-flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-slate-50 transition-all"><span class="material-symbols-outlined">arrow_back</span> Back to Applications</a>');
+page_shell_start('archived_applications', 'Archived Applications', 'View and restore deleted or archived internship applications', '<a href="hr_applications.php" class="inline-flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-slate-50 transition-all"><span class="material-symbols-outlined">arrow_back</span> Back to Applications <span class="ml-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-600">' . $archived_count . '</span></a>');
 ?>
 
       <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">

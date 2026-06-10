@@ -437,59 +437,93 @@ $old_role     = isset($_GET['role'])      ? htmlspecialchars($_GET['role'])     
 
 
     <script>
-    // Password Visibility Toggles
-    const togglePassword = document.getElementById('toggle-password');
-    const passwordInput = document.getElementById('password');
-    if (togglePassword && passwordInput) {
-        togglePassword.addEventListener('click', function() {
-            const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
-            passwordInput.setAttribute('type', type);
-            this.textContent = type === 'password' ? 'visibility' : 'visibility_off';
-        });
-    }
+    document.addEventListener('DOMContentLoaded', function() {
+        // ── Password Visibility Toggles ─────────────────────────────────────
+        const passwordInput = document.getElementById('password');
+        const confirmPasswordInput = document.getElementById('confirm-password');
+        const togglePassword = document.getElementById('toggle-password');
+        const toggleConfirmPassword = document.getElementById('toggle-confirm-password');
 
-    const toggleConfirmPassword = document.getElementById('toggle-confirm-password');
-    const confirmPasswordInput = document.getElementById('confirm-password');
-    if (toggleConfirmPassword && confirmPasswordInput) {
-        toggleConfirmPassword.addEventListener('click', function() {
-            const type = confirmPasswordInput.getAttribute('type') === 'password' ? 'text' : 'password';
-            confirmPasswordInput.setAttribute('type', type);
-            this.textContent = type === 'password' ? 'visibility' : 'visibility_off';
-        });
-    }
-
-    const phoneInput = document.getElementById('phone');
-    if (phoneInput) {
-        phoneInput.addEventListener('input', function(e) {
-            this.value = this.value.replace(/[^0-9]/g, '');
-            if (this.value.length !== 10) {
-                this.setCustomValidity('Phone number must be exactly 10 digits.');
-            } else {
-                this.setCustomValidity('');
-            }
-        });
-    }
-
-    document.getElementById('register-form').addEventListener('submit', function(e) {
-        const phoneInput = document.getElementById('phone');
-        if (phoneInput && !/^[0-9]{10}$/.test(phoneInput.value)) {
-            e.preventDefault();
-            phoneInput.setCustomValidity('Phone number must be exactly 10 digits.');
-            phoneInput.reportValidity();
-            return false;
+        if (togglePassword && passwordInput) {
+            togglePassword.addEventListener('click', function() {
+                const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+                passwordInput.setAttribute('type', type);
+                this.textContent = type === 'password' ? 'visibility' : 'visibility_off';
+            });
         }
 
-        const btn = document.getElementById('register-submit-btn');
-        if (btn) {
-            btn.style.pointerEvents = 'none';
-            const textSpan = btn.querySelector('.btn-text');
-            if (textSpan) {
-                textSpan.textContent = 'Creating account...';
-            }
-            const spinner = document.createElement('span');
-            spinner.className = 'material-symbols-outlined text-lg animate-spin';
-            spinner.textContent = 'sync';
-            btn.appendChild(spinner);
+        if (toggleConfirmPassword && confirmPasswordInput) {
+            toggleConfirmPassword.addEventListener('click', function() {
+                const type = confirmPasswordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+                confirmPasswordInput.setAttribute('type', type);
+                this.textContent = type === 'password' ? 'visibility' : 'visibility_off';
+            });
+        }
+
+        // ── Phone Validation ────────────────────────────────────────────────
+        const phoneInput = document.getElementById('phone');
+        if (phoneInput) {
+            phoneInput.addEventListener('input', function(e) {
+                this.value = this.value.replace(/[^0-9]/g, '');
+                if (this.value.length !== 10) {
+                    this.setCustomValidity('Phone number must be exactly 10 digits.');
+                } else {
+                    this.setCustomValidity('');
+                }
+            });
+        }
+
+        // ── Password Strength Validation ────────────────────────────────────
+        const passwordRequirementsMessage = 'Password must contain at least:\n• 8 characters\n• One uppercase letter\n• One lowercase letter\n• One number\n• One special character';
+        const strongPasswordPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
+        if (passwordInput) {
+            passwordInput.addEventListener('input', function() {
+                if (this.value && !strongPasswordPattern.test(this.value)) {
+                    this.setCustomValidity(passwordRequirementsMessage);
+                } else {
+                    this.setCustomValidity('');
+                }
+            });
+        }
+
+        // ── Form Submit Handler ─────────────────────────────────────────────
+        var registerForm = document.getElementById('register-form');
+        if (registerForm) {
+            registerForm.addEventListener('submit', function(e) {
+                if (phoneInput && !/^[0-9]{10}$/.test(phoneInput.value)) {
+                    e.preventDefault();
+                    phoneInput.setCustomValidity('Phone number must be exactly 10 digits.');
+                    phoneInput.reportValidity();
+                    return false;
+                }
+
+                if (passwordInput && !strongPasswordPattern.test(passwordInput.value)) {
+                    e.preventDefault();
+                    passwordInput.setCustomValidity(passwordRequirementsMessage);
+                    passwordInput.reportValidity();
+                    return false;
+                }
+
+                if (confirmPasswordInput && passwordInput && confirmPasswordInput.value !== passwordInput.value) {
+                    e.preventDefault();
+                    confirmPasswordInput.setCustomValidity('Passwords do not match.');
+                    confirmPasswordInput.reportValidity();
+                    return false;
+                }
+
+                var btn = document.getElementById('register-submit-btn');
+                if (btn) {
+                    btn.style.pointerEvents = 'none';
+                    var textSpan = btn.querySelector('.btn-text');
+                    if (textSpan) {
+                        textSpan.textContent = 'Creating account...';
+                    }
+                    var spinner = document.createElement('span');
+                    spinner.className = 'material-symbols-outlined text-lg animate-spin';
+                    spinner.textContent = 'sync';
+                    btn.appendChild(spinner);
+                }
+            });
         }
     });
     </script>

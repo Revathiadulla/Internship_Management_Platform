@@ -1,0 +1,108 @@
+----- 2026-06-09 03:43:37 -----
+REQUEST_URI: /IMP/mark_notification_read.php?action=read&id=133
+REMOTE_ADDR: ::1
+HTTP_USER_AGENT: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0
+SESSION_USER_ID: 76
+SESSION_ROLE: student
+GET: {"action":"read","id":"133"}
+POST: []
+HEADERS: {"Host":"localhost","Connection":"keep-alive","sec-ch-ua-platform":"\"Windows\"","User-Agent":"Mozilla\/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit\/537.36 (KHTML, like Gecko) Chrome\/149.0.0.0 Safari\/537.36 Edg\/149.0.0.0","sec-ch-ua":"\"Microsoft Edge\";v=\"149\", \"Chromium\";v=\"149\", \"Not)A;Brand\";v=\"24\"","sec-ch-ua-mobile":"?0","Accept":"*\/*","Sec-Fetch-Site":"same-origin","Sec-Fetch-Mode":"cors","Sec-Fetch-Dest":"empty","Referer":"http:\/\/localhost\/IMP\/student_dashboard.php","Accept-Encoding":"gzip, deflate, br, zstd","Accept-Language":"en-US,en;q=0.9","Cookie":"PHPSESSID=te2qg8ub9ica8btsrroopn9pi4"}
+----- 2026-06-09 03:43:39 -----
+REQUEST_URI: /IMP/mark_notification_read.php?action=read&id=133
+REMOTE_ADDR: ::1
+HTTP_USER_AGENT: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0
+SESSION_USER_ID: 76
+SESSION_ROLE: student
+GET: {"action":"read","id":"133"}
+POST: []
+HEADERS: {"Host":"localhost","Connection":"keep-alive","sec-ch-ua-platform":"\"Windows\"","User-Agent":"Mozilla\/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit\/537.36 (KHTML, like Gecko) Chrome\/149.0.0.0 Safari\/537.36 Edg\/149.0.0.0","sec-ch-ua":"\"Microsoft Edge\";v=\"149\", \"Chromium\";v=\"149\", \"Not)A;Brand\";v=\"24\"","sec-ch-ua-mobile":"?0","Accept":"*\/*","Sec-Fetch-Site":"same-origin","Sec-Fetch-Mode":"cors","Sec-Fetch-Dest":"empty","Referer":"http:\/\/localhost\/IMP\/student_dashboard.php","Accept-Encoding":"gzip, deflate, br, zstd","Accept-Language":"en-US,en;q=0.9","Cookie":"PHPSESSID=te2qg8ub9ica8btsrroopn9pi4"}
+----- 2026-06-09 03:43:45 -----
+REQUEST_URI: /IMP/mark_notification_read.php?action=read_all
+REMOTE_ADDR: ::1
+HTTP_USER_AGENT: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0
+SESSION_USER_ID: 76
+SESSION_ROLE: student
+GET: {"action":"read_all"}
+POST: []
+HEADERS: {"Host":"localhost","Connection":"keep-alive","sec-ch-ua-platform":"\"Windows\"","User-Agent":"Mozilla\/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit\/537.36 (KHTML, like Gecko) Chrome\/149.0.0.0 Safari\/537.36 Edg\/149.0.0.0","sec-ch-ua":"\"Microsoft Edge\";v=\"149\", \"Chromium\";v=\"149\", \"Not)A;Brand\";v=\"24\"","sec-ch-ua-mobile":"?0","Accept":"*\/*","Sec-Fetch-Site":"same-origin","Sec-Fetch-Mode":"cors","Sec-Fetch-Dest":"empty","Referer":"http:\/\/localhost\/IMP\/student_dashboard.php","Accept-Encoding":"gzip, deflate, br, zstd","Accept-Language":"en-US,en;q=0.9","Cookie":"PHPSESSID=te2qg8ub9ica8btsrroopn9pi4"}
+----- 2026-06-09 03:44:05 -----
+REQUEST_URI: /IMP/mark_notification_read.php?action=read&id=62
+REMOTE_ADDR: ::1
+HTTP_USER_AGENT: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0
+SESSION_USER_ID: 76
+SESSION_ROLE: student
+GET: {"action":"read","id":"62"}
+POST: []
+HEADERS: {"Host":"localhost","Connection":"keep-alive","sec-ch-ua-platform":"\"Windows\"","User-Agent":"Mozilla\/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit\/537.36 (KHTML, like Gecko) Chrome\/149.0.0.0 Safari\/537.36 Edg\/149.0.0.0","sec-ch-ua":"\"Microsoft Edge\";v=\"149\", \"Chromium\";v=\"149\", \"Not)A;Brand\";v=\"24\"","sec-ch-ua-mobile":"?0","Accept":"*\/*","Sec-Fetch-Site":"same-origin","Sec-Fetch-Mode":"cors","Sec-Fetch-Dest":"empty","Referer":"http:\/\/localhost\/IMP\/student_dashboard.php","Accept-Encoding":"gzip, deflate, br, zstd","Accept-Language":"en-US,en;q=0.9","Cookie":"PHPSESSID=te2qg8ub9ica8btsrroopn9pi4"}
+----- 2026-06-09 03:57:46 -----
+REQUEST_URI: /IMP/mark_notification_read.php?action=read&id=62
+REMOTE_ADDR: ::1
+HTTP_USER_AGENT: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0
+SESSION_USER_ID: 76
+SESSION_ROLE: student
+GET: {"action":"read","id":"62"}
+POST: []
+HEADERS: {"Host":"localhost","Connection":"keep-alive","sec-ch-ua-platform":"\"Windows\"","User-Agent":"Mozilla\/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit\/537.36 (KHTML, like Gecko) Chrome\/149.0.0.0 Safari\/537.36 Edg\/149.0.0.0","sec-ch-ua":"\"Microsoft Edge\";v=\"149\", \"Chromium\";v=\"149\", \"Not)A;Brand\";v=\"24\"","sec-ch-ua-mobile":"?0","Accept":"*\/*","Sec-Fetch-Site":"same-origin","Sec-Fetch-Mode":"cors","Sec-Fetch-Dest":"empty","Referer":"http:\/\/localhost\/IMP\/student_dashboard.php","Accept-Encoding":"gzip, deflate, br, zstd","Accept-Language":"en-US,en;q=0.9","Cookie":"PHPSESSID=dic5tl91c78mtdlamb7m83tfov"}
+----- 2026-06-09 03:57:51 -----
+REQUEST_URI: /IMP/mark_notification_read.php?action=delete&id=134
+REMOTE_ADDR: ::1
+HTTP_USER_AGENT: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0
+SESSION_USER_ID: 76
+SESSION_ROLE: student
+GET: {"action":"delete","id":"134"}
+POST: []
+HEADERS: {"Host":"localhost","Connection":"keep-alive","sec-ch-ua-platform":"\"Windows\"","User-Agent":"Mozilla\/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit\/537.36 (KHTML, like Gecko) Chrome\/149.0.0.0 Safari\/537.36 Edg\/149.0.0.0","sec-ch-ua":"\"Microsoft Edge\";v=\"149\", \"Chromium\";v=\"149\", \"Not)A;Brand\";v=\"24\"","sec-ch-ua-mobile":"?0","Accept":"*\/*","Sec-Fetch-Site":"same-origin","Sec-Fetch-Mode":"cors","Sec-Fetch-Dest":"empty","Referer":"http:\/\/localhost\/IMP\/student_dashboard.php","Accept-Encoding":"gzip, deflate, br, zstd","Accept-Language":"en-US,en;q=0.9","Cookie":"PHPSESSID=dic5tl91c78mtdlamb7m83tfov"}
+----- 2026-06-09 09:19:30 -----
+REQUEST_URI: /IMP/mark_notification_read.php?id=86
+REMOTE_ADDR: ::1
+HTTP_USER_AGENT: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0
+SESSION_USER_ID: 66
+SESSION_ROLE: mentor
+GET: {"id":"86"}
+POST: []
+HEADERS: {"Host":"localhost","Connection":"keep-alive","sec-ch-ua-platform":"\"Windows\"","User-Agent":"Mozilla\/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit\/537.36 (KHTML, like Gecko) Chrome\/149.0.0.0 Safari\/537.36 Edg\/149.0.0.0","sec-ch-ua":"\"Microsoft Edge\";v=\"149\", \"Chromium\";v=\"149\", \"Not)A;Brand\";v=\"24\"","sec-ch-ua-mobile":"?0","Accept":"*\/*","Sec-Fetch-Site":"same-origin","Sec-Fetch-Mode":"cors","Sec-Fetch-Dest":"empty","Referer":"http:\/\/localhost\/IMP\/mentor_notifications.php","Accept-Encoding":"gzip, deflate, br, zstd","Accept-Language":"en-US,en;q=0.9","Cookie":"PHPSESSID=inps4bqtefnnfdulng48mihlo6"}
+----- 2026-06-09 09:19:32 -----
+REQUEST_URI: /IMP/mark_notification_read.php?id=85
+REMOTE_ADDR: ::1
+HTTP_USER_AGENT: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0
+SESSION_USER_ID: 66
+SESSION_ROLE: mentor
+GET: {"id":"85"}
+POST: []
+HEADERS: {"Host":"localhost","Connection":"keep-alive","sec-ch-ua-platform":"\"Windows\"","User-Agent":"Mozilla\/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit\/537.36 (KHTML, like Gecko) Chrome\/149.0.0.0 Safari\/537.36 Edg\/149.0.0.0","sec-ch-ua":"\"Microsoft Edge\";v=\"149\", \"Chromium\";v=\"149\", \"Not)A;Brand\";v=\"24\"","sec-ch-ua-mobile":"?0","Accept":"*\/*","Sec-Fetch-Site":"same-origin","Sec-Fetch-Mode":"cors","Sec-Fetch-Dest":"empty","Referer":"http:\/\/localhost\/IMP\/mentor_notifications.php","Accept-Encoding":"gzip, deflate, br, zstd","Accept-Language":"en-US,en;q=0.9","Cookie":"PHPSESSID=inps4bqtefnnfdulng48mihlo6"}
+----- 2026-06-09 20:08:27 -----
+REQUEST_URI: /IMP/mark_notification_read.php?action=delete&id=196&source=global
+REMOTE_ADDR: ::1
+HTTP_USER_AGENT: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0
+SESSION_USER_ID: 66
+SESSION_ROLE: mentor
+GET: {"action":"delete","id":"196","source":"global"}
+POST: []
+HEADERS: {"Host":"localhost","Connection":"keep-alive","sec-ch-ua-platform":"\"Windows\"","User-Agent":"Mozilla\/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit\/537.36 (KHTML, like Gecko) Chrome\/149.0.0.0 Safari\/537.36 Edg\/149.0.0.0","sec-ch-ua":"\"Microsoft Edge\";v=\"149\", \"Chromium\";v=\"149\", \"Not)A;Brand\";v=\"24\"","sec-ch-ua-mobile":"?0","Accept":"*\/*","Sec-Fetch-Site":"same-origin","Sec-Fetch-Mode":"cors","Sec-Fetch-Dest":"empty","Referer":"http:\/\/localhost\/IMP\/mentor_notifications.php","Accept-Encoding":"gzip, deflate, br, zstd","Accept-Language":"en-US,en;q=0.9","Cookie":"PHPSESSID=uk6un04r2bgekhoii2jrl6rglm"}
+----- 2026-06-09 20:08:46 -----
+REQUEST_URI: /IMP/mark_notification_read.php?action=delete_all&source=global
+REMOTE_ADDR: ::1
+HTTP_USER_AGENT: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0
+SESSION_USER_ID: 66
+SESSION_ROLE: mentor
+GET: {"action":"delete_all","source":"global"}
+POST: []
+HEADERS: {"Host":"localhost","Connection":"keep-alive","sec-ch-ua-platform":"\"Windows\"","User-Agent":"Mozilla\/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit\/537.36 (KHTML, like Gecko) Chrome\/149.0.0.0 Safari\/537.36 Edg\/149.0.0.0","sec-ch-ua":"\"Microsoft Edge\";v=\"149\", \"Chromium\";v=\"149\", \"Not)A;Brand\";v=\"24\"","sec-ch-ua-mobile":"?0","Accept":"*\/*","Sec-Fetch-Site":"same-origin","Sec-Fetch-Mode":"cors","Sec-Fetch-Dest":"empty","Referer":"http:\/\/localhost\/IMP\/mentor_notifications.php","Accept-Encoding":"gzip, deflate, br, zstd","Accept-Language":"en-US,en;q=0.9","Cookie":"PHPSESSID=uk6un04r2bgekhoii2jrl6rglm"}
+----- 2026-06-10 07:19:58 -----
+REQUEST_URI: /IMP/mark_notification_read.php?action=read&id=212&source=global
+REMOTE_ADDR: ::1
+HTTP_USER_AGENT: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0
+SESSION_USER_ID: 93
+SESSION_ROLE: student
+GET: {"action":"read","id":"212","source":"global"}
+POST: []
+HEADERS: {"Host":"localhost","Connection":"keep-alive","sec-ch-ua-platform":"\"Windows\"","User-Agent":"Mozilla\/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit\/537.36 (KHTML, like Gecko) Chrome\/149.0.0.0 Safari\/537.36 Edg\/149.0.0.0","sec-ch-ua":"\"Microsoft Edge\";v=\"149\", \"Chromium\";v=\"149\", \"Not)A;Brand\";v=\"24\"","sec-ch-ua-mobile":"?0","Accept":"*\/*","Sec-Fetch-Site":"same-origin","Sec-Fetch-Mode":"cors","Sec-Fetch-Dest":"empty","Referer":"http:\/\/localhost\/IMP\/student_dashboard.php?msg=Application+Submitted+Successfully%21","Accept-Encoding":"gzip, deflate, br, zstd","Accept-Language":"en-US,en;q=0.9","Cookie":"PHPSESSID=rn2ml007ajd6l9mq7ehccq1a79"}
+----- 2026-06-10 07:20:04 -----
+REQUEST_URI: /IMP/mark_notification_read.php?action=read&id=214&source=global
+REMOTE_ADDR: ::1
+HTTP_USER_AGENT: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0
+SESSION_USER_ID: 93
+SESSION_ROLE: student
+GET: {"action":"read","id":"214","source":"global"}
+POST: []
+HEADERS: {"Host":"localhost","Connection":"keep-alive","sec-ch-ua-platform":"\"Windows\"","User-Agent":"Mozilla\/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit\/537.36 (KHTML, like Gecko) Chrome\/149.0.0.0 Safari\/537.36 Edg\/149.0.0.0","sec-ch-ua":"\"Microsoft Edge\";v=\"149\", \"Chromium\";v=\"149\", \"Not)A;Brand\";v=\"24\"","sec-ch-ua-mobile":"?0","Accept":"*\/*","Sec-Fetch-Site":"same-origin","Sec-Fetch-Mode":"cors","Sec-Fetch-Dest":"empty","Referer":"http:\/\/localhost\/IMP\/student_dashboard.php?msg=Application+Submitted+Successfully%21","Accept-Encoding":"gzip, deflate, br, zstd","Accept-Language":"en-US,en;q=0.9","Cookie":"PHPSESSID=rn2ml007ajd6l9mq7ehccq1a79"}

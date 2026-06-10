@@ -704,7 +704,7 @@ if (!function_exists('createNotification')) {
     /**
      * Create a dashboard notification record for the given user/role.
      */
-    function createNotification($userId, $role, $title, $message, $notification_type = 'info', $type = 'general') {
+    function createNotification($userId, $role, $title, $message, $notification_type = 'info', $type = 'general', $attachment_path = null, $attachment_name = null, $attachment_size = null, $attachment_type = null) {
         global $conn;
         $userId = intval($userId);
         $role = strtolower(trim((string) $role));
@@ -763,6 +763,22 @@ if (!function_exists('createNotification')) {
 
             if (isset($existingCols['created_at'])) {
                 $insertData['created_at'] = [date('Y-m-d H:i:s'), 's'];
+            }
+
+            if (isset($existingCols['attachment_path'])) {
+                $insertData['attachment_path'] = [$attachment_path, 's'];
+            }
+
+            if (isset($existingCols['attachment_name'])) {
+                $insertData['attachment_name'] = [$attachment_name, 's'];
+            }
+
+            if (isset($existingCols['attachment_size'])) {
+                $insertData['attachment_size'] = [$attachment_size !== null ? intval($attachment_size) : null, 'i'];
+            }
+
+            if (isset($existingCols['attachment_type'])) {
+                $insertData['attachment_type'] = [$attachment_type, 's'];
             }
 
             if (!empty($insertData)) {
@@ -833,7 +849,7 @@ if (!function_exists('sendManualMessage')) {
      * @param bool   $sendEmail      Whether to send the message by email
      * @return array Status details for the manual message delivery
      */
-    function sendManualMessage($senderId, $senderRole, $recipientId, $recipientRole, $subject, $message, $sendNotification = true, $sendEmail = true) {
+    function sendManualMessage($senderId, $senderRole, $recipientId, $recipientRole, $subject, $message, $sendNotification = true, $sendEmail = true, $attachment_path = null, $attachment_name = null, $attachment_size = null, $attachment_type = null) {
         global $conn;
 
         $senderId = intval($senderId);
@@ -849,7 +865,7 @@ if (!function_exists('sendManualMessage')) {
         $emailError = null;
 
         if ($sendNotification) {
-            createNotification($recipientId, $recipientRole, $subject, $message, 'info', 'message');
+            createNotification($recipientId, $recipientRole, $subject, $message, 'info', 'message', $attachment_path, $attachment_name, $attachment_size, $attachment_type);
         }
 
         if ($sendEmail) {
@@ -889,21 +905,35 @@ if (!function_exists('sendManualMessage')) {
                     'from_name' => $fromName,
                 ];
 
+                // Set email attachment if provided
+                if (!empty($attachment_path)) {
+                    $fullPath = __DIR__ . '/../' . $attachment_path;
+                    if (file_exists($fullPath)) {
+                        $GLOBALS['mail_options_attachments'] = [[
+                            'path' => $fullPath,
+                            'name' => $attachment_name ?: basename($fullPath)
+                        ]];
+                    }
+                }
+
                 $emailError = '';
                 $sent = sendEmailNotification($recipientEmail, $subject, $message, $metadata, $emailError);
                 $emailStatus = $sent ? 'sent' : 'failed';
                 if (!$sent && empty($emailError)) {
                     $emailError = 'Email failed: Unknown error occurred';
                 }
+
+                // Clear email attachments global state
+                unset($GLOBALS['mail_options_attachments']);
             } else {
                 $emailStatus = 'failed';
                 $emailError = 'Recipient does not have a valid email address.';
             }
         }
 
-        $stmt = mysqli_prepare($conn, "INSERT INTO manual_messages (sender_id, sender_role, recipient_id, recipient_role, subject, message, send_notification, send_email, email_status, email_error, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())");
+        $stmt = mysqli_prepare($conn, "INSERT INTO manual_messages (sender_id, sender_role, recipient_id, recipient_role, subject, message, send_notification, send_email, email_status, email_error, attachment_path, attachment_name, attachment_size, attachment_type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())");
         if ($stmt) {
-            $stmt->bind_param('isisssiiss', $senderId, $senderRole, $recipientId, $recipientRole, $subject, $message, $sendNotification, $sendEmail, $emailStatus, $emailError);
+            $stmt->bind_param('isisssiissssis', $senderId, $senderRole, $recipientId, $recipientRole, $subject, $message, $sendNotification, $sendEmail, $emailStatus, $emailError, $attachment_path, $attachment_name, $attachment_size, $attachment_type);
             $stmt->execute();
             $stmt->close();
         }

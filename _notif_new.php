@@ -133,6 +133,16 @@
                     <p class="text-sm text-slate-700 <?php echo $unread ? 'font-semibold' : 'font-medium'; ?> leading-snug">
                       <?php echo htmlspecialchars($nr['message']); ?>
                     </p>
+                    <?php if (!empty($nr['attachment_path'])): ?>
+                        <div class="mt-3 flex items-center gap-2 text-xs bg-slate-50 p-2.5 rounded-xl border border-slate-100 max-w-fit">
+                            <span class="material-symbols-outlined text-[16px] text-gray-500">attachment</span>
+                            <span class="font-semibold text-slate-700"><?php echo htmlspecialchars($nr['attachment_name']); ?></span>
+                            <span class="text-gray-400"> (<?php echo round($nr['attachment_size'] / 1024, 1); ?> KB)</span>
+                            <span class="text-slate-300">|</span>
+                            <a href="<?php echo htmlspecialchars($nr['attachment_path']); ?>" target="_blank" class="text-blue-600 font-bold hover:underline">View</a>
+                            <a href="<?php echo htmlspecialchars($nr['attachment_path']); ?>" download class="text-indigo-600 font-bold hover:underline ml-1">Download</a>
+                        </div>
+                    <?php endif; ?>
                     <!-- Footer: time + action buttons -->
                     <div class="flex items-center justify-between mt-3 pt-2.5 border-t border-slate-100">
                       <div class="flex items-center gap-1.5 text-xs text-slate-400">

@@ -4,8 +4,90 @@
 // It is safe to include multiple times; it checks existence before altering.
 
 if (!isset($conn) || !($conn instanceof mysqli)) {
-    // Expect a valid mysqli connection from the including script.
-    die('Database connection not available');
+    error_log('ensure_extended_schema skipped: database connection not available.');
+    return;
+}
+
+if (!function_exists('columnExists')) {
+    function columnExists(mysqli $conn, string $table, string $column): bool {
+        $tableEsc = str_replace('`', '', $table);
+        $columnEsc = mysqli_real_escape_string($conn, $column);
+        $res = mysqli_query($conn, "SHOW COLUMNS FROM `$tableEsc` LIKE '$columnEsc'");
+        return $res && mysqli_num_rows($res) > 0;
+    }
+}
+
+if (!function_exists('isAutoIncrement')) {
+    function isAutoIncrement(mysqli $conn, string $table, string $column = 'id'): bool {
+        if (!columnExists($conn, $table, $column)) {
+            return false;
+        }
+
+        $tableEsc = str_replace('`', '', $table);
+        $columnEsc = mysqli_real_escape_string($conn, $column);
+        $res = mysqli_query($conn, "SHOW COLUMNS FROM `$tableEsc` LIKE '$columnEsc'");
+        if (!$res || mysqli_num_rows($res) === 0) {
+            return false;
+        }
+
+        $row = mysqli_fetch_assoc($res);
+        $type = strtolower($row['Type'] ?? '');
+        $null = strtoupper($row['Null'] ?? 'YES');
+        $extra = strtolower($row['Extra'] ?? '');
+
+        return (strpos($type, 'int') !== false) && ($null === 'NO') && (strpos($extra, 'auto_increment') !== false);
+    }
+}
+
+if (!function_exists('foreignKeyExists')) {
+    function foreignKeyExists(mysqli $conn, string $table, string $column = 'id'): bool {
+        $tableEsc = mysqli_real_escape_string($conn, $table);
+        $columnEsc = mysqli_real_escape_string($conn, $column);
+        $sql = "SELECT 1
+            FROM information_schema.key_column_usage
+            WHERE table_schema = DATABASE()
+              AND (
+                (table_name = '$tableEsc' AND column_name = '$columnEsc' AND referenced_table_name IS NOT NULL)
+                OR (referenced_table_name = '$tableEsc' AND referenced_column_name = '$columnEsc')
+              )
+            LIMIT 1";
+        $res = mysqli_query($conn, $sql);
+        return $res && mysqli_num_rows($res) > 0;
+    }
+}
+
+if (!function_exists('ensureAutoIncrementPrimaryKeySafe')) {
+    function ensureAutoIncrementPrimaryKeySafe(mysqli $conn, string $table, string $column = 'id'): bool {
+        if (!columnExists($conn, $table, $column)) {
+            error_log("ensure_extended_schema: skipping $table.$column because the column does not exist.");
+            return false;
+        }
+
+        if (isAutoIncrement($conn, $table, $column)) {
+            return true;
+        }
+
+        if (foreignKeyExists($conn, $table, $column)) {
+            error_log("ensure_extended_schema: skipping $table.$column because it is referenced by a foreign key constraint.");
+            return false;
+        }
+
+        $tableEsc = str_replace('`', '', $table);
+        $columnEsc = mysqli_real_escape_string($conn, $column);
+        $pkRes = mysqli_query($conn, "SHOW KEYS FROM `$tableEsc` WHERE Key_name = 'PRIMARY' AND Column_name = '$columnEsc'");
+        $hasPk = $pkRes && mysqli_num_rows($pkRes) > 0;
+
+        $sql = $hasPk
+            ? "ALTER TABLE `$tableEsc` MODIFY `$columnEsc` INT NOT NULL AUTO_INCREMENT"
+            : "ALTER TABLE `$tableEsc` MODIFY `$columnEsc` INT NOT NULL AUTO_INCREMENT, ADD PRIMARY KEY (`$columnEsc`)";
+
+        if (!mysqli_query($conn, $sql)) {
+            error_log("ensure_extended_schema: failed to update $table.$column: " . mysqli_error($conn));
+            return false;
+        }
+
+        return true;
+    }
 }
 
 // Add new columns to internship_applications if missing
@@ -19,7 +101,21 @@ $extended_cols = [
     'hr_reviewed_at'         => "ALTER TABLE internship_applications ADD COLUMN hr_reviewed_at DATETIME NULL",
     'hod_token'              => "ALTER TABLE internship_applications ADD COLUMN hod_token VARCHAR(64) NULL",
     'assigned_project_id'    => "ALTER TABLE internship_applications ADD COLUMN assigned_project_id INT DEFAULT NULL",
-    'team_id'                => "ALTER TABLE internship_applications ADD COLUMN team_id INT DEFAULT NULL"
+    'team_id'                => "ALTER TABLE internship_applications ADD COLUMN team_id INT DEFAULT NULL",
+    'exam_link'              => "ALTER TABLE internship_applications ADD COLUMN exam_link TEXT DEFAULT NULL",
+    'exam_link_sent_at'      => "ALTER TABLE internship_applications ADD COLUMN exam_link_sent_at DATETIME DEFAULT NULL",
+    'exam_status'            => "ALTER TABLE internship_applications ADD COLUMN exam_status VARCHAR(50) DEFAULT 'Pending'",
+    'exam_qualified_at'      => "ALTER TABLE internship_applications ADD COLUMN exam_qualified_at DATETIME DEFAULT NULL",
+    'qualified_by_hr'        => "ALTER TABLE internship_applications ADD COLUMN qualified_by_hr INT DEFAULT NULL",
+    'confirmation_letter_sent_at' => "ALTER TABLE internship_applications ADD COLUMN confirmation_letter_sent_at DATETIME DEFAULT NULL",
+    'exam_name'              => "ALTER TABLE internship_applications ADD COLUMN exam_name VARCHAR(255) DEFAULT NULL",
+    'exam_remarks'           => "ALTER TABLE internship_applications ADD COLUMN exam_remarks TEXT DEFAULT NULL",
+    'exam_title'             => "ALTER TABLE internship_applications ADD COLUMN exam_title VARCHAR(255) DEFAULT NULL",
+    'exam_instructions'      => "ALTER TABLE internship_applications ADD COLUMN exam_instructions TEXT DEFAULT NULL",
+    'exam_attachment'        => "ALTER TABLE internship_applications ADD COLUMN exam_attachment VARCHAR(255) DEFAULT NULL",
+    'exam_sent_date'         => "ALTER TABLE internship_applications ADD COLUMN exam_sent_date DATETIME DEFAULT NULL",
+    'exam_date'              => "ALTER TABLE internship_applications ADD COLUMN exam_date DATE DEFAULT NULL",
+    'exam_time'              => "ALTER TABLE internship_applications ADD COLUMN exam_time VARCHAR(100) DEFAULT NULL"
 ];
 foreach ($extended_cols as $col => $sql) {
     $check = mysqli_query($conn, "SHOW COLUMNS FROM internship_applications LIKE '$col'");
@@ -28,23 +124,7 @@ foreach ($extended_cols as $col => $sql) {
     }
 }
 
-// Ensure test score and completion columns exist
-$test_app_cols = [
-    'test_score' => "ALTER TABLE internship_applications ADD COLUMN test_score DECIMAL(5,2) DEFAULT NULL",
-    'test_completed_at' => "ALTER TABLE internship_applications ADD COLUMN test_completed_at DATETIME DEFAULT NULL",
-    'test_status' => "ALTER TABLE internship_applications ADD COLUMN test_status VARCHAR(50) DEFAULT NULL",
-    'test_result' => "ALTER TABLE internship_applications ADD COLUMN test_result VARCHAR(50) DEFAULT NULL",
-    'test_submitted_date' => "ALTER TABLE internship_applications ADD COLUMN test_submitted_date DATETIME DEFAULT NULL",
-    'test_attempts' => "ALTER TABLE internship_applications ADD COLUMN test_attempts INT NOT NULL DEFAULT 0",
-    'max_attempts' => "ALTER TABLE internship_applications ADD COLUMN max_attempts INT NOT NULL DEFAULT 3",
-    'test_answers' => "ALTER TABLE internship_applications ADD COLUMN test_answers TEXT DEFAULT NULL"
-];
-foreach ($test_app_cols as $col => $sql) {
-    $check = mysqli_query($conn, "SHOW COLUMNS FROM internship_applications LIKE '$col'");
-    if ($check && mysqli_num_rows($check) == 0) {
-        mysqli_query($conn, $sql);
-    }
-}
+// Legacy test columns are intentionally not re-created; assessment flow is external to IMP.
 
 // Ensure internship_status column exists for discontinuation workflow (if missing)
 $check_internship_status = mysqli_query($conn, "SHOW COLUMNS FROM internship_applications LIKE 'internship_status'");
@@ -116,26 +196,25 @@ if ($check_notification_type && mysqli_num_rows($check_notification_type) === 0)
     mysqli_query($conn, "ALTER TABLE notifications ADD COLUMN notification_type VARCHAR(50) DEFAULT 'info'");
 }
 
-// FIX: Ensure notifications.id is AUTO_INCREMENT PRIMARY KEY (live DB may lack this)
-$_notif_id_check = mysqli_query($conn, "SHOW COLUMNS FROM notifications LIKE 'id'");
-if ($_notif_id_check && $_notif_id_row = mysqli_fetch_assoc($_notif_id_check)) {
-    $hasAutoIncrement = (stripos($_notif_id_row['Extra'] ?? '', 'auto_increment') !== false);
-    if (!$hasAutoIncrement) {
-        // Ensure id is the primary key first
-        $hasPK = false;
-        $_pk_check = mysqli_query($conn, "SHOW KEYS FROM notifications WHERE Key_name = 'PRIMARY' AND Column_name = 'id'");
-        if ($_pk_check && mysqli_num_rows($_pk_check) > 0) {
-            $hasPK = true;
+// Ensure notification attachment columns exist for dashboard and inbox views
+$notifications_table_exists = mysqli_query($conn, "SHOW TABLES LIKE 'notifications'");
+if ($notifications_table_exists && mysqli_num_rows($notifications_table_exists) > 0) {
+    $notification_attachment_columns = [
+        'attachment_path' => "ALTER TABLE notifications ADD COLUMN attachment_path VARCHAR(500) DEFAULT NULL",
+        'attachment_name' => "ALTER TABLE notifications ADD COLUMN attachment_name VARCHAR(255) DEFAULT NULL",
+        'attachment_type' => "ALTER TABLE notifications ADD COLUMN attachment_type VARCHAR(100) DEFAULT NULL",
+        'attachment_size' => "ALTER TABLE notifications ADD COLUMN attachment_size INT DEFAULT NULL"
+    ];
+
+    foreach ($notification_attachment_columns as $col => $sql) {
+        if (!columnExists($conn, 'notifications', $col)) {
+            @mysqli_query($conn, $sql);
         }
-        if (!$hasPK) {
-            // Drop any existing PK first (may fail silently if none exists), then add
-            @mysqli_query($conn, "ALTER TABLE notifications DROP PRIMARY KEY");
-            @mysqli_query($conn, "ALTER TABLE notifications ADD PRIMARY KEY (id)");
-        }
-        // Now set AUTO_INCREMENT
-        @mysqli_query($conn, "ALTER TABLE notifications MODIFY id INT NOT NULL AUTO_INCREMENT");
     }
 }
+
+// Ensure notifications.id is AUTO_INCREMENT PRIMARY KEY when safe to do so
+ensureAutoIncrementPrimaryKeySafe($conn, 'notifications', 'id');
 
 // Add email_logs table for tracking outbound emails
 $create_email_logs = "CREATE TABLE IF NOT EXISTS email_logs (
@@ -172,23 +251,8 @@ foreach ($email_log_columns as $col => $definition) {
     }
 }
 
-// FIX: Ensure email_logs.id is AUTO_INCREMENT PRIMARY KEY
-$_email_logs_id_check = mysqli_query($conn, "SHOW COLUMNS FROM email_logs LIKE 'id'");
-if ($_email_logs_id_check && $_email_logs_id_row = mysqli_fetch_assoc($_email_logs_id_check)) {
-    $hasAutoIncrement = (stripos($_email_logs_id_row['Extra'] ?? '', 'auto_increment') !== false);
-    if (!$hasAutoIncrement) {
-        $hasPK = false;
-        $_pk_check = mysqli_query($conn, "SHOW KEYS FROM email_logs WHERE Key_name = 'PRIMARY' AND Column_name = 'id'");
-        if ($_pk_check && mysqli_num_rows($_pk_check) > 0) {
-            $hasPK = true;
-        }
-        if (!$hasPK) {
-            @mysqli_query($conn, "ALTER TABLE email_logs DROP PRIMARY KEY");
-            @mysqli_query($conn, "ALTER TABLE email_logs ADD PRIMARY KEY (id)");
-        }
-        @mysqli_query($conn, "ALTER TABLE email_logs MODIFY id INT NOT NULL AUTO_INCREMENT");
-    }
-}
+// Ensure email_logs.id is AUTO_INCREMENT PRIMARY KEY when safe to do so
+ensureAutoIncrementPrimaryKeySafe($conn, 'email_logs', 'id');
 
 // Ensure email_notifications_log sender columns exist when the table is present
 $has_email_notifications_log = mysqli_query($conn, "SHOW TABLES LIKE 'email_notifications_log'");
@@ -202,23 +266,8 @@ if ($has_email_notifications_log && mysqli_num_rows($has_email_notifications_log
         @mysqli_query($conn, "ALTER TABLE email_notifications_log ADD COLUMN sender_role VARCHAR(50) NULL");
     }
 
-    // FIX: Ensure email_notifications_log.id is AUTO_INCREMENT PRIMARY KEY
-    $_email_notif_log_id_check = mysqli_query($conn, "SHOW COLUMNS FROM email_notifications_log LIKE 'id'");
-    if ($_email_notif_log_id_check && $_email_notif_log_id_row = mysqli_fetch_assoc($_email_notif_log_id_check)) {
-        $hasAutoIncrement = (stripos($_email_notif_log_id_row['Extra'] ?? '', 'auto_increment') !== false);
-        if (!$hasAutoIncrement) {
-            $hasPK = false;
-            $_pk_check = mysqli_query($conn, "SHOW KEYS FROM email_notifications_log WHERE Key_name = 'PRIMARY' AND Column_name = 'id'");
-            if ($_pk_check && mysqli_num_rows($_pk_check) > 0) {
-                $hasPK = true;
-            }
-            if (!$hasPK) {
-                @mysqli_query($conn, "ALTER TABLE email_notifications_log DROP PRIMARY KEY");
-                @mysqli_query($conn, "ALTER TABLE email_notifications_log ADD PRIMARY KEY (id)");
-            }
-            @mysqli_query($conn, "ALTER TABLE email_notifications_log MODIFY id INT NOT NULL AUTO_INCREMENT");
-        }
-    }
+    // Ensure email_notifications_log.id is AUTO_INCREMENT PRIMARY KEY when safe to do so
+    ensureAutoIncrementPrimaryKeySafe($conn, 'email_notifications_log', 'id');
 }
 
 // Create manual_messages table for sender-driven communications
@@ -238,23 +287,22 @@ $create_manual_messages = "CREATE TABLE IF NOT EXISTS manual_messages (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
 mysqli_query($conn, $create_manual_messages);
 
-// FIX: Ensure manual_messages.id is AUTO_INCREMENT PRIMARY KEY
-$_manual_msg_id_check = mysqli_query($conn, "SHOW COLUMNS FROM manual_messages LIKE 'id'");
-if ($_manual_msg_id_check && $_manual_msg_id_row = mysqli_fetch_assoc($_manual_msg_id_check)) {
-    $hasAutoIncrement = (stripos($_manual_msg_id_row['Extra'] ?? '', 'auto_increment') !== false);
-    if (!$hasAutoIncrement) {
-        $hasPK = false;
-        $_pk_check = mysqli_query($conn, "SHOW KEYS FROM manual_messages WHERE Key_name = 'PRIMARY' AND Column_name = 'id'");
-        if ($_pk_check && mysqli_num_rows($_pk_check) > 0) {
-            $hasPK = true;
-        }
-        if (!$hasPK) {
-            @mysqli_query($conn, "ALTER TABLE manual_messages DROP PRIMARY KEY");
-            @mysqli_query($conn, "ALTER TABLE manual_messages ADD PRIMARY KEY (id)");
-        }
-        @mysqli_query($conn, "ALTER TABLE manual_messages MODIFY id INT NOT NULL AUTO_INCREMENT");
+// Ensure manual_messages table has attachment columns
+$manual_msg_cols = [
+    'attachment_path' => "ALTER TABLE manual_messages ADD COLUMN attachment_path VARCHAR(255) DEFAULT NULL",
+    'attachment_name' => "ALTER TABLE manual_messages ADD COLUMN attachment_name VARCHAR(255) DEFAULT NULL",
+    'attachment_size' => "ALTER TABLE manual_messages ADD COLUMN attachment_size INT DEFAULT NULL",
+    'attachment_type' => "ALTER TABLE manual_messages ADD COLUMN attachment_type VARCHAR(100) DEFAULT NULL"
+];
+foreach ($manual_msg_cols as $col => $sql) {
+    $check = mysqli_query($conn, "SHOW COLUMNS FROM manual_messages LIKE '$col'");
+    if ($check && mysqli_num_rows($check) == 0) {
+        mysqli_query($conn, $sql);
     }
 }
+
+// Ensure manual_messages.id is AUTO_INCREMENT PRIMARY KEY when safe to do so
+ensureAutoIncrementPrimaryKeySafe($conn, 'manual_messages', 'id');
 
 // Create dropout_requests table to track mentor-initiated dropouts
 $create_dropout = "CREATE TABLE IF NOT EXISTS dropout_requests (
@@ -374,198 +422,8 @@ foreach ($sub_cols as $col => $sql) {
     }
 }
 
-// Create test_questions table if not exists
-$create_test_questions = "CREATE TABLE IF NOT EXISTS test_questions (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    internship_id INT NOT NULL,
-    question_text TEXT NOT NULL,
-    option_a VARCHAR(255) NOT NULL,
-    option_b VARCHAR(255) NOT NULL,
-    option_c VARCHAR(255) NOT NULL,
-    option_d VARCHAR(255) NOT NULL,
-    correct_option VARCHAR(10) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
-mysqli_query($conn, $create_test_questions);
-
-// Seed sample questions if the table is empty
-$q_check = mysqli_query($conn, "SELECT COUNT(*) as count FROM test_questions");
-$q_row = mysqli_fetch_assoc($q_check);
-if ($q_row && intval($q_row['count']) === 0) {
-    // Insert a few default questions for standard internship IDs (or dynamically map them if needed)
-    $sample_questions = [
-        [1, "What does 'box-sizing: border-box' do in CSS?", "Includes padding/border in total dimensions", "Excludes padding from width", "Forces border grid", "Adds borders to margins", "A"],
-        [1, "What is the primary state hook in React?", "useEffect", "useContext", "useState", "useReducer", "C"],
-        [1, "Which JS array method returns a new array of elements passing a test?", "map()", "filter()", "forEach()", "reduce()", "B"],
-        [1, "Which HTML attribute makes an input field required before form submission?", "mandatory", "required", "validate", "must", "B"],
-        [1, "Which CSS unit is relative to the root element's font size?", "em", "rem", "px", "vh", "B"]
-    ];
-
-    $ins_stmt = $conn->prepare("INSERT INTO test_questions (internship_id, question_text, option_a, option_b, option_c, option_d, correct_option) VALUES (?, ?, ?, ?, ?, ?, ?)");
-    if ($ins_stmt) {
-        foreach ($sample_questions as $sq) {
-            $ins_stmt->bind_param("issssss", $sq[0], $sq[1], $sq[2], $sq[3], $sq[4], $sq[5], $sq[6]);
-            $ins_stmt->execute();
-        }
-        $ins_stmt->close();
-    }
-}
-
-// Ensure subtype_tests and subtype_test_questions tables are created and migrated
+// Legacy assessment tables are intentionally skipped; the assessment flow is external to IMP.
 try {
-    // 1. Create subtype_tests table if not exists
-    $create_subtype_tests = "CREATE TABLE IF NOT EXISTS subtype_tests (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        project_type VARCHAR(100) NULL,
-        project_subtype VARCHAR(100) NULL,
-        skills TEXT NULL,
-        difficulty_level VARCHAR(50) NULL,
-        num_questions INT NOT NULL,
-        duration_minutes INT DEFAULT 30,
-        status VARCHAR(20) DEFAULT 'Active',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
-    mysqli_query($conn, $create_subtype_tests);
-
-    $subtype_tests_cols = [
-        'project_type' => 'VARCHAR(100) NULL',
-        'project_subtype' => 'VARCHAR(100) NULL',
-        'skills' => 'TEXT NULL',
-        'difficulty_level' => 'VARCHAR(50) NULL',
-        'num_questions' => 'INT NOT NULL',
-        'duration_minutes' => 'INT DEFAULT 30',
-        'status' => "VARCHAR(20) DEFAULT 'Active'",
-        'created_at' => 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP'
-    ];
-    foreach ($subtype_tests_cols as $col => $definition) {
-        $check_col = mysqli_query($conn, "SHOW COLUMNS FROM subtype_tests LIKE '$col'");
-        if ($check_col && mysqli_num_rows($check_col) === 0) {
-            mysqli_query($conn, "ALTER TABLE subtype_tests ADD COLUMN $col $definition");
-        }
-    }
-
-    // 2. Create subtype_test_questions table if not exists
-    $create_questions_table = "CREATE TABLE IF NOT EXISTS subtype_test_questions (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        subtype_test_id INT NOT NULL,
-        question_bank_id INT NOT NULL DEFAULT 0,
-        question_text TEXT NOT NULL,
-        option_a VARCHAR(255) NOT NULL,
-        option_b VARCHAR(255) NOT NULL,
-        option_c VARCHAR(255) NOT NULL,
-        option_d VARCHAR(255) NOT NULL,
-        correct_option VARCHAR(5) NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
-    mysqli_query($conn, $create_questions_table);
-
-    $questions_cols = [
-        'subtype_test_id' => 'INT NOT NULL',
-        'question_bank_id' => 'INT NOT NULL DEFAULT 0',
-        'question_text' => 'TEXT NULL',
-        'option_a' => 'VARCHAR(255) NULL',
-        'option_b' => 'VARCHAR(255) NULL',
-        'option_c' => 'VARCHAR(255) NULL',
-        'option_d' => 'VARCHAR(255) NULL',
-        'correct_option' => 'VARCHAR(5) NULL'
-    ];
-    foreach ($questions_cols as $col => $definition) {
-        $check_col = mysqli_query($conn, "SHOW COLUMNS FROM subtype_test_questions LIKE '$col'");
-        if ($check_col && mysqli_num_rows($check_col) === 0) {
-            mysqli_query($conn, "ALTER TABLE subtype_test_questions ADD COLUMN $col $definition");
-        }
-    }
-
-    // Ensure correct_option column has type VARCHAR(5)
-    $check_type = mysqli_query($conn, "SHOW COLUMNS FROM subtype_test_questions LIKE 'correct_option'");
-    if ($check_type && mysqli_num_rows($check_type) > 0) {
-        $col_info = mysqli_fetch_assoc($check_type);
-        if (strpos(strtolower($col_info['Type']), 'varchar(5)') === false) {
-            mysqli_query($conn, "ALTER TABLE subtype_test_questions MODIFY COLUMN correct_option VARCHAR(5) NOT NULL");
-        }
-    }
-
-    // FIX: Ensure question_bank_id has a DEFAULT value (prevents INSERT failures)
-    $check_qbid = mysqli_query($conn, "SHOW COLUMNS FROM subtype_test_questions LIKE 'question_bank_id'");
-    if ($check_qbid && mysqli_num_rows($check_qbid) > 0) {
-        $qbid_info = mysqli_fetch_assoc($check_qbid);
-        if ($qbid_info['Default'] === null || $qbid_info['Default'] === '') {
-            @mysqli_query($conn, "ALTER TABLE subtype_test_questions MODIFY COLUMN question_bank_id INT NOT NULL DEFAULT 0");
-        }
-    }
-
-    // FIX: Ensure test_questions.id is AUTO_INCREMENT PRIMARY KEY
-    $_test_q_id_check = mysqli_query($conn, "SHOW COLUMNS FROM test_questions LIKE 'id'");
-    if ($_test_q_id_check && $_test_q_id_row = mysqli_fetch_assoc($_test_q_id_check)) {
-        $hasAutoIncrement = (stripos($_test_q_id_row['Extra'] ?? '', 'auto_increment') !== false);
-        if (!$hasAutoIncrement) {
-            $hasPK = false;
-            $_pk_check = mysqli_query($conn, "SHOW KEYS FROM test_questions WHERE Key_name = 'PRIMARY' AND Column_name = 'id'");
-            if ($_pk_check && mysqli_num_rows($_pk_check) > 0) {
-                $hasPK = true;
-            }
-            if (!$hasPK) {
-                @mysqli_query($conn, "ALTER TABLE test_questions DROP PRIMARY KEY");
-                @mysqli_query($conn, "ALTER TABLE test_questions ADD PRIMARY KEY (id)");
-            }
-            @mysqli_query($conn, "ALTER TABLE test_questions MODIFY id INT NOT NULL AUTO_INCREMENT");
-        }
-    }
-
-    // FIX: Ensure subtype_tests.id is AUTO_INCREMENT PRIMARY KEY
-    $_subtype_t_id_check = mysqli_query($conn, "SHOW COLUMNS FROM subtype_tests LIKE 'id'");
-    if ($_subtype_t_id_check && $_subtype_t_id_row = mysqli_fetch_assoc($_subtype_t_id_check)) {
-        $hasAutoIncrement = (stripos($_subtype_t_id_row['Extra'] ?? '', 'auto_increment') !== false);
-        if (!$hasAutoIncrement) {
-            $hasPK = false;
-            $_pk_check = mysqli_query($conn, "SHOW KEYS FROM subtype_tests WHERE Key_name = 'PRIMARY' AND Column_name = 'id'");
-            if ($_pk_check && mysqli_num_rows($_pk_check) > 0) {
-                $hasPK = true;
-            }
-            if (!$hasPK) {
-                @mysqli_query($conn, "ALTER TABLE subtype_tests DROP PRIMARY KEY");
-                @mysqli_query($conn, "ALTER TABLE subtype_tests ADD PRIMARY KEY (id)");
-            }
-            @mysqli_query($conn, "ALTER TABLE subtype_tests MODIFY id INT NOT NULL AUTO_INCREMENT");
-        }
-    }
-
-    // FIX: Ensure subtype_test_questions.id is AUTO_INCREMENT PRIMARY KEY
-    $_subtype_tq_id_check = mysqli_query($conn, "SHOW COLUMNS FROM subtype_test_questions LIKE 'id'");
-    if ($_subtype_tq_id_check && $_subtype_tq_id_row = mysqli_fetch_assoc($_subtype_tq_id_check)) {
-        $hasAutoIncrement = (stripos($_subtype_tq_id_row['Extra'] ?? '', 'auto_increment') !== false);
-        if (!$hasAutoIncrement) {
-            $hasPK = false;
-            $_pk_check = mysqli_query($conn, "SHOW KEYS FROM subtype_test_questions WHERE Key_name = 'PRIMARY' AND Column_name = 'id'");
-            if ($_pk_check && mysqli_num_rows($_pk_check) > 0) {
-                $hasPK = true;
-            }
-            if (!$hasPK) {
-                @mysqli_query($conn, "ALTER TABLE subtype_test_questions DROP PRIMARY KEY");
-                @mysqli_query($conn, "ALTER TABLE subtype_test_questions ADD PRIMARY KEY (id)");
-            }
-            @mysqli_query($conn, "ALTER TABLE subtype_test_questions MODIFY id INT NOT NULL AUTO_INCREMENT");
-        }
-    }
-
-    // FIX: Ensure question_bank.id is AUTO_INCREMENT PRIMARY KEY
-    $_qb_id_check = mysqli_query($conn, "SHOW COLUMNS FROM question_bank LIKE 'id'");
-    if ($_qb_id_check && $_qb_id_row = mysqli_fetch_assoc($_qb_id_check)) {
-        $hasAutoIncrement = (stripos($_qb_id_row['Extra'] ?? '', 'auto_increment') !== false);
-        if (!$hasAutoIncrement) {
-            $hasPK = false;
-            $_pk_check = mysqli_query($conn, "SHOW KEYS FROM question_bank WHERE Key_name = 'PRIMARY' AND Column_name = 'id'");
-            if ($_pk_check && mysqli_num_rows($_pk_check) > 0) {
-                $hasPK = true;
-            }
-            if (!$hasPK) {
-                @mysqli_query($conn, "ALTER TABLE question_bank DROP PRIMARY KEY");
-                @mysqli_query($conn, "ALTER TABLE question_bank ADD PRIMARY KEY (id)");
-            }
-            @mysqli_query($conn, "ALTER TABLE question_bank MODIFY id INT NOT NULL AUTO_INCREMENT");
-        }
-    }
-
     // Create notifications table if missing
     $create_notifications = "CREATE TABLE IF NOT EXISTS notifications (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -591,18 +449,8 @@ try {
         mysqli_query($conn, "ALTER TABLE notifications ADD COLUMN notification_type VARCHAR(50) DEFAULT 'info'");
     }
 
-    // FIX: Ensure notifications.id is AUTO_INCREMENT PRIMARY KEY (live DB may lack this)
-    $_notif_id_check2 = mysqli_query($conn, "SHOW COLUMNS FROM notifications LIKE 'id'");
-    if ($_notif_id_check2 && $_notif_id_row2 = mysqli_fetch_assoc($_notif_id_check2)) {
-        if (stripos($_notif_id_row2['Extra'] ?? '', 'auto_increment') === false) {
-            $_pk_check2 = mysqli_query($conn, "SHOW KEYS FROM notifications WHERE Key_name = 'PRIMARY' AND Column_name = 'id'");
-            if (!$_pk_check2 || mysqli_num_rows($_pk_check2) === 0) {
-                @mysqli_query($conn, "ALTER TABLE notifications DROP PRIMARY KEY");
-                @mysqli_query($conn, "ALTER TABLE notifications ADD PRIMARY KEY (id)");
-            }
-            @mysqli_query($conn, "ALTER TABLE notifications MODIFY id INT NOT NULL AUTO_INCREMENT");
-        }
-    }
+    // Ensure notifications.id is AUTO_INCREMENT PRIMARY KEY when safe to do so
+    ensureAutoIncrementPrimaryKeySafe($conn, 'notifications', 'id');
 
     // Ensure notification metadata columns exist for coordinator send/receive flow and universal linking
     $notifications_columns = [
@@ -614,7 +462,11 @@ try {
         'notification_type' => "VARCHAR(50) DEFAULT 'info'",
         'link' => "VARCHAR(255) DEFAULT NULL",
         'related_id' => 'INT DEFAULT NULL',
-        'related_type' => "VARCHAR(50) DEFAULT NULL"
+        'related_type' => "VARCHAR(50) DEFAULT NULL",
+        'attachment_path' => "VARCHAR(255) NULL",
+        'attachment_name' => "VARCHAR(255) NULL",
+        'attachment_size' => "INT NULL",
+        'attachment_type' => "VARCHAR(100) NULL"
     ];
     foreach ($notifications_columns as $column => $definition) {
         $check_col = mysqli_query($conn, "SHOW COLUMNS FROM notifications LIKE '$column'");
@@ -623,18 +475,37 @@ try {
         }
     }
 
-    // Ensure links exist on student_notifications
+    // Ensure student_notifications has required columns and id auto-increment
     $student_notif_check = mysqli_query($conn, "SHOW TABLES LIKE 'student_notifications'");
     if ($student_notif_check && mysqli_num_rows($student_notif_check) > 0) {
         $sn_cols = [
+            'title' => "VARCHAR(255) DEFAULT NULL",
             'link' => "VARCHAR(255) DEFAULT NULL",
             'related_id' => 'INT DEFAULT NULL',
-            'related_type' => "VARCHAR(50) DEFAULT NULL"
+            'related_type' => "VARCHAR(50) DEFAULT NULL",
+            'attachment_path' => "VARCHAR(255) NULL",
+            'attachment_name' => "VARCHAR(255) NULL",
+            'attachment_size' => "INT NULL",
+            'attachment_type' => "VARCHAR(100) NULL"
         ];
         foreach ($sn_cols as $column => $definition) {
             $check_col = mysqli_query($conn, "SHOW COLUMNS FROM student_notifications LIKE '$column'");
             if ($check_col && mysqli_num_rows($check_col) === 0) {
                 mysqli_query($conn, "ALTER TABLE student_notifications ADD COLUMN $column $definition");
+            }
+        }
+
+        ensureAutoIncrementPrimaryKeySafe($conn, 'student_notifications', 'id');
+
+        $status_res = mysqli_query($conn, "SHOW TABLE STATUS LIKE 'student_notifications'");
+        if ($status_res && $status_row = mysqli_fetch_assoc($status_res)) {
+            $current_ai = intval($status_row['Auto_increment']);
+            $max_res = mysqli_query($conn, "SELECT MAX(id) AS max_id FROM student_notifications");
+            if ($max_res && $max_row = mysqli_fetch_assoc($max_res)) {
+                $max_id = intval($max_row['max_id']);
+                if ($max_id >= $current_ai) {
+                    mysqli_query($conn, "ALTER TABLE student_notifications AUTO_INCREMENT = " . ($max_id + 1));
+                }
             }
         }
     }
@@ -684,21 +555,11 @@ try {
         submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (student_id) REFERENCES users(id) ON UPDATE CASCADE ON DELETE CASCADE,
         FOREIGN KEY (internship_id) REFERENCES internships(id) ON UPDATE CASCADE ON DELETE CASCADE,
-        FOREIGN KEY (test_id) REFERENCES subtype_tests(id) ON UPDATE CASCADE ON DELETE SET NULL,
         UNIQUE KEY uq_student_test (student_id, test_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
     mysqli_query($conn, $create_student_scores);
-    // -------------------------------------------------
-    // Ensure student_scores.id has PRIMARY KEY and AUTO_INCREMENT
-    // -------------------------------------------------
-    $check_pk = mysqli_query($conn, "SHOW INDEX FROM student_scores WHERE Key_name = 'PRIMARY'");
-    if ($check_pk && mysqli_num_rows($check_pk) > 0) {
-        // Primary key exists, ensure AUTO_INCREMENT
-        mysqli_query($conn, "ALTER TABLE student_scores MODIFY id INT NOT NULL AUTO_INCREMENT");
-    } else {
-        // Add PRIMARY KEY and AUTO_INCREMENT
-        mysqli_query($conn, "ALTER TABLE student_scores MODIFY id INT NOT NULL AUTO_INCREMENT, ADD PRIMARY KEY (id)");
-    }
+    // Ensure student_scores.id has PRIMARY KEY and AUTO_INCREMENT when safe to do so
+    ensureAutoIncrementPrimaryKeySafe($conn, 'student_scores', 'id');
 
     // Ensure student_scores columns exist and are correct
     $student_scores_cols = [
@@ -716,25 +577,7 @@ try {
         }
     }
 
-    // Create test_attempt_history table if missing
-    $create_test_attempt_history = "CREATE TABLE IF NOT EXISTS test_attempt_history (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        application_id INT NOT NULL,
-        student_id INT NOT NULL,
-        internship_id INT NOT NULL,
-        test_id INT DEFAULT NULL,
-        attempt_no INT NOT NULL,
-        score DECIMAL(5,2) NOT NULL,
-        total_questions INT NOT NULL DEFAULT 0,
-        percentage DECIMAL(5,2) NOT NULL,
-        submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (application_id) REFERENCES internship_applications(id) ON DELETE CASCADE,
-        FOREIGN KEY (student_id) REFERENCES users(id) ON UPDATE CASCADE ON DELETE CASCADE,
-        FOREIGN KEY (internship_id) REFERENCES internships(id) ON UPDATE CASCADE ON DELETE CASCADE,
-        FOREIGN KEY (test_id) REFERENCES subtype_tests(id) ON UPDATE CASCADE ON DELETE SET NULL,
-        UNIQUE KEY uq_app_attempt (application_id, attempt_no)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
-    mysqli_query($conn, $create_test_attempt_history);
+    // Legacy test attempt history table is intentionally skipped.
 
     // Create coordinator_assignments table
     $create_coord_assignments = "CREATE TABLE IF NOT EXISTS coordinator_assignments (
@@ -786,6 +629,20 @@ try {
         note_text TEXT NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    // Ensure notifications table has attachment columns
+    $notif_cols = [
+        'attachment_path' => "ALTER TABLE notifications ADD COLUMN attachment_path VARCHAR(255) DEFAULT NULL",
+        'attachment_name' => "ALTER TABLE notifications ADD COLUMN attachment_name VARCHAR(255) DEFAULT NULL",
+        'attachment_size' => "ALTER TABLE notifications ADD COLUMN attachment_size INT DEFAULT NULL",
+        'attachment_type' => "ALTER TABLE notifications ADD COLUMN attachment_type VARCHAR(100) DEFAULT NULL"
+    ];
+    foreach ($notif_cols as $col => $sql) {
+        $check = mysqli_query($conn, "SHOW COLUMNS FROM notifications LIKE '$col'");
+        if ($check && mysqli_num_rows($check) == 0) {
+            mysqli_query($conn, $sql);
+        }
+    }
 } catch (Throwable $e) {
     // Fail silently
 }
