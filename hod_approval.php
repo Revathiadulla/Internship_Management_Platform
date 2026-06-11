@@ -4,6 +4,9 @@
  * Stateless HOD approval page - no login required.
  * HOD clicks approve/reject link from email → this page handles it.
  */
+ini_set('display_errors', 0);
+error_reporting(E_ALL);
+
 include "db.php";
 include_once __DIR__ . "/includes/mail_helper.php";
 
@@ -21,7 +24,7 @@ $esc_token = mysqli_real_escape_string($conn, $token);
 
 // Fetch the application by token
 $sql = "SELECT a.id, a.status, a.hod_approval_status, a.hod_token, a.hod_name, a.hod_email,
-               a.user_id, COALESCE(i.title, a.internship_name) AS internship_title,
+               a.user_id, COALESCE(i.project_subtype, a.project_subtype, a.applied_subtype, 'Not specified') AS applied_subtype,
                u.full_name AS student_name, u.email AS student_email,
                sp.full_name AS sp_name, sp.hod_name AS sp_hod_name
         FROM internship_applications a
@@ -42,7 +45,7 @@ $app_id           = intval($row['id']);
 $current_status   = $row['status'];
 $hod_appr_status  = $row['hod_approval_status'] ?? 'Pending';
 $student_name     = $row['sp_name'] ?: $row['student_name'] ?: 'Student';
-$internship_title = $row['internship_title'] ?: 'Internship';
+$applied_subtype = $row['applied_subtype'] ?: 'Not specified';
 $student_user_id  = intval($row['user_id']);
 $hod_name         = $row['hod_name'] ?: $row['sp_hod_name'] ?: 'HOD';
 
@@ -56,14 +59,14 @@ if ($hod_appr_status !== 'Pending') {
 if ($decision === 'approve') {
     $new_status     = 'HOD Approved';
     $new_hod_status = 'Approved';
-    $notif_msg      = "Your HOD has approved your internship application for \"$internship_title\". HR will contact you shortly with next steps.";
+    $notif_msg      = "Your HOD has approved your internship application for \"$applied_subtype\". HR will contact you shortly with next steps.";
     $page_title     = 'Approval Submitted';
     $page_msg       = "You have successfully <strong>approved</strong> the internship application for <strong>" . htmlspecialchars($student_name) . "</strong>.<br>The student and HR team have been notified.";
     $page_type      = 'success';
 } else {
     $new_status     = 'HOD Rejected';
     $new_hod_status = 'Rejected';
-    $notif_msg      = "Unfortunately, your HOD has rejected your internship application for \"$internship_title\".";
+    $notif_msg      = "Unfortunately, your HOD has rejected your internship application for \"$applied_subtype\".";
     $page_title     = 'Rejection Submitted';
     $page_msg       = "You have <strong>rejected</strong> the internship application for <strong>" . htmlspecialchars($student_name) . "</strong>.<br>The student has been notified.";
     $page_type      = 'warning';
@@ -94,11 +97,11 @@ mysqli_query($conn, "INSERT INTO student_notifications (user_id, title, type, me
 
 // Email the student
 $subj = ($decision === 'approve')
-    ? "IMP – HOD Approved Your Internship Application: $internship_title"
-    : "IMP – HOD Rejected Your Internship Application: $internship_title";
+    ? "IMP – HOD Approved Your Internship Application: $applied_subtype"
+    : "IMP – HOD Rejected Your Internship Application: $applied_subtype";
 sendStudentNotification($student_user_id, $student_name, $subj, $notif_msg, [
     'event'        => 'HOD Decision',
-    'internship'   => $internship_title,
+    'applied_internship' => $applied_subtype,
     'hod_decision' => ucfirst($decision) . 'd',
     'action_url'   => 'http://localhost/IMP/student_applications.php',
     'action_label' => 'View Application Status'

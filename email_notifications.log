@@ -940,3 +940,322 @@ HTML body generated (5081 bytes).
 [2026-06-10 07:19:22] PHPMailer SMTP: Sent OK to revathireddy2003@gmail.com | Subject: New Student Application
 [2026-06-10 07:19:27] PHPMailer SMTP: Sent OK to imp.webportal2026@gmail.com | Subject: New Internship Application Submitted
 [2026-06-10 07:19:32] PHPMailer SMTP: Sent OK to madhavimacha03@gmail.com | Subject: IMP Application Submitted: Design - Graphic Design
+[2026-06-10 11:12:44] PHPMailer SMTP: Sent OK to sample@gmail.com | Subject: IMP — Account Registration Received
+[2026-06-10 11:12:49] PHPMailer SMTP: Sent OK to imp.webportal2026@gmail.com | Subject: New User Registered — Student
+[2026-06-10 11:15:16] PHPMailer SMTP: Sent OK to sample@gmail.com | Subject: Application Submitted
+[2026-06-10 11:15:21] PHPMailer SMTP: Sent OK to jaya@gmail.com | Subject: New Student Application
+[2026-06-10 11:15:26] PHPMailer SMTP: Sent OK to revathireddy2003@gmail.com | Subject: New Student Application
+[2026-06-10 11:15:30] PHPMailer SMTP: Sent OK to imp.webportal2026@gmail.com | Subject: New Internship Application Submitted
+[2026-06-10 11:15:36] PHPMailer SMTP: Sent OK to sample@gmail.com | Subject: IMP Application Submitted: Student Internship Management Portal
+[2026-06-10 11:18:03] PHPMailer SMTP: Sent OK to sample@gmail.com | Subject: Aadhaar Document Verified - IMP
+[2026-06-10 11:18:10] PHPMailer SMTP: Sent OK to sample@gmail.com | Subject: PAN Document Verified - IMP
+[2026-06-10 11:18:23] PHPMailer SMTP: Sent OK to sample@gmail.com | Subject: Your application has been shortlisted
+[2026-06-10 11:19:58] PHPMailer SMTP: Sent OK to madhavimacha03@gmail.com | Subject: Aadhaar Document Verified - IMP
+[2026-06-10 11:20:05] PHPMailer SMTP: Sent OK to madhavimacha03@gmail.com | Subject: PAN Document Verified - IMP
+[2026-06-10 11:20:18] PHPMailer SMTP: Sent OK to madhavimacha03@gmail.com | Subject: Your application has been shortlisted
+[2026-06-10 14:24:14] PHPMailer SMTP: Sent OK to sample@gmail.com | Subject: Internship Assessment Invitation
+[2026-06-10 15:37:33] Email failed: Invalid recipient email – 'Array'
+========================================================================
+[2026-06-10 15:37:33] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: sample@gmail.com (sample name) [ID: 94]
+SUBJECT: Application Update: Exam Completed
+MESSAGE TEXT: Dear sample name,
+
+Your internship application for "Student Internship Management Portal" has been updated to "Exam Completed".
+
+Please log in to the platform for the latest details and next steps.
+
+Best regards,
+IMP Team
+METADATA: {"event":"Application Status Update","internship":"Student Internship Management Portal","status":"Exam Completed","action_url":"http:\/\/localhost\/IMP\/student_applications.php","action_label":"View Application","recipient_name":"sample name"}
+------------------------------------------------------------------------
+SMTP LOGS:
+Email failed: Invalid recipient email – 'Array'
+------------------------------------------------------------------------
+HTML body generated (5514 bytes).
+========================================================================
+
+[2026-06-10 15:37:44] Email failed: Invalid recipient email – 'Array'
+========================================================================
+[2026-06-10 15:37:44] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: sample@gmail.com (sample name) [ID: 94]
+SUBJECT: Your application is under HR review
+MESSAGE TEXT: Dear sample name,
+
+Your application for "Student Internship Management Portal" is now under HR review. We will notify you once there is an update.
+
+Best regards,
+IMP Team
+METADATA: {"event":"Application Status Update","internship":"Student Internship Management Portal","status":"HR Review","action_url":"http:\/\/localhost\/IMP\/student_applications.php","action_label":"View Application","recipient_name":"sample name"}
+------------------------------------------------------------------------
+SMTP LOGS:
+Email failed: Invalid recipient email – 'Array'
+------------------------------------------------------------------------
+HTML body generated (5447 bytes).
+========================================================================
+
+[2026-06-10 16:15:49] PHPMailer SMTP: Sent OK to madhavimacha03@gmail.com | Subject: Test Assessment Invitation
+[2026-06-10 16:16:32] PHPMailer SMTP: Sent OK to madhavimacha03@gmail.com | Subject: Test Normal Email Subject
+[2026-06-10 16:16:37] PHPMailer SMTP: Sent OK to sample@gmail.com | Subject: Test Normal Email Subject
+[2026-06-10 17:11:00] Email failed: Invalid recipient email – 'Array'
+========================================================================
+[2026-06-10 17:11:00] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: sample@gmail.com (sample name) [ID: 94]
+SUBJECT: Your application has been shortlisted
+MESSAGE TEXT: Dear sample name,
+
+Your application for "Student Internship Management Portal" has been shortlisted and will be considered for the next phase of the internship process.
+
+We will update you with the next steps soon.
+
+Best regards,
+IMP Team
+METADATA: {"event":"Application Status Update","internship":"Student Internship Management Portal","status":"Shortlisted","action_url":"http:\/\/localhost\/IMP\/student_applications.php","action_label":"View Application","recipient_name":"sample name"}
+------------------------------------------------------------------------
+SMTP LOGS:
+Email failed: Invalid recipient email – 'Array'
+------------------------------------------------------------------------
+HTML body generated (5531 bytes).
+========================================================================
+
+[2026-06-10 17:43:46] Email failed: Invalid recipient email – 'Array'
+========================================================================
+[2026-06-10 17:43:46] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: revathiadulla@gmail.com (Revathi Adulla) [ID: 91]
+SUBJECT: testing
+MESSAGE TEXT: testing the email
+METADATA: {"recipient_name":"Revathi Adulla","event":"Hr Notification","action_url":"http:\/\/localhost\/IMP\/coordinator_dashboard.php","action_label":"View Dashboard"}
+------------------------------------------------------------------------
+SMTP LOGS:
+Email failed: Invalid recipient email – 'Array'
+------------------------------------------------------------------------
+HTML body generated (4876 bytes).
+========================================================================
+
+[2026-06-10 17:45:16] PHPMailer SMTP error to sample@gmail.com: SMTP Error: Could not connect to SMTP host. Connection failed. stream_socket_enable_crypto(): SSL: An existing connection was forcibly closed by the remote host | SMTP Error: Could not connect to SMTP host. Connection failed. stream_socket_enable_crypto(): SSL: An existing connection was forcibly closed by the remote host SMTP server error: QUIT command failed
+[2026-06-10 17:45:16] Email failed: PHPMailer SMTP failed and BREVO_API_KEY is not set. No email engine available.
+[2026-06-10 17:46:11] PHPMailer SMTP error to sample@gmail.com: SMTP Error: Could not connect to SMTP host. Called STARTTLS without being connected | SMTP Error: Could not connect to SMTP host. Called STARTTLS without being connected SMTP server error: Called QUIT without being connected
+[2026-06-10 17:46:11] Email failed: PHPMailer SMTP failed and BREVO_API_KEY is not set. No email engine available.
+[2026-06-10 23:48:20] PHPMailer SMTP: Sent OK to sample@gmail.com | Subject: Internship Assessment - Student Internship Management Portal
+[2026-06-10 23:48:53] PHPMailer SMTP: Sent OK to revathiadulla@gmail.com | Subject: Action Required: Internship Approval for sample name – IMP
+[2026-06-10 23:49:26] Email failed: Invalid recipient email – 'Array'
+========================================================================
+[2026-06-10 23:49:26] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: sample@gmail.com (sample name) [ID: 94]
+SUBJECT: Your application status is now HOD Approved
+MESSAGE TEXT: Your HOD has approved your internship application for 'Student Internship Management Portal'.
+
+Current status: HOD Approved.
+METADATA: {"event":"HOD Decision","internship":"Student Internship Management Portal","status":"HOD Approved","action_url":"http:\/\/localhost\/IMP\/student_applications.php","action_label":"View Application Status","recipient_name":"sample name","recipient_role":"student"}
+------------------------------------------------------------------------
+SMTP LOGS:
+Email failed: Invalid recipient email – 'Array'
+------------------------------------------------------------------------
+HTML body generated (5556 bytes).
+========================================================================
+
+[2026-06-10 23:49:26] Email failed: Invalid recipient email – 'Array'
+========================================================================
+[2026-06-10 23:49:26] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: imp.webportal2026@gmail.com (Admin) [ID: 38]
+SUBJECT: Internship Application status updated to HOD Approved
+MESSAGE TEXT: The HOD has approved the internship application for 'sample name' (Student Internship Management Portal). Current status: HOD Approved.
+METADATA: {"event":"HOD Decision","internship":"Student Internship Management Portal","action_url":"http:\/\/localhost\/IMP\/hr_applications.php","action_label":"Review Applications","recipient_name":"Admin","recipient_role":"admin"}
+------------------------------------------------------------------------
+SMTP LOGS:
+Email failed: Invalid recipient email – 'Array'
+------------------------------------------------------------------------
+HTML body generated (5377 bytes).
+========================================================================
+
+[2026-06-10 23:49:26] Email failed: Invalid recipient email – 'Array'
+========================================================================
+[2026-06-10 23:49:26] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: revathiadulla24@gmail.com (Revathi Adulla) [ID: 78]
+SUBJECT: Internship Application status updated to HOD Approved
+MESSAGE TEXT: The HOD has approved the internship application for 'sample name' (Student Internship Management Portal). Current status: HOD Approved.
+METADATA: {"event":"HOD Decision","internship":"Student Internship Management Portal","action_url":"http:\/\/localhost\/IMP\/hr_applications.php","action_label":"Review Applications","recipient_name":"Revathi Adulla","recipient_role":"hr"}
+------------------------------------------------------------------------
+SMTP LOGS:
+Email failed: Invalid recipient email – 'Array'
+------------------------------------------------------------------------
+HTML body generated (5392 bytes).
+========================================================================
+
+[2026-06-10 23:54:48] Email failed: Invalid recipient email – 'Array'
+========================================================================
+[2026-06-10 23:54:48] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: sample@gmail.com (sample name) [ID: 94]
+SUBJECT: Congratulations! You have been selected for the internship
+MESSAGE TEXT: Dear sample name,
+
+We are pleased to inform you that you have been selected for the internship: "Student Internship Management Portal".
+
+The HR team will send your confirmation letter separately once it is ready.
+
+Please note: Project allocation, team formation, and mentor assignment will be communicated separately by the Coordinator.
+
+Best regards,
+IMP Team
+METADATA: {"event":"Application Status Update","internship":"Student Internship Management Portal","status":"Selected","action_url":"http:\/\/localhost\/IMP\/student_applications.php","action_label":"View Application","recipient_name":"sample name"}
+------------------------------------------------------------------------
+SMTP LOGS:
+Email failed: Invalid recipient email – 'Array'
+------------------------------------------------------------------------
+HTML body generated (5683 bytes).
+========================================================================
+
+[2026-06-10 23:54:58] Email failed: Invalid recipient email – 'Array'
+========================================================================
+[2026-06-10 23:54:58] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: sample@gmail.com (sample name) [ID: 94]
+SUBJECT: Congratulations! You have been selected for the internship
+MESSAGE TEXT: Dear sample name,
+
+We are pleased to inform you that you have been selected for the internship: "Student Internship Management Portal". Please find your Confirmation Letter attached.
+
+Note: Project allocation, team formation, and mentor assignment will be communicated separately by the Coordinator.
+
+Best regards,
+IMP Team
+METADATA: {"event":"Application Status Update","internship":"Student Internship Management Portal","status":"Selected","action_url":"http:\/\/localhost\/IMP\/student_applications.php","action_label":"View Application","recipient_name":"sample name"}
+------------------------------------------------------------------------
+SMTP LOGS:
+Email failed: Invalid recipient email – 'Array'
+------------------------------------------------------------------------
+HTML body generated (5634 bytes).
+========================================================================
+
+[2026-06-10 23:55:07] Email failed: Invalid recipient email – 'Array'
+========================================================================
+[2026-06-10 23:55:07] OUTGOING EMAIL - STATUS: Failed
+ENGINE: Sent via PHPMailer SMTP (smtp.gmail.com:587)
+TO: sample@gmail.com (sample name) [ID: 94]
+SUBJECT: Congratulations! You have been selected for the internship
+MESSAGE TEXT: Dear sample name,
+
+We are pleased to inform you that you have been selected for the internship: "Student Internship Management Portal". Please find your Confirmation Letter attached.
+
+Note: Project allocation, team formation, and mentor assignment will be communicated separately by the Coordinator.
+
+Best regards,
+IMP Team
+METADATA: {"event":"Application Status Update","internship":"Student Internship Management Portal","status":"Selected","action_url":"http:\/\/localhost\/IMP\/student_applications.php","action_label":"View Application","recipient_name":"sample name"}
+------------------------------------------------------------------------
+SMTP LOGS:
+Email failed: Invalid recipient email – 'Array'
+------------------------------------------------------------------------
+HTML body generated (5634 bytes).
+========================================================================
+
+[2026-06-10 23:58:09] PHPMailer SMTP: Sent OK to test_student_hod@example.com | Subject: Your application status is now HOD Approved
+[2026-06-10 23:58:13] PHPMailer SMTP: Sent OK to imp.webportal2026@gmail.com | Subject: Internship Application status updated to HOD Approved
+[2026-06-10 23:58:17] PHPMailer SMTP: Sent OK to revathiadulla24@gmail.com | Subject: Internship Application status updated to HOD Approved
+[2026-06-11 00:01:05] PHPMailer SMTP: Sent OK to test_student_hod@example.com | Subject: Your application status is now HOD Approved
+[2026-06-11 00:01:09] PHPMailer SMTP: Sent OK to imp.webportal2026@gmail.com | Subject: Internship Application status updated to HOD Approved
+[2026-06-11 00:01:13] PHPMailer SMTP: Sent OK to revathiadulla24@gmail.com | Subject: Internship Application status updated to HOD Approved
+[2026-06-11 00:02:21] PHPMailer SMTP: Sent OK to revathiadulla@gmail.com | Subject: [IMP Mentor Notification] progress
+[2026-06-11 00:08:56] PHPMailer SMTP: Sent OK to test_student_conf@example.com | Subject: Congratulations! You have been selected for the internship
+[2026-06-11 00:10:33] PHPMailer SMTP: Sent OK to sample@gmail.com | Subject: Congratulations! You have been selected for the internship
+[2026-06-11 01:28:53] PHPMailer SMTP: Sent OK to imp.webportal2026@gmail.com | Subject: IMP Password Recovery Verification Code
+[2026-06-11 01:39:01] PHPMailer SMTP: Sent OK to revathireddy2003@gmail.com | Subject: IMP Password Recovery Verification Code
+[2026-06-11 01:41:23] PHPMailer SMTP: Sent OK to imp.webportal2026@gmail.com | Subject: IMP – New Project Awaiting Approval: 2. Online Food Ordering System
+[2026-06-11 01:42:12] PHPMailer SMTP: Sent OK to revathireddy2003@gmail.com | Subject: IMP – Internship Approved: 2. Online Food Ordering System
+[2026-06-11 01:46:42] PHPMailer SMTP: Sent OK to revathiadulla24@gmail.com | Subject: IMP Password Recovery Verification Code
+[2026-06-11 02:18:34] PHPMailer SMTP: Sent OK to sample@gmail.com | Subject: Squad Assignment: beta
+[2026-06-11 02:18:38] PHPMailer SMTP: Sent OK to mentor.rajesh@example.com | Subject: Squad Assignment: beta
+[2026-06-11 02:48:44] PHPMailer SMTP: Sent OK to testing@gmail.com | Subject: IMP — Account Registration Received
+[2026-06-11 02:48:48] PHPMailer SMTP: Sent OK to imp.webportal2026@gmail.com | Subject: New User Registered — Student
+[2026-06-11 02:51:31] PHPMailer SMTP: Sent OK to testing@gmail.com | Subject: Application Submitted
+[2026-06-11 02:51:35] PHPMailer SMTP: Sent OK to jaya@gmail.com | Subject: New Student Application
+[2026-06-11 02:51:39] PHPMailer SMTP: Sent OK to revathireddy2003@gmail.com | Subject: New Student Application
+[2026-06-11 02:51:43] PHPMailer SMTP: Sent OK to imp.webportal2026@gmail.com | Subject: New Internship Application Submitted
+[2026-06-11 02:51:47] PHPMailer SMTP: Sent OK to testing@gmail.com | Subject: IMP Application Submitted: 2. Online Food Ordering System
+[2026-06-11 02:52:51] PHPMailer SMTP: Sent OK to testing@gmail.com | Subject: Aadhaar Document Verified - IMP
+[2026-06-11 02:53:01] PHPMailer SMTP: Sent OK to testing@gmail.com | Subject: PAN Document Verified - IMP
+[2026-06-11 02:53:12] PHPMailer SMTP: Sent OK to testing@gmail.com | Subject: Your application has been shortlisted
+[2026-06-11 02:53:28] PHPMailer SMTP: Sent OK to testing@gmail.com | Subject: Internship Assessment - 2. Online Food Ordering System
+[2026-06-11 02:53:42] PHPMailer SMTP: Sent OK to revathireddy2003@gmail.com | Subject: Action Required: Internship Approval for testing – IMP
+[2026-06-11 02:58:52] PHPMailer SMTP: Sent OK to testing@gmail.com | Subject: Your application status is now HOD Approved
+[2026-06-11 02:58:56] PHPMailer SMTP: Sent OK to imp.webportal2026@gmail.com | Subject: Internship Application status updated to HOD Approved
+[2026-06-11 02:59:00] PHPMailer SMTP: Sent OK to revathiadulla24@gmail.com | Subject: Internship Application status updated to HOD Approved
+[2026-06-11 02:59:45] PHPMailer SMTP: Sent OK to testing@gmail.com | Subject: Congratulations! You have been selected for the internship
+[2026-06-11 03:10:36] PHPMailer SMTP: Sent OK to testing@gmail.com | Subject: Congratulations! You have been selected for the internship
+[2026-06-11 03:11:58] PHPMailer SMTP: Sent OK to sample@gmail.com | Subject: Squad Assignment: beta
+[2026-06-11 03:12:01] PHPMailer SMTP: Sent OK to testing@gmail.com | Subject: Squad Assignment: beta
+[2026-06-11 03:12:05] PHPMailer SMTP: Sent OK to mentor.rajesh@example.com | Subject: Squad Assignment: beta
+[2026-06-11 03:14:37] PHPMailer SMTP: Sent OK to testing@gmail.com | Subject: Mentor Reviewed Your Daily Log
+[2026-06-11 03:16:22] PHPMailer SMTP: Sent OK to testmodule@gmail.com | Subject: IMP — Account Registration Received
+[2026-06-11 03:16:26] PHPMailer SMTP: Sent OK to imp.webportal2026@gmail.com | Subject: New User Registered — Student
+[2026-06-11 03:18:35] PHPMailer SMTP: Sent OK to testmodule@gmail.com | Subject: Application Submitted
+[2026-06-11 03:18:39] PHPMailer SMTP: Sent OK to jaya@gmail.com | Subject: New Student Application
+[2026-06-11 03:18:43] PHPMailer SMTP: Sent OK to revathireddy2003@gmail.com | Subject: New Student Application
+[2026-06-11 03:18:47] PHPMailer SMTP: Sent OK to imp.webportal2026@gmail.com | Subject: New Internship Application Submitted
+[2026-06-11 03:18:51] PHPMailer SMTP: Sent OK to testmodule@gmail.com | Subject: IMP Application Submitted: 2. Online Food Ordering System
+[2026-06-11 03:19:54] PHPMailer SMTP: Sent OK to testmodule@gmail.com | Subject: Aadhaar Document Verified - IMP
+[2026-06-11 03:19:59] PHPMailer SMTP: Sent OK to testmodule@gmail.com | Subject: PAN Document Verified - IMP
+[2026-06-11 03:20:12] PHPMailer SMTP: Sent OK to testmodule@gmail.com | Subject: Your application has been shortlisted
+[2026-06-11 03:20:25] PHPMailer SMTP: Sent OK to testmodule@gmail.com | Subject: Internship Assessment - 2. Online Food Ordering System
+[2026-06-11 03:20:44] PHPMailer SMTP: Sent OK to revathireddy2003@gmail.com | Subject: Action Required: Internship Approval for testmodule – IMP
+[2026-06-11 03:24:02] PHPMailer SMTP: Sent OK to testmodule@gmail.com | Subject: Your application status is now HOD Approved
+[2026-06-11 03:24:07] PHPMailer SMTP: Sent OK to imp.webportal2026@gmail.com | Subject: Internship Application status updated to HOD Approved
+[2026-06-11 03:24:10] PHPMailer SMTP: Sent OK to revathiadulla24@gmail.com | Subject: Internship Application status updated to HOD Approved
+[2026-06-11 03:24:33] PHPMailer SMTP: Sent OK to testmodule@gmail.com | Subject: Congratulations! You have been selected for the internship
+[2026-06-11 03:24:41] PHPMailer SMTP: Sent OK to testmodule@gmail.com | Subject: Congratulations! You have been selected for the internship
+[2026-06-11 03:24:55] PHPMailer SMTP: Sent OK to testmodule@gmail.com | Subject: Congratulations! You have been selected for the internship
+[2026-06-11 03:26:04] PHPMailer SMTP: Sent OK to sample@gmail.com | Subject: Squad Assignment: beta
+[2026-06-11 03:26:07] PHPMailer SMTP: Sent OK to testing@gmail.com | Subject: Squad Assignment: beta
+[2026-06-11 03:26:11] PHPMailer SMTP: Sent OK to testmodule@gmail.com | Subject: Squad Assignment: beta
+[2026-06-11 03:26:16] PHPMailer SMTP: Sent OK to mentor.rajesh@example.com | Subject: Squad Assignment: beta
+[2026-06-11 03:27:18] PHPMailer SMTP: Sent OK to sample1@gmail.com | Subject: IMP — Account Registration Received
+[2026-06-11 03:27:22] PHPMailer SMTP: Sent OK to imp.webportal2026@gmail.com | Subject: New User Registered — Student
+[2026-06-11 03:35:44] PHPMailer SMTP: Sent OK to sample1@gmail.com | Subject: Application Submitted
+[2026-06-11 03:35:47] PHPMailer SMTP: Sent OK to revathiadulla24@gmail.com | Subject: New Internship Application Submitted
+[2026-06-11 03:35:51] PHPMailer SMTP: Sent OK to jaya@gmail.com | Subject: New Student Application
+[2026-06-11 03:35:55] PHPMailer SMTP: Sent OK to revathireddy2003@gmail.com | Subject: New Student Application
+[2026-06-11 03:35:59] PHPMailer SMTP: Sent OK to imp.webportal2026@gmail.com | Subject: New Internship Application Submitted
+[2026-06-11 03:36:03] PHPMailer SMTP: Sent OK to sample1@gmail.com | Subject: IMP Application Submitted: Web Development
+[2026-06-11 03:37:58] PHPMailer SMTP: Sent OK to sample1@gmail.com | Subject: PAN Document Verified - IMP
+[2026-06-11 03:38:04] PHPMailer SMTP: Sent OK to sample1@gmail.com | Subject: Aadhaar Document Verified - IMP
+[2026-06-11 03:38:40] PHPMailer SMTP: Sent OK to sample1@gmail.com | Subject: Your application has been shortlisted
+[2026-06-11 03:38:55] PHPMailer SMTP: Sent OK to sample1@gmail.com | Subject: Internship Assessment - 2. Online Food Ordering System
+[2026-06-11 03:39:13] PHPMailer SMTP: Sent OK to revathiadulla@gmail.com | Subject: Action Required: Internship Approval for sample1 – IMP
+[2026-06-11 03:39:45] PHPMailer SMTP: Sent OK to sample1@gmail.com | Subject: Your application status is now HOD Approved
+[2026-06-11 03:39:49] PHPMailer SMTP: Sent OK to imp.webportal2026@gmail.com | Subject: Internship Application status updated to HOD Approved
+[2026-06-11 03:39:53] PHPMailer SMTP: Sent OK to revathiadulla24@gmail.com | Subject: Internship Application status updated to HOD Approved
+[2026-06-11 03:40:16] PHPMailer SMTP: Sent OK to sample1@gmail.com | Subject: Congratulations! You have been selected for the internship
+[2026-06-11 03:40:33] PHPMailer SMTP: Sent OK to sample1@gmail.com | Subject: Congratulations! You have been selected for the internship
+[2026-06-11 06:21:09] PHPMailer SMTP: Sent OK to mca111724039128@gmail.com | Subject: IMP — Account Registration Received
+[2026-06-11 06:21:14] PHPMailer SMTP: Sent OK to imp.webportal2026@gmail.com | Subject: New User Registered — Student
+[2026-06-11 06:23:37] PHPMailer SMTP: Sent OK to mca111724039128@gmail.com | Subject: Application Submitted
+[2026-06-11 06:23:42] PHPMailer SMTP: Sent OK to revathiadulla24@gmail.com | Subject: New Internship Application Submitted
+[2026-06-11 06:23:46] PHPMailer SMTP: Sent OK to jaya@gmail.com | Subject: New Student Application
+[2026-06-11 06:23:51] PHPMailer SMTP: Sent OK to revathireddy2003@gmail.com | Subject: New Student Application
+[2026-06-11 06:23:55] PHPMailer SMTP: Sent OK to imp.webportal2026@gmail.com | Subject: New Internship Application Submitted
+[2026-06-11 06:24:00] PHPMailer SMTP: Sent OK to mca111724039128@gmail.com | Subject: IMP Application Submitted: Web Development
+[2026-06-11 06:24:58] PHPMailer SMTP: Sent OK to mca111724039128@gmail.com | Subject: Aadhaar Document Verified - IMP
+[2026-06-11 06:25:05] PHPMailer SMTP: Sent OK to mca111724039128@gmail.com | Subject: PAN Document Verified - IMP
+[2026-06-11 06:25:18] PHPMailer SMTP: Sent OK to mca111724039128@gmail.com | Subject: Your application has been shortlisted
+[2026-06-11 06:26:00] PHPMailer SMTP: Sent OK to mca111724039128@gmail.com | Subject: Internship Assessment -web development
+[2026-06-11 06:26:45] PHPMailer SMTP: Sent OK to revathiadulla@gmail.com | Subject: Action Required: Internship Approval for Macha Madhu – IMP
+[2026-06-11 06:27:15] PHPMailer SMTP: Sent OK to mca111724039128@gmail.com | Subject: Your application status is now HOD Approved
+[2026-06-11 06:27:20] PHPMailer SMTP: Sent OK to imp.webportal2026@gmail.com | Subject: Internship Application status updated to HOD Approved
+[2026-06-11 06:27:24] PHPMailer SMTP: Sent OK to revathiadulla24@gmail.com | Subject: Internship Application status updated to HOD Approved
+[2026-06-11 06:28:01] PHPMailer SMTP: Sent OK to mca111724039128@gmail.com | Subject: Congratulations! You have been selected for the internship
+[2026-06-11 06:28:18] PHPMailer SMTP: Sent OK to mca111724039128@gmail.com | Subject: Congratulations! You have been selected for the internship
+[2026-06-11 06:31:32] PHPMailer SMTP: Sent OK to sample@gmail.com | Subject: Squad Assignment: beta
+[2026-06-11 06:31:36] PHPMailer SMTP: Sent OK to testing@gmail.com | Subject: Squad Assignment: beta
+[2026-06-11 06:31:40] PHPMailer SMTP: Sent OK to testmodule@gmail.com | Subject: Squad Assignment: beta
+[2026-06-11 06:31:45] PHPMailer SMTP: Sent OK to mca111724039128@gmail.com | Subject: Squad Assignment: beta
+[2026-06-11 06:31:50] PHPMailer SMTP: Sent OK to mentor.rajesh@example.com | Subject: Squad Assignment: beta
+[2026-06-11 06:53:30] PHPMailer SMTP: Sent OK to billa@gmail.com | Subject: IMP — Account Registration Received
+[2026-06-11 06:53:35] PHPMailer SMTP: Sent OK to imp.webportal2026@gmail.com | Subject: New User Registered — Student

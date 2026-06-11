@@ -14,3 +14,18 @@
 [2026-06-09 14:04:24] User ID: 78 | Role: hr | App ID: 40 | Current Status: Selected | Target Status: Selected | Permission Result: Allowed
 [2026-06-09 14:18:51] User ID: 78 | Role: hr | App ID: 45 | Current Status: HR Review | Target Status: Shortlisted | Permission Result: Allowed
 [2026-06-09 14:23:05] User ID: 78 | Role: hr | App ID: 45 | Current Status: exam_sent | Target Status: Selected | Permission Result: Allowed
+[2026-06-10 11:18:18] User ID: 78 | Role: hr | App ID: 47 | Current Status: HR Review | Target Status: Shortlisted | Permission Result: Allowed
+[2026-06-10 11:20:14] User ID: 78 | Role: hr | App ID: 46 | Current Status: HR Review | Target Status: Shortlisted | Permission Result: Allowed
+[2026-06-10 15:37:33] User ID: 78 | Role: hr | App ID: 47 | Current Status: Exam Link Sent | Target Status: Exam Completed | Permission Result: Allowed
+[2026-06-10 15:37:44] User ID: 78 | Role: hr | App ID: 47 | Current Status: Exam Completed | Target Status: HR Review | Permission Result: Allowed
+[2026-06-10 17:11:00] User ID: 78 | Role: hr | App ID: 47 | Current Status: HR Review | Target Status: Shortlisted | Permission Result: Allowed
+[2026-06-10 23:54:48] User ID: 78 | Role: hr | App ID: 47 | Current Status: HOD Approved | Target Status: Selected | Permission Result: Allowed
+[2026-06-11 02:53:08] User ID: 78 | Role: hr | App ID: 56 | Current Status: HR Review | Target Status: Shortlisted | Permission Result: Allowed
+[2026-06-11 02:59:41] User ID: 78 | Role: hr | App ID: 56 | Current Status: HOD Approved | Target Status: Selected | Permission Result: Allowed
+[2026-06-11 03:20:08] User ID: 78 | Role: hr | App ID: 57 | Current Status: HR Review | Target Status: Shortlisted | Permission Result: Allowed
+[2026-06-11 03:24:29] User ID: 78 | Role: hr | App ID: 57 | Current Status: HOD Approved | Target Status: Selected | Permission Result: Allowed
+[2026-06-11 03:24:37] User ID: 78 | Role: hr | App ID: 57 | Current Status: Selected | Target Status: Selected | Permission Result: Allowed
+[2026-06-11 03:38:36] User ID: 78 | Role: hr | App ID: 58 | Current Status: HR Review | Target Status: Shortlisted | Permission Result: Allowed
+[2026-06-11 03:40:12] User ID: 78 | Role: hr | App ID: 58 | Current Status: HOD Approved | Target Status: Selected | Permission Result: Allowed
+[2026-06-11 06:25:13] User ID: 78 | Role: hr | App ID: 59 | Current Status: HR Review | Target Status: Shortlisted | Permission Result: Allowed
+[2026-06-11 06:27:56] User ID: 78 | Role: hr | App ID: 59 | Current Status: HOD Approved | Target Status: Selected | Permission Result: Allowed

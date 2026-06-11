@@ -229,7 +229,7 @@ if (!function_exists('sendEmailNotification')) {
      * @param array  $metadata    Key-value pairs to display in the email body summary card
      * @return bool True if logged and sent, false otherwise
      */
-    function sendEmailNotification($recipient, $subject, $messageText, $metadata = [], &$errorOutput = null) {
+    function sendEmailNotification($recipient, $subject, $messageText, $metadata = [], &$errorOutput = null, $options = []) {
         global $conn;
         $errorOutput = '';
 
@@ -249,12 +249,16 @@ if (!function_exists('sendEmailNotification')) {
         }
 
         // 2. Resolve recipient details
+        $recipient_addresses = [];
         if (is_numeric($recipient)) {
             $user_id = intval($recipient);
             $user_sql = "SELECT email, full_name FROM users WHERE id = $user_id LIMIT 1";
             $res = mysqli_query($conn, $user_sql);
             if ($res && $row = mysqli_fetch_assoc($res)) {
                 $email = trim($row['email']);
+                if (!empty($email)) {
+                    $recipient_addresses[] = $email;
+                }
                 if (empty($fullName) && !empty($row['full_name'])) {
                     $fullName = trim($row['full_name']);
                 }
@@ -267,36 +271,42 @@ if (!function_exists('sendEmailNotification')) {
                     if (empty($email)) {
                         $email = trim($prof_row['email']);
                     }
+                    if (!empty($email) && !in_array($email, $recipient_addresses, true)) {
+                        $recipient_addresses[] = $email;
+                    }
                     if (empty($fullName) && !empty($prof_row['full_name'])) {
                         $fullName = trim($prof_row['full_name']);
                     }
                 }
             }
-        } elseif (is_string($recipient) && filter_var($recipient, FILTER_VALIDATE_EMAIL)) {
-            $email = trim($recipient);
-            $esc_email = mysqli_real_escape_string($conn, $email);
-            $user_sql = "SELECT id, full_name FROM users WHERE email = '$esc_email' LIMIT 1";
-            $res = mysqli_query($conn, $user_sql);
-            if ($res && $row = mysqli_fetch_assoc($res)) {
-                $user_id = intval($row['id']);
-                if (empty($fullName) && !empty($row['full_name'])) {
-                    $fullName = trim($row['full_name']);
-                }
-            }
-            // Fall back to student profiles using user_id if we have it, or email otherwise
-            if (empty($fullName)) {
-                if ($user_id) {
-                    $prof_sql = "SELECT full_name FROM student_profiles WHERE user_id = $user_id LIMIT 1";
-                } else {
-                    $prof_sql = "SELECT user_id, full_name FROM student_profiles WHERE email = '$esc_email' LIMIT 1";
-                }
-                $prof_res = mysqli_query($conn, $prof_sql);
-                if ($prof_res && $prof_row = mysqli_fetch_assoc($prof_res)) {
-                    if (empty($user_id) && !empty($prof_row['user_id'])) {
-                        $user_id = intval($prof_row['user_id']);
+        } elseif (is_string($recipient)) {
+            $recipient_addresses = normalizeEmailAddresses($recipient);
+            if (!empty($recipient_addresses)) {
+                $email = trim($recipient_addresses[0]);
+                $esc_email = mysqli_real_escape_string($conn, $email);
+                $user_sql = "SELECT id, full_name FROM users WHERE email = '$esc_email' LIMIT 1";
+                $res = mysqli_query($conn, $user_sql);
+                if ($res && $row = mysqli_fetch_assoc($res)) {
+                    $user_id = intval($row['id']);
+                    if (empty($fullName) && !empty($row['full_name'])) {
+                        $fullName = trim($row['full_name']);
                     }
-                    if (empty($fullName) && !empty($prof_row['full_name'])) {
-                        $fullName = trim($prof_row['full_name']);
+                }
+                // Fall back to student profiles using user_id if we have it, or email otherwise
+                if (empty($fullName)) {
+                    if ($user_id) {
+                        $prof_sql = "SELECT full_name FROM student_profiles WHERE user_id = $user_id LIMIT 1";
+                    } else {
+                        $prof_sql = "SELECT user_id, full_name FROM student_profiles WHERE email = '$esc_email' LIMIT 1";
+                    }
+                    $prof_res = mysqli_query($conn, $prof_sql);
+                    if ($prof_res && $prof_row = mysqli_fetch_assoc($prof_res)) {
+                        if (empty($user_id) && !empty($prof_row['user_id'])) {
+                            $user_id = intval($prof_row['user_id']);
+                        }
+                        if (empty($fullName) && !empty($prof_row['full_name'])) {
+                            $fullName = trim($prof_row['full_name']);
+                        }
                     }
                 }
             }
@@ -485,13 +495,13 @@ if (!function_exists('sendEmailNotification')) {
                     </tr>';
 
             foreach ($metadata as $key => $val) {
-                if (in_array($key, ['event', 'action_url', 'action_label', 'sender_name', 'sender_role'])) {
+                if (in_array($key, ['event', 'action_url', 'action_label', 'sender_name', 'sender_role', 'attachments']) || is_array($val) || is_object($val)) {
                     continue;
                 }
                 $htmlBody .= '
                     <tr>
                         <td class="label">' . htmlspecialchars(ucwords(str_replace('_', ' ', $key))) . '</td>
-                        <td class="value">' . htmlspecialchars($val) . '</td>
+                        <td class="value">' . htmlspecialchars((string)$val) . '</td>
                     </tr>';
             }
             $htmlBody .= '
@@ -512,8 +522,46 @@ if (!function_exists('sendEmailNotification')) {
     </div>
 </body>
 </html>';
+        $to_list = array_values(array_unique(array_merge($recipient_addresses, normalizeEmailAddresses($options['to'] ?? null), normalizeEmailAddresses($metadata['to'] ?? null))));
+        $cc_list = normalizeEmailAddresses($options['cc'] ?? null);
+        $bcc_list = normalizeEmailAddresses($options['bcc'] ?? null);
+        $attachment_payload = $options['attachments'] ?? ($metadata['attachments'] ?? []);
+
+        $GLOBALS['mail_options'] = [
+            'reply_to' => $GLOBALS['mail_options']['reply_to'] ?? null,
+            'reply_to_name' => $GLOBALS['mail_options']['reply_to_name'] ?? '',
+            'from_name' => $GLOBALS['mail_options']['from_name'] ?? '',
+            'cc' => $cc_list,
+            'bcc' => $bcc_list,
+        ];
+        $GLOBALS['mail_options_attachments'] = $attachment_payload;
+
+        $resolved_app_id = 0;
+        if (!empty($options['application_id'])) {
+            $resolved_app_id = intval($options['application_id']);
+        } elseif (!empty($metadata['application_id'])) {
+            $resolved_app_id = intval($metadata['application_id']);
+        } elseif ($user_id) {
+            $app_query = mysqli_query($conn, "SELECT id FROM internship_applications WHERE user_id = $user_id ORDER BY id DESC LIMIT 1");
+            if ($app_query && $app_row = mysqli_fetch_assoc($app_query)) {
+                $resolved_app_id = intval($app_row['id']);
+            }
+        }
+
+        $sender_id = isset($_SESSION['user_id']) ? intval($_SESSION['user_id']) : 0;
+        $sender_role = isset($_SESSION['role']) ? $_SESSION['role'] : '';
+
+        $GLOBALS['mail_context'] = [
+            'sender_id' => $sender_id,
+            'sender_role' => $sender_role,
+            'application_id' => $resolved_app_id,
+        ];
+
         $smtp_logs = '';
-        $sent = sendEmail($email, $fullName, $subject, $htmlBody, $smtp_logs);
+        $sent = sendEmail($to_list ?: $email, $fullName, $subject, $htmlBody, $smtp_logs);
+        unset($GLOBALS['mail_options']);
+        unset($GLOBALS['mail_options_attachments']);
+        unset($GLOBALS['mail_context']);
         $final_status = $sent ? 'Sent' : 'Failed';
         $engine_info = "Sent via PHPMailer SMTP (smtp.gmail.com:587)";
                $clean_err = '';
@@ -609,54 +657,7 @@ if (!function_exists('sendEmailNotification')) {
         $log_sql = "INSERT INTO email_notifications_log $log_columns VALUES $log_values";
         mysqli_query($conn, $log_sql);
 
-        // Also log to email_logs table when available
-        $recipient_role = isset($metadata['recipient_role']) ? mysqli_real_escape_string($conn, $metadata['recipient_role']) : null;
-        if (empty($recipient_role) && is_numeric($recipient)) {
-            $role_query = mysqli_query($conn, "SELECT role FROM users WHERE id = " . intval($recipient) . " LIMIT 1");
-            if ($role_query && $row = mysqli_fetch_assoc($role_query)) {
-                $recipient_role = mysqli_real_escape_string($conn, $row['role']);
-            }
-        }
-        $recipient_role_sql = $recipient_role ? "'" . mysqli_real_escape_string($conn, $recipient_role) . "'" : 'NULL';
-        $err_msg_safe = $sent ? 'NULL' : "'" . mysqli_real_escape_string($conn, ($clean_err ? $clean_err . " | " : "") . $smtp_logs) . "'";
-        // Capture sender details when available in session
-        $sender_id_sql = 'NULL';
-        $sender_role_sql = 'NULL';
-        if (session_status() === PHP_SESSION_NONE) {
-            @session_start();
-        }
-        if (!empty($_SESSION['user_id'])) {
-            $sender_id_sql = intval($_SESSION['user_id']);
-        }
-        if (!empty($_SESSION['role'])) {
-            $sender_role_sql = "'" . mysqli_real_escape_string($conn, $_SESSION['role']) . "'";
-        }
-
-        $email_logs_has_user_col = false;
-        $email_logs_has_sender_cols = false;
-        $log_cols = '(recipient_email, recipient_role, subject, status, error_message';
-        $log_vals = "('$esc_email', $recipient_role_sql, '$esc_subject', '$esc_status', $err_msg_safe";
-        $email_log_user_check = mysqli_query($conn, "SHOW COLUMNS FROM email_logs LIKE 'user_id'");
-        if ($email_log_user_check && mysqli_num_rows($email_log_user_check) > 0) {
-            $email_logs_has_user_col = true;
-            $log_cols .= ', user_id';
-            $log_vals .= ", $esc_user_id";
-        }
-        $email_log_check = mysqli_query($conn, "SHOW COLUMNS FROM email_logs LIKE 'sender_id'");
-        if ($email_log_check && mysqli_num_rows($email_log_check) > 0) {
-            $email_log_check2 = mysqli_query($conn, "SHOW COLUMNS FROM email_logs LIKE 'sender_role'");
-            if ($email_log_check2 && mysqli_num_rows($email_log_check2) > 0) {
-                $email_logs_has_sender_cols = true;
-            }
-        }
-        if ($email_logs_has_sender_cols) {
-            $log_cols .= ', sender_id, sender_role';
-            $log_vals .= ", $sender_id_sql, $sender_role_sql";
-        }
-        $log_cols .= ')';
-        $log_vals .= ')';
-        $email_log_sql = "INSERT INTO email_logs $log_cols VALUES $log_vals";
-        @mysqli_query($conn, $email_log_sql);
+        // Duplicate insert into email_logs is removed. Logging is handled inside sendEmail() via logOutboundEmail()
 
         // 4. Log to File System for easy sandbox verification only on failure
         if (!$sent) {

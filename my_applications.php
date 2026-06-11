@@ -158,7 +158,7 @@ function formatDate($value) {
                   ?>
                   <h2 class="text-2xl font-semibold text-slate-900"><?php echo htmlspecialchars($display_title ?: 'Untitled Internship'); ?></h2>
                   <div class="flex flex-wrap items-center gap-2">
-                    <span class="rounded-full border px-3 py-1 text-sm font-semibold <?php echo $badgeClass; ?>"><?php echo htmlspecialchars($app['status']); ?></span>
+                    <span class="rounded-full border px-3 py-1 text-sm font-semibold <?php echo $badgeClass; ?>"><?php echo htmlspecialchars(formatStatusLabel($app['status'])); ?></span>
                     <span class="rounded-full border px-3 py-1 text-sm font-semibold <?php echo $verificationClass; ?>"><?php echo htmlspecialchars($app['verification_status']); ?></span>
                   </div>
                 </div>

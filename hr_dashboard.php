@@ -10,7 +10,7 @@ sync_candidates_from_applications($conn);
 
 $status_order = ['Applied', 'HR Review', 'Shortlisted', 'Exam Mail Sent', 'HOD Pending', 'HOD Approved', 'Selected', 'Rejected'];
 $status_counts = array_fill_keys($status_order, 0);
-$status_res = mysqli_query($conn, "SELECT COALESCE(status, 'Applied') AS status, COUNT(*) AS cnt FROM internship_applications WHERE is_deleted = 0 GROUP BY status");
+$status_res = mysqli_query($conn, "SELECT COALESCE(status, 'Applied') AS status, COUNT(*) AS cnt FROM internship_applications WHERE is_deleted = 0 AND status NOT IN ('Project Assigned', 'Team Assigned', 'Internship Started', 'Internship Completed', 'Certificate Issued', 'Archived') GROUP BY status");
 if ($status_res) {
     while ($row = mysqli_fetch_assoc($status_res)) {
         $st = $row['status'];
@@ -36,11 +36,11 @@ function scalar_count(mysqli $conn, string $sql): int {
     return (int) ($row['total'] ?? 0);
 }
 
-$total_applications = scalar_count($conn, "SELECT COUNT(*) AS total FROM internship_applications WHERE is_deleted = 0");
+$total_applications = scalar_count($conn, "SELECT COUNT(*) AS total FROM internship_applications WHERE is_deleted = 0 AND status NOT IN ('Project Assigned', 'Team Assigned', 'Internship Started', 'Internship Completed', 'Certificate Issued', 'Archived')");
 $total_candidates = scalar_count($conn, "SELECT COUNT(*) AS total FROM candidates");
 $pending_logs = scalar_count($conn, "SELECT COUNT(*) AS total FROM daily_logs WHERE hr_review_status = 'Pending'");
 $logs_today = scalar_count($conn, "SELECT COUNT(*) AS total FROM daily_logs WHERE DATE(created_at) = CURDATE()");
-$new_today = scalar_count($conn, "SELECT COUNT(*) AS total FROM internship_applications WHERE is_deleted = 0 AND DATE(applied_date) = CURDATE()");
+$new_today = scalar_count($conn, "SELECT COUNT(*) AS total FROM internship_applications WHERE is_deleted = 0 AND status NOT IN ('Project Assigned', 'Team Assigned', 'Internship Started', 'Internship Completed', 'Certificate Issued', 'Archived') AND DATE(applied_date) = CURDATE()");
 
 $recent_apps = mysqli_query($conn, "SELECT a.id, a.status, a.verification_status, a.applied_date,
         COALESCE(sp.full_name, u.full_name, a.full_name, 'Unknown Applicant') AS full_name,
@@ -369,7 +369,7 @@ page_shell_start('dashboard', 'Dashboard', 'Live HR overview powered by current 
                               </td>
                               <td class="px-6 py-4">
                                 <span class="inline-flex px-2.5 py-1 rounded-full text-[10px] font-bold uppercase border <?php echo getStatusBadgeClass($app['status'] ?: 'Applied'); ?>">
-                                    <?php echo htmlspecialchars($app['status'] ?: 'Applied'); ?>
+                                    <?php echo htmlspecialchars(formatStatusLabel($app['status'] ?: 'Applied')); ?>
                                 </span>
                             </td>
                             <td class="px-6 py-4 text-right text-slate-400 font-semibold text-xs"><?php echo $app['applied_date'] ? date('M d, Y', strtotime($app['applied_date'])) : 'N/A'; ?></td>
@@ -476,7 +476,7 @@ page_shell_start('dashboard', 'Dashboard', 'Live HR overview powered by current 
                 
                 <div class="text-right shrink-0 flex flex-col items-start sm:items-end gap-1">
                     <span class="inline-flex px-2 py-0.5 rounded text-[10px] font-bold uppercase border <?php echo getStatusBadgeClass($act_status ?: 'Updated'); ?>">
-                        <?php echo htmlspecialchars($act_status ?: 'Updated'); ?>
+                        <?php echo htmlspecialchars(formatStatusLabel($act_status ?: 'Updated')); ?>
                     </span>
                     <span class="text-[10px] text-slate-400 font-semibold"><?php echo date('M d, Y H:i', strtotime($activity['created_at'])); ?></span>
                 </div>

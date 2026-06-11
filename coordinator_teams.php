@@ -817,29 +817,26 @@ mysqli_stmt_close($teams_stmt);
 
 // Fetch selected students that can be assigned to a project team, including current team members and eligible unassigned applicants.
 $students_sql = "
-    SELECT u.id, u.full_name, u.email, sp.college_name,
+    SELECT DISTINCT u.id, u.full_name, u.email, sp.college_name,
            a.id AS application_id,
            a.internship_id, a.team_name AS assigned_team,
-           COALESCE(NULLIF(TRIM(a.applied_subtype), ''), NULLIF(TRIM(a.internship_name), ''), NULLIF(TRIM(i.project_subtype), '')) AS applied_subtype,
+           COALESCE(NULLIF(TRIM(a.applied_subtype), ''), NULLIF(TRIM(a.internship_name), '')) AS applied_subtype,
            a.status,
            CASE WHEN EXISTS (
                 SELECT 1
                 FROM project_team_members ptm2
-                JOIN project_teams pt2 ON ptm2.project_team_id = pt2.id
                 WHERE ptm2.student_id = u.id
-                  AND pt2.internship_id = a.internship_id
            ) THEN 1 ELSE 0 END AS assigned_to_any_team
     FROM users u
     JOIN internship_applications a ON u.id = a.user_id
-    JOIN internships i ON a.internship_id = i.id
     LEFT JOIN student_profiles sp ON u.id = sp.user_id
+    LEFT JOIN internships i ON a.internship_id = i.id
+    LEFT JOIN project_subtypes ps ON LOWER(TRIM(COALESCE(a.applied_subtype, a.internship_name))) = LOWER(TRIM(ps.subtype_name))
+    LEFT JOIN project_types pt2 ON ps.project_type_id = pt2.id
+    LEFT JOIN coordinator_assignments ca ON pt2.id = ca.project_type_id
     WHERE u.role = 'student'
-      AND i.coordinator_id = $coord_id
-      AND LOWER(TRIM(COALESCE(a.status, ''))) = 'selected'
-      AND (
-            LOWER(TRIM(COALESCE(a.applied_subtype, ''))) = LOWER(TRIM(COALESCE(i.project_subtype, '')))
-            OR LOWER(TRIM(COALESCE(a.internship_name, ''))) = LOWER(TRIM(COALESCE(i.project_subtype, '')))
-      )
+      AND (i.coordinator_id = $coord_id OR ca.coordinator_id = $coord_id)
+      AND LOWER(TRIM(COALESCE(a.status, ''))) IN ('selected', 'confirmation letter sent', 'confirmation_letter_sent')
     ORDER BY assigned_to_any_team DESC, u.full_name ASC
 ";
 $students_res = mysqli_query($conn, $students_sql);
@@ -1005,10 +1002,7 @@ if ($team_msg_res) {
                         <a href="coordinator_reports.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
                                 <span class="material-symbols-outlined text-[20px]">analytics</span> Reports
                         </a>
-						<a href="coordinator_student_reports.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
-							<span class="material-symbols-outlined text-[20px]">warning</span> Student Reports
-						</a>
-                        <a href="coordinator_teams.php" class="flex items-center gap-3 bg-blue-50 text-blue-700 border-l-4 border-blue-600 px-3 py-2.5 rounded-r-lg text-sm font-semibold">
+						<a href="coordinator_teams.php" class="flex items-center gap-3 bg-blue-50 text-blue-700 border-l-4 border-blue-600 px-3 py-2.5 rounded-r-lg text-sm font-semibold">
                                 <span class="material-symbols-outlined text-[20px]">manage_accounts</span> Teams
                         </a>
                 </nav>
@@ -1780,10 +1774,8 @@ if ($team_msg_res) {
             });
 
             studentsData.filter(st => {
-                if (parseInt(st.internship_id, 10) !== parseInt(internshipId, 10)) return false;
-
                 const stStatus = (st.status || '').trim().toLowerCase();
-                if (stStatus !== 'selected') return false;
+                if (!['selected', 'confirmation letter sent', 'confirmation_letter_sent'].includes(stStatus)) return false;
 
                 const stSubtype = ((st.applied_subtype || st.internship_name || '') + '').trim().toLowerCase();
                 if (stSubtype !== projectSubtype) return false;

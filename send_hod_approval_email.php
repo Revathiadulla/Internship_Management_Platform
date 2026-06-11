@@ -20,7 +20,7 @@ if ($app_id <= 0) {
 }
 
 // Fetch HOD email and student details
-$stmt = $conn->prepare('SELECT a.education_status, a.hod_email, a.hod_approval_status, i.title AS internship_title, sp.full_name, sp.email AS student_email FROM internship_applications a LEFT JOIN internships i ON a.internship_id = i.id LEFT JOIN student_profiles sp ON a.user_id = sp.user_id WHERE a.id = ?');
+$stmt = $conn->prepare('SELECT a.education_status, a.hod_email, a.hod_approval_status, COALESCE(i.project_subtype, a.project_subtype, a.applied_subtype, \'Not specified\') AS applied_subtype, sp.full_name, sp.email AS student_email FROM internship_applications a LEFT JOIN internships i ON a.internship_id = i.id LEFT JOIN student_profiles sp ON a.user_id = sp.user_id WHERE a.id = ?');
 $stmt->bind_param('i', $app_id);
 $stmt->execute();
 $res = $stmt->get_result();
@@ -63,7 +63,7 @@ $reject_link = hod_approval_url($app_id, $token, 'reject');
 $subject = "HOD Approval Required for Internship Application #$app_id";
 $message = "<html><body>
     <p>Dear HOD,</p>
-    <p>The student <strong>{$app['full_name']}</strong> (<a href='mailto:{$app['student_email']}'>{$app['student_email']}</a>) has completed the test for the internship <strong>{$app['internship_title']}</strong>.
+    <p>The student <strong>{$app['full_name']}</strong> (<a href='mailto:{$app['student_email']}'>{$app['student_email']}</a>) has completed the test for the applied internship <strong>{$app['applied_subtype']}</strong>.
     <p>Please review and decide:</p>
     <p><a href='$approve_link'>Approve Application</a> | <a href='$reject_link'>Reject Application</a></p>
     <p>This link will expire in 7 days.</p>

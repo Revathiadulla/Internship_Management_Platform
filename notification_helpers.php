@@ -335,7 +335,7 @@ function sendRoleBasedNotification($conn, $sender_id, $sender_role, $title, $mes
         }
 
         $receiver_role_value = strtolower(trim($user['role'] ?? $recipient_role ?? ''));
-        $stmt->bind_param('ississsssssssis', $sender_id, $sender_role, $user_id, $receiver_role_value, $user_id, $receiver_role_value, $effective_title, $message, $priority_value, $batch_key, $attachment_path, $attachment_name, $attachment_size, $attachment_type);
+        $stmt->bind_param('isisisssssssis', $sender_id, $sender_role, $user_id, $receiver_role_value, $user_id, $receiver_role_value, $effective_title, $message, $priority_value, $batch_key, $attachment_path, $attachment_name, $attachment_size, $attachment_type);
         if ($stmt->execute()) {
             $sent_count++;
         }

@@ -13,6 +13,7 @@
  */
 
 session_start();
+die(json_encode(['success' => false, 'message' => 'Student Reports module has been disabled.']));
 include_once __DIR__ . '/includes/auth.php';
 require_role('mentor');
 include 'db.php';
@@ -63,13 +64,20 @@ $check_sql = "SELECT 1 FROM (
                   JOIN project_team_members tm ON tm.project_team_id = t.id
                   JOIN internship_applications a ON a.user_id = tm.student_id
                   WHERE t.mentor_id = ? AND tm.student_id = ? AND a.id = ?
+                  
+                  UNION ALL
+                  
+                  SELECT 1
+                  FROM internship_applications a
+                  WHERE a.mentor_id = ? AND a.user_id = ? AND a.id = ?
+                    AND a.status IN ('Project Assigned', 'Team Assigned', 'Internship Started', 'Started', 'Active Intern', 'Selected')
               ) as assignments LIMIT 1";
 
 $check_stmt = $conn->prepare($check_sql);
 if (!$check_stmt) {
     json_response(false, 'Database error: ' . $conn->error);
 }
-$check_stmt->bind_param('iiiii', $mentor_id, $app_id, $mentor_id, $student_id, $app_id);
+$check_stmt->bind_param('iiiiiiii', $mentor_id, $app_id, $mentor_id, $student_id, $app_id, $mentor_id, $student_id, $app_id);
 $check_stmt->execute();
 $check_result = $check_stmt->get_result();
 

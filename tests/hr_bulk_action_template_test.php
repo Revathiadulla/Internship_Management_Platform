@@ -6,7 +6,7 @@ $message = get_bulk_exam_default_message();
 $rendered = render_bulk_exam_message($message, 'https://example.test/student_test.php?application_id=42');
 
 $assertions = [];
-$assertions[] = ($subject === 'Internship Assessment Link') ? 'subject-ok' : 'subject-failed';
+$assertions[] = ($subject === 'Internship Assessment Invitation') ? 'subject-ok' : 'subject-failed';
 $assertions[] = (strpos($rendered, 'https://example.test/student_test.php?application_id=42') !== false) ? 'link-ok' : 'link-failed';
 $assertions[] = (strpos($rendered, '{{EXAM_LINK}}') === false && strpos($rendered, '{EXAM_LINK}') === false) ? 'placeholder-ok' : 'placeholder-failed';
 

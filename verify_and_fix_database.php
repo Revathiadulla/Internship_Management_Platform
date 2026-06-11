@@ -543,6 +543,73 @@ if (mysqli_num_rows($check_hr) > 0) {
 }
 echo "</div>";
 
+// Check 12: confirmation_letter_templates table
+echo "<div class='mb-6'>";
+echo "<h2 class='text-lg font-bold text-slate-800 mb-3'>12. Checking confirmation_letter_templates table</h2>";
+$check_cl = mysqli_query($conn, "SHOW TABLES LIKE 'confirmation_letter_templates'");
+if (mysqli_num_rows($check_cl) > 0) {
+    echo "<p class='text-emerald-600 font-semibold'>✓ Table exists</p>";
+    $checks_passed++;
+} else {
+    echo "<p class='text-orange-600 font-semibold'>⚠ Creating table confirmation_letter_templates...</p>";
+    $create_sql = "CREATE TABLE confirmation_letter_templates (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        template_name VARCHAR(255) NOT NULL,
+        subject VARCHAR(255) NOT NULL,
+        content TEXT NOT NULL,
+        logo_path VARCHAR(255) NULL,
+        signature_name VARCHAR(255) NULL,
+        signature_designation VARCHAR(255) NULL,
+        is_active TINYINT(1) DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+    if (mysqli_query($conn, $create_sql)) {
+        echo "<p class='text-emerald-600 text-sm ml-4'>✓ Table created successfully</p>";
+        $fixes_applied++;
+        // Insert default template
+        $default_content = "Dear {student_name},\n\nWe are pleased to inform you that your application for the internship position \"{project_title}\" has been successful. You have been officially selected for this role.\n\nPlease note: Project allocation, team formation, and mentor assignment will be communicated separately by the Coordinator. You do not need to take any action regarding these assignments until further notice.\n\nCongratulations on your selection!";
+        $ins = mysqli_query($conn, "INSERT INTO confirmation_letter_templates (template_name, subject, content, signature_name, signature_designation, is_active) VALUES ('Default Template', 'Congratulations! You have been selected for the internship', '" . mysqli_real_escape_string($conn, $default_content) . "', 'HR Team', 'IMP Platform', 1)");
+    } else {
+        echo "<p class='text-red-600 text-sm ml-4'>✗ Failed to create table: " . mysqli_error($conn) . "</p>";
+        $checks_failed++;
+    }
+}
+echo "</div>";
+
+// Check 13: certificate_templates table
+echo "<div class='mb-6'>";
+echo "<h2 class='text-lg font-bold text-slate-800 mb-3'>13. Checking certificate_templates table</h2>";
+$check_ct = mysqli_query($conn, "SHOW TABLES LIKE 'certificate_templates'");
+if (mysqli_num_rows($check_ct) > 0) {
+    echo "<p class='text-emerald-600 font-semibold'>✓ Table exists</p>";
+    $checks_passed++;
+} else {
+    echo "<p class='text-orange-600 font-semibold'>⚠ Creating table certificate_templates...</p>";
+    $create_sql = "CREATE TABLE certificate_templates (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        template_name VARCHAR(255) NOT NULL,
+        content TEXT NOT NULL,
+        logo_path VARCHAR(255) NULL,
+        signature_name VARCHAR(255) NULL,
+        signature_designation VARCHAR(255) NULL,
+        seal_image VARCHAR(255) NULL,
+        is_active TINYINT(1) DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+    if (mysqli_query($conn, $create_sql)) {
+        echo "<p class='text-emerald-600 text-sm ml-4'>✓ Table created successfully</p>";
+        $fixes_applied++;
+        // Insert default template
+        $default_content = "has successfully completed the internship program as a {project_title} at the {company_name}.";
+        $ins = mysqli_query($conn, "INSERT INTO certificate_templates (template_name, content, signature_name, signature_designation, is_active) VALUES ('Default Template', '" . mysqli_real_escape_string($conn, $default_content) . "', 'Program Coordinator', 'IMP Platform Director', 1)");
+    } else {
+        echo "<p class='text-red-600 text-sm ml-4'>✗ Failed to create table: " . mysqli_error($conn) . "</p>";
+        $checks_failed++;
+    }
+}
+echo "</div>";
 
 // Summary
 echo "<div class='mt-8 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200'>";

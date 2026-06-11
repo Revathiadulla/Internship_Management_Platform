@@ -5,6 +5,7 @@
  */
 
 session_start();
+die("Student Reports module has been disabled.");
 if (!isset($_SESSION['user_id']) || strtolower($_SESSION['role']) !== 'coordinator') {
     header("Location: login.php");
     exit();

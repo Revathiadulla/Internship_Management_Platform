@@ -219,7 +219,7 @@ page_shell_start('archived_applications', 'Archived Applications', 'View and res
                   </td>
                   <td class="py-4 px-6">
                     <span class="inline-flex px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wide border uppercase <?php echo getStatusBadgeClass($app['status']); ?>">
-                      <?php echo htmlspecialchars($app['status']); ?>
+                      <?php echo htmlspecialchars(formatStatusLabel($app['status'])); ?>
                     </span>
                     <div class="mt-2">
                       <span class="inline-flex px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wide border uppercase <?php echo getVerificationBadgeClass($app['verification_status'] ?? 'Pending'); ?>">

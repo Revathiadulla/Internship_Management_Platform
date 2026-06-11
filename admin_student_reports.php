@@ -5,6 +5,7 @@
  */
 
 session_start();
+die("Student Reports module has been disabled.");
 include_once __DIR__ . '/includes/auth.php';
 require_role('admin');
 include 'db.php';

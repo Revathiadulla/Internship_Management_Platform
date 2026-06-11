@@ -10,6 +10,10 @@ if ($mentor_id <= 0) {
     die('Unauthorized');
 }
 
+$team_rows = [];
+$team_ids_added = [];
+$team_names_added = [];
+
 $team_sql = "SELECT t.id, t.team_name, t.status, t.internship_id, i.title AS project_title, i.project_type, i.project_subtype, i.technology_stack, i.duration, i.start_date, i.end_date, u.full_name AS mentor_name
              FROM project_teams t
              LEFT JOIN internships i ON t.internship_id = i.id
@@ -17,57 +21,152 @@ $team_sql = "SELECT t.id, t.team_name, t.status, t.internship_id, i.title AS pro
              WHERE t.mentor_id = ?
              ORDER BY COALESCE(i.title, t.team_name) ASC, t.team_name ASC";
 $team_stmt = $conn->prepare($team_sql);
-$team_stmt->bind_param('i', $mentor_id);
-$team_stmt->execute();
-$team_result = $team_stmt->get_result();
-$team_rows = [];
-while ($row = $team_result->fetch_assoc()) {
-    $team_id = intval($row['id']);
-    $member_sql = "SELECT COUNT(*) AS student_count FROM project_team_members WHERE project_team_id = ?";
-    $member_stmt = $conn->prepare($member_sql);
-    $member_stmt->bind_param('i', $team_id);
-    $member_stmt->execute();
-    $member_result = $member_stmt->get_result();
-    $member_count = 0;
-    if ($member_row = $member_result->fetch_assoc()) {
-        $member_count = intval($member_row['student_count'] ?? 0);
+if ($team_stmt) {
+    $team_stmt->bind_param('i', $mentor_id);
+    $team_stmt->execute();
+    $team_result = $team_stmt->get_result();
+    while ($row = $team_result->fetch_assoc()) {
+        $team_id = intval($row['id']);
+        $team_name = trim($row['team_name'] ?? '');
+        
+        $member_sql = "SELECT COUNT(*) AS student_count FROM project_team_members WHERE project_team_id = ?";
+        $member_stmt = $conn->prepare($member_sql);
+        $member_count = 0;
+        if ($member_stmt) {
+            $member_stmt->bind_param('i', $team_id);
+            $member_stmt->execute();
+            $member_result = $member_stmt->get_result();
+            if ($member_row = $member_result->fetch_assoc()) {
+                $member_count = intval($member_row['student_count'] ?? 0);
+            }
+            $member_stmt->close();
+        }
+
+        $phase_map = [
+            'Planning' => 25,
+            'Active' => 50,
+            'In Progress' => 60,
+            'Mid Review' => 75,
+            'Final Review' => 85,
+            'Completed' => 100,
+            'Paused' => 35,
+            'Started' => 55,
+            'Applied' => 20,
+            'Shortlisted' => 35,
+            'Selected' => 45,
+            'Internship Started' => 70,
+            'Internship Active' => 85,
+            'Active Intern' => 80,
+        ];
+        $progress = $phase_map[trim($row['status'] ?? '')] ?? 45;
+
+        $team_rows[] = [
+            'team_id' => $team_id,
+            'team_name' => $team_name ?: 'Project Team',
+            'project_title' => $row['project_title'] ?: 'Assigned Project',
+            'project_subtype' => $row['project_subtype'] ?: 'General',
+            'technology_stack' => $row['technology_stack'] ?: 'Not listed',
+            'duration' => $row['duration'] ?: '—',
+            'start_date' => $row['start_date'] ?: '—',
+            'end_date' => $row['end_date'] ?: '—',
+            'current_phase' => trim($row['status'] ?: 'Active'),
+            'progress_percent' => $progress,
+            'student_count' => $member_count,
+            'mentor_name' => $row['mentor_name'] ?: 'Mentor',
+        ];
+
+        if ($team_id > 0) {
+            $team_ids_added[$team_id] = true;
+        }
+        if ($team_name !== '') {
+            $team_names_added[strtolower($team_name)] = true;
+        }
     }
-    $member_stmt->close();
-
-    $phase_map = [
-        'Planning' => 25,
-        'Active' => 50,
-        'In Progress' => 60,
-        'Mid Review' => 75,
-        'Final Review' => 85,
-        'Completed' => 100,
-        'Paused' => 35,
-        'Started' => 55,
-        'Applied' => 20,
-        'Shortlisted' => 35,
-        'Selected' => 45,
-        'Internship Started' => 70,
-        'Internship Active' => 85,
-        'Active Intern' => 80,
-    ];
-    $progress = $phase_map[trim($row['status'] ?? '')] ?? 45;
-
-    $team_rows[] = [
-        'team_id' => $team_id,
-        'team_name' => $row['team_name'] ?: 'Project Team',
-        'project_title' => $row['project_title'] ?: 'Assigned Project',
-        'project_subtype' => $row['project_subtype'] ?: 'General',
-        'technology_stack' => $row['technology_stack'] ?: 'Not listed',
-        'duration' => $row['duration'] ?: '—',
-        'start_date' => $row['start_date'] ?: '—',
-        'end_date' => $row['end_date'] ?: '—',
-        'current_phase' => trim($row['status'] ?: 'Active'),
-        'progress_percent' => $progress,
-        'student_count' => $member_count,
-        'mentor_name' => $row['mentor_name'] ?: 'Mentor',
-    ];
+    $team_stmt->close();
 }
-$team_stmt->close();
+
+// Fallback: Query from internship_applications
+$app_teams_sql = "SELECT DISTINCT ia.team_name, ia.team_status, ia.internship_id, ia.internship_name, 
+                          COALESCE(i.title, ia.internship_name) as project_title,
+                          COALESCE(i.project_type, 'General') as project_type,
+                          COALESCE(i.project_subtype, ia.applied_subtype, 'General') as project_subtype,
+                          COALESCE(i.technology_stack, ia.tech_stack, '') as technology_stack,
+                          COALESCE(i.duration, ia.internship_duration, '—') as duration,
+                          i.start_date, i.end_date,
+                          ia.team_id, u.full_name AS mentor_name
+                  FROM internship_applications ia
+                  LEFT JOIN internships i ON ia.internship_id = i.id
+                  LEFT JOIN users u ON ia.mentor_id = u.id
+                  WHERE ia.mentor_id = ? 
+                    AND ia.status IN ('Project Assigned', 'Team Assigned', 'Internship Started', 'Started', 'Active Intern', 'Selected')
+                    AND ia.team_name IS NOT NULL AND ia.team_name != ''
+                  GROUP BY ia.team_name, ia.internship_id";
+$app_teams_stmt = $conn->prepare($app_teams_sql);
+if ($app_teams_stmt) {
+    $app_teams_stmt->bind_param('i', $mentor_id);
+    $app_teams_stmt->execute();
+    $app_teams_result = $app_teams_stmt->get_result();
+    while ($row = $app_teams_result->fetch_assoc()) {
+        $team_name = trim($row['team_name'] ?? '');
+        $team_id = intval($row['team_id'] ?? 0);
+        $internship_id = intval($row['internship_id']);
+
+        if ($team_id > 0 && isset($team_ids_added[$team_id])) {
+            continue;
+        }
+        if (isset($team_names_added[strtolower($team_name)])) {
+            continue;
+        }
+
+        // Count students in internship_applications
+        $cnt_stmt = $conn->prepare("SELECT COUNT(DISTINCT user_id) as cnt FROM internship_applications WHERE mentor_id = ? AND team_name = ? AND status IN ('Project Assigned', 'Team Assigned', 'Internship Started', 'Started', 'Active Intern', 'Selected')");
+        $student_count = 0;
+        if ($cnt_stmt) {
+            $cnt_stmt->bind_param('is', $mentor_id, $team_name);
+            $cnt_stmt->execute();
+            $student_count = intval($cnt_stmt->get_result()->fetch_assoc()['cnt'] ?? 0);
+            $cnt_stmt->close();
+        }
+
+        $phase_map = [
+            'Planning' => 25,
+            'Active' => 50,
+            'In Progress' => 60,
+            'Mid Review' => 75,
+            'Final Review' => 85,
+            'Completed' => 100,
+            'Paused' => 35,
+            'Started' => 55,
+            'Applied' => 20,
+            'Shortlisted' => 35,
+            'Selected' => 45,
+            'Internship Started' => 70,
+            'Internship Active' => 85,
+            'Active Intern' => 80,
+        ];
+        $progress = $phase_map[trim($row['team_status'] ?? '')] ?? 50;
+
+        $team_rows[] = [
+            'team_id' => $team_id > 0 ? $team_id : -1,
+            'team_name' => $team_name,
+            'project_title' => $row['project_title'] ?: 'Assigned Project',
+            'project_subtype' => $row['project_subtype'] ?: 'General',
+            'technology_stack' => $row['technology_stack'] ?: 'Not listed',
+            'duration' => $row['duration'] ?: '—',
+            'start_date' => $row['start_date'] ?: '—',
+            'end_date' => $row['end_date'] ?: '—',
+            'current_phase' => trim($row['team_status'] ?: 'Active'),
+            'progress_percent' => $progress,
+            'student_count' => $student_count,
+            'mentor_name' => $row['mentor_name'] ?: 'Mentor',
+        ];
+
+        if ($team_name !== '') {
+            $team_names_added[strtolower($team_name)] = true;
+        }
+    }
+    $app_teams_stmt->close();
+}
 
 page_shell_start('projects', 'Projects', 'Assigned project workspace');
 ?>
@@ -140,11 +239,11 @@ page_shell_start('projects', 'Projects', 'Assigned project workspace');
                     </div>
 
                     <div class="mt-6 pt-4 border-t border-slate-100 flex items-center gap-3">
-                        <a href="mentor_workspace.php?team_id=<?= intval($project['team_id']) ?>" class="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700 transition-colors shadow-sm">
+                        <a href="mentor_workspace.php?team_id=<?= intval($project['team_id']) ?>&team_name=<?= urlencode($project['team_name']) ?>" class="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700 transition-colors shadow-sm">
                             <span class="material-symbols-outlined text-[14px]">terminal</span>
                             Open Workspace
                         </a>
-                        <a href="mentor_workspace.php?team_id=<?= intval($project['team_id']) ?>&tab=students" class="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-xs font-bold text-red-700 hover:bg-red-100 transition-colors">
+                        <a href="mentor_workspace.php?team_id=<?= intval($project['team_id']) ?>&team_name=<?= urlencode($project['team_name']) ?>&tab=students" class="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-xs font-bold text-red-700 hover:bg-red-100 transition-colors">
                             <span class="material-symbols-outlined text-[14px]">person_remove</span>
                             Request Drop Student
                         </a>

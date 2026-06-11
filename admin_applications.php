@@ -5,6 +5,7 @@ if (!isset($_SESSION['user_id']) || !isset($_SESSION['role']) || strtolower($_SE
     exit();
 }
 include "db.php";
+include "status_utils.php";
 
 // Fetch admin notifications unread count for badge
 $admin_unread_res = mysqli_query($conn, "SELECT COUNT(*) as count FROM notifications WHERE user_id = " . intval($_SESSION['user_id']) . " AND role = 'admin' AND is_read = 0");
@@ -421,7 +422,7 @@ $header_photo = $header_user['profile_photo'] ?? '';
                       <td class="px-6 py-4 text-gray-400 text-xs font-semibold"><?php echo date('M d, Y', strtotime($app['applied_date'])); ?></td>
                       <td class="px-6 py-4">
                         <span class="px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wider border <?php echo $stat_cls; ?>">
-                          <?php echo htmlspecialchars($app['status']); ?>
+                          <?php echo htmlspecialchars(formatStatusLabel($app['status'])); ?>
                         </span>
                       </td>
                       <td class="px-6 py-4 text-right">

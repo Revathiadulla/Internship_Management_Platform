@@ -59,8 +59,10 @@ foreach ($sp_verif_cols as $col => $sql) {
 // Use new official statuses
 $status_options       = ['Applied', 'HR Review', 'HOD Approval', 'Selected', 'Project Assignment', 'Active Intern', 'Completed', 'Rejected'];
 $verification_options = ['Pending', 'Verified', 'Rejected'];
-// Base where clause
-$where_clauses = ["a.is_deleted = 0"];
+$where_clauses = [
+    "a.is_deleted = 0",
+    "a.status NOT IN ('Project Assigned', 'Team Assigned', 'Internship Started', 'Internship Completed', 'Certificate Issued', 'Archived')"
+];
 
 // Existing filters remain unchanged
 $status_filter       = isset($_GET['status'])              ? trim($_GET['status'])              : '';;
@@ -275,6 +277,7 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
           <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
             <select id="bulk-action-select" class="w-full sm:w-auto border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 bg-white">
               <option value="">Bulk action</option>
+              <option value="send_email">Send Email</option>
               <option value="send_confirmation_letter">Send Confirmation Letter</option>
               <option value="archive">Archive selected</option>
             </select>
@@ -390,7 +393,7 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
                   <td class="py-4 px-6">
                     <div class="flex flex-col items-start gap-2">
                       <span class="inline-flex px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wide border uppercase <?php echo getStatusBadgeClass($raw_status); ?>">
-                        Application Status: <?php echo htmlspecialchars($application_status_label); ?>
+                        <?php echo htmlspecialchars(formatStatusLabel($raw_status)); ?>
                       </span>
                       <?php if ($show_confirmation_status): ?>
                       <span class="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-700">
@@ -701,8 +704,8 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
           return;
         }
 
-        if (action === 'send_exam_link' || action === 'send_exam_mail') {
-          openBulkExamComposeModal(selectedIds, selectedRows);
+        if (action === 'send_email') {
+          openBulkExamComposeModal(selectedIds, selectedRows, { action: 'send_email' });
           return;
         }
 
@@ -1020,9 +1023,15 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
     const selectedCountEl = document.getElementById('bulk-exam-selected-count');
     const recipientsEl = document.getElementById('bulk-exam-recipients');
     const previewEl = document.getElementById('bulk-exam-link-preview');
+    const previewWrapper = document.getElementById('bulk-exam-preview-wrapper');
     const appIdEl = document.getElementById('bulk-exam-app-id');
     const subjectInput = document.getElementById('bulk-exam-subject');
     const messageInput = document.getElementById('bulk-exam-message');
+    const toInput = document.getElementById('bulk-exam-to');
+    const ccInput = document.getElementById('bulk-exam-cc');
+    const bccInput = document.getElementById('bulk-exam-bcc');
+    const modalTitle = document.getElementById('bulk-exam-modal-title');
+    const submitBtn = document.getElementById('bulk-exam-submit-btn');
     const singleRecipientNameInput = form.querySelector('input[name="single_recipient_name"]');
     const singleRecipientEmailInput = form.querySelector('input[name="single_recipient_email"]');
 
@@ -1032,6 +1041,7 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
 
     const selectedRowsData = selectedRows || bulkRows.filter(row => !row.disabled && row.checked);
     const singleRecipient = options.recipient || null;
+    const action = options.action || 'send_email';
     const recipients = selectedRowsData
       .map(row => ({
         name: row.dataset.studentName || 'Student',
@@ -1045,7 +1055,7 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
     const firstId = (selectedIds || []).find(Boolean);
     const previewRecipient = singleRecipient || (recipients[0] || null);
     const previewUrl = firstId ? `${getBulkExamBaseUrl()}/application_status_timeline.php?application_id=${firstId}` : `${getBulkExamBaseUrl()}/application_status_timeline.php?application_id=APPLICATION_ID`;
-    previewEl.textContent = previewUrl;
+    if (previewEl) previewEl.textContent = previewUrl;
     if (appIdEl) {
       appIdEl.textContent = firstId || '-';
     }
@@ -1060,17 +1070,28 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
       recipientsEl.innerHTML = `<li class="text-sm text-slate-600">${previewRecipient.name} — ${previewRecipient.email}</li>`;
     }
 
-    subjectInput.value = 'Internship Assessment Update';
-    messageInput.value = [
-      'Dear Student,',
-      '',
-      'Your internship assessment details will be shared separately by the team if required.',
-      'Please follow the latest update in the application portal for next steps.',
-      '',
-      'Regards,',
-      'HR Team'
-    ].join('\n');
+    if (toInput) toInput.value = recipients.map(item => item.email).filter(Boolean).join(', ');
+    if (ccInput) ccInput.value = '';
+    if (bccInput) bccInput.value = '';
 
+    if (action === 'send_email') {
+      if (subjectInput) subjectInput.value = 'Important Update from HR';
+      if (messageInput) messageInput.value = [
+        'Dear Student,',
+        '',
+        'This is an update from the HR team regarding your internship application.',
+        '',
+        'Please review the details and follow the next steps as communicated by the HR team.',
+        '',
+        'Regards,',
+        'HR Team'
+      ].join('\n');
+      if (previewWrapper) previewWrapper.classList.add('hidden');
+      if (modalTitle) modalTitle.textContent = 'Compose Email';
+      if (submitBtn) submitBtn.textContent = 'Send Email';
+    }
+
+    form.dataset.action = action;
     form.querySelector('input[name="selected_count"]').value = selectedRowsData.length;
     form.querySelectorAll('input[name="application_ids[]"]').forEach(input => input.remove());
     (selectedIds || []).forEach(id => {
@@ -1119,12 +1140,13 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
       }
 
       const submitBtn = document.getElementById('bulk-exam-submit-btn');
+      const action = this.dataset.action || 'send_email';
       submitBtn.disabled = true;
       submitBtn.textContent = 'Sending...';
       
       try {
         const formData = new FormData(this);
-        formData.append('action', 'send_exam_link');
+        formData.set('action', action);
         
         const response = await fetch('hr_bulk_action.php', {
           method: 'POST',
@@ -1143,12 +1165,6 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
         const toastType = result.type || (result.success ? 'success' : 'error');
         const toastTitle = result.title || (result.success ? 'Success' : 'Failed');
         let toastMessage = result.message || 'Bulk exam request completed.';
-        const singleRecipientName = this.querySelector('input[name="single_recipient_name"]').value;
-        if (result.success && selectedIds.length === 1 && singleRecipientName) {
-          toastMessage = `Exam link delivered successfully to ${singleRecipientName}.`;
-        } else if (!result.success && selectedIds.length === 1) {
-          toastMessage = `Exam link delivery failed. Reason: ${toastMessage.replace('No exam links were delivered. Reason: ', '')}`;
-        }
 
         if (result.success) {
           closeBulkExamModal();
@@ -1158,13 +1174,13 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
           closeBulkExamModal();
           showToast(toastType, toastTitle, toastMessage);
           submitBtn.disabled = false;
-          submitBtn.textContent = 'Send Exam Link';
+          submitBtn.textContent = 'Send Email';
         }
       } catch (error) {
         console.error('Bulk action failed', error);
         showToast('error', 'Failed', 'Bulk action failed. Please check server error/logs.');
         submitBtn.disabled = false;
-        submitBtn.textContent = 'Send Exam Link';
+        submitBtn.textContent = 'Send Email';
       }
     });
   }
@@ -1192,14 +1208,14 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
     <div class="inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full border border-slate-100">
       <form id="bulk-exam-form" enctype="multipart/form-data" class="p-6 space-y-4">
         <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-          <h3 class="text-lg font-bold text-slate-800" id="modal-title">Compose Exam Email</h3>
+          <h3 class="text-lg font-bold text-slate-800" id="bulk-exam-modal-title">Compose Email</h3>
           <button type="button" onclick="closeBulkExamModal()" class="text-slate-400 hover:text-slate-600 transition">
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
         
         <div class="space-y-4">
-          <input type="hidden" name="action" value="send_exam_link">
+          <input type="hidden" name="action" value="send_email">
           <input type="hidden" name="selected_count" value="0">
           <input type="hidden" name="single_recipient_name" value="">
           <input type="hidden" name="single_recipient_email" value="">
@@ -1211,6 +1227,22 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
             <ul id="bulk-exam-recipients" class="mt-2 space-y-1 list-disc pl-5 text-sm text-slate-600"></ul>
           </div>
 
+          <div class="grid gap-4 md:grid-cols-2">
+            <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
+              <span class="mb-1 block">To</span>
+              <input id="bulk-exam-to" type="text" name="to" class="w-full rounded-lg border border-slate-200 p-2.5 text-sm text-slate-700 bg-white focus:ring-2 focus:ring-blue-600 focus:border-transparent outline-none transition" required>
+            </label>
+            <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
+              <span class="mb-1 block">CC</span>
+              <input id="bulk-exam-cc" type="text" name="cc" class="w-full rounded-lg border border-slate-200 p-2.5 text-sm text-slate-700 bg-white focus:ring-2 focus:ring-blue-600 focus:border-transparent outline-none transition">
+            </label>
+          </div>
+
+          <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
+            <span class="mb-1 block">BCC</span>
+            <input id="bulk-exam-bcc" type="text" name="bcc" class="w-full rounded-lg border border-slate-200 p-2.5 text-sm text-slate-700 bg-white focus:ring-2 focus:ring-blue-600 focus:border-transparent outline-none transition">
+          </label>
+
           <div>
             <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Subject</label>
             <input id="bulk-exam-subject" type="text" name="subject" value="Internship Assessment Link" class="w-full rounded-lg border border-slate-200 p-2.5 text-sm text-slate-700 bg-white focus:ring-2 focus:ring-blue-600 focus:border-transparent outline-none transition" required>
@@ -1221,14 +1253,14 @@ page_shell_start('applications', 'Applications', 'Review, update status, and man
             <textarea id="bulk-exam-message" name="message" rows="8" class="w-full rounded-lg border border-slate-200 p-2.5 text-sm text-slate-700 bg-white focus:ring-2 focus:ring-blue-600 focus:border-transparent outline-none transition" required></textarea>
           </div>
 
-          <div>
+          <div id="bulk-exam-preview-wrapper">
             <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Generated exam link preview</label>
             <div id="bulk-exam-link-preview" class="rounded-lg border border-blue-100 bg-blue-50 p-2.5 text-sm text-blue-700 break-all"></div>
           </div>
 
           <div>
             <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Attachment (optional)</label>
-            <input type="file" name="exam_attachment" accept=".pdf,.doc,.docx,.zip" class="w-full text-xs text-slate-700 file:mr-2 file:py-1 file:px-2 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+            <input type="file" name="attachment_file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" class="w-full text-xs text-slate-700 file:mr-2 file:py-1 file:px-2 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
           </div>
         </div>
         

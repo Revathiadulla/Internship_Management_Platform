@@ -138,12 +138,151 @@ function writeEmailLog(string $message): void {
         '[' . date('Y-m-d H:i:s') . '] ' . $message . "\n", FILE_APPEND);
 }
 
+function ensureEmailLogColumns(): void {
+    global $conn;
+    if (empty($conn) || !($conn instanceof mysqli)) {
+        return;
+    }
+
+    $requiredColumns = [
+        'from_email' => 'VARCHAR(255) NULL',
+        'to_email' => 'VARCHAR(255) NULL',
+        'body' => 'TEXT NULL',
+        'attachment_path' => 'VARCHAR(500) NULL',
+        'application_id' => 'INT NULL',
+        'sender_id' => 'INT NULL',
+        'sender_role' => 'VARCHAR(50) NULL',
+    ];
+
+    foreach ($requiredColumns as $column => $definition) {
+        $check = mysqli_query($conn, "SHOW COLUMNS FROM email_logs LIKE '$column'");
+        if ($check && mysqli_num_rows($check) === 0) {
+            @mysqli_query($conn, "ALTER TABLE email_logs ADD COLUMN $column $definition");
+        }
+    }
+}
+
+function logOutboundEmail(array $data = []): void {
+    global $conn;
+    if (empty($conn) || !($conn instanceof mysqli)) {
+        return;
+    }
+
+    ensureEmailLogColumns();
+
+    $senderId = isset($data['sender_id']) ? intval($data['sender_id']) : 0;
+    $senderRole = trim((string) ($data['sender_role'] ?? ''));
+    $fromEmail = trim((string) ($data['from_email'] ?? ''));
+    $toEmail = trim((string) ($data['to_email'] ?? $data['recipient_email'] ?? ''));
+    $subject = substr(trim((string) ($data['subject'] ?? '')), 0, 255);
+    $body = trim((string) ($data['body'] ?? $data['message'] ?? ''));
+    $attachmentPath = substr(trim((string) ($data['attachment_path'] ?? '')), 0, 500);
+    $status = trim((string) ($data['status'] ?? 'sent'));
+    $errorMessage = substr(trim((string) ($data['error_message'] ?? '')), 0, 65535);
+    $sentAt = trim((string) ($data['sent_at'] ?? date('Y-m-d H:i:s')));
+    $applicationId = isset($data['application_id']) ? intval($data['application_id']) : 0;
+
+    $subjectEsc = mysqli_real_escape_string($conn, $subject);
+    $bodyEsc = mysqli_real_escape_string($conn, $body);
+    $errorEsc = mysqli_real_escape_string($conn, $errorMessage);
+    $fromEmailEsc = mysqli_real_escape_string($conn, $fromEmail);
+    $toEmailEsc = mysqli_real_escape_string($conn, $toEmail);
+    $attachmentEsc = mysqli_real_escape_string($conn, $attachmentPath);
+    $senderRoleEsc = mysqli_real_escape_string($conn, $senderRole);
+    $statusEsc = mysqli_real_escape_string($conn, $status);
+
+    $stmt = $conn->prepare("INSERT INTO email_logs (sender_id, sender_role, from_email, to_email, recipient_email, subject, body, message, attachment_path, status, error_message, sent_at, application_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    if (!$stmt) {
+        return;
+    }
+
+    $stmt->bind_param('isssssssssssi', $senderId, $senderRoleEsc, $fromEmailEsc, $toEmailEsc, $toEmailEsc, $subjectEsc, $bodyEsc, $bodyEsc, $attachmentEsc, $statusEsc, $errorEsc, $sentAt, $applicationId);
+    $stmt->execute();
+    $stmt->close();
+}
+
+function isSmtpConfigured(): bool {
+    $cfg = getSmtpConfig();
+    return !empty($cfg['host']) && !empty($cfg['port']) && !empty($cfg['username']) && !empty($cfg['password']) && !empty($cfg['from_email']);
+}
+
+function normalizeEmailAddresses($value): array {
+    if (is_array($value)) {
+        $items = [];
+        foreach ($value as $item) {
+            if (is_string($item) || is_numeric($item)) {
+                $items[] = (string) $item;
+            }
+        }
+        $value = implode(', ', $items);
+    }
+
+    if ($value === null) {
+        return [];
+    }
+
+    $parts = preg_split('/[\r\n,;]+/', trim((string) $value));
+    $emails = [];
+    foreach ($parts as $part) {
+        $email = trim($part);
+        if ($email === '') {
+            continue;
+        }
+        if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $emails[] = $email;
+        }
+    }
+
+    return array_values(array_unique($emails));
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // sendEmail()
 // Tries PHPMailer/SMTP first; falls back to Brevo API if BREVO_API_KEY is set.
 // Returns true on success, false on failure.
 // ─────────────────────────────────────────────────────────────────────────────
 function sendEmail($to, $subjectOrName, $messageOrSubject = null, $message = null, &$debugInfo = null): bool {
+
+    // Helper to safely convert arrays or objects to strings based on user rules
+    $convertParam = function($var, $name) {
+        if (is_array($var)) {
+            // Add debugging temporarily
+            error_log("Array to string conversion debug for parameter '$name': " . print_r($var, true));
+            
+            // If variable is a user object/array
+            if (isset($var['email'])) {
+                return $var['email'];
+            }
+            if (isset($var['name'])) {
+                return $var['name'];
+            }
+            
+            // If variable is attachment metadata
+            if (isset($var['path']) || isset($var['tmp_name']) || isset($var['file']) || isset($var['data']) || isset($var['content'])) {
+                return json_encode($var);
+            }
+            
+            // If variable is an email list
+            $all_scalars = true;
+            foreach ($var as $k => $v) {
+                if (is_array($v) || is_object($v)) {
+                    $all_scalars = false;
+                    break;
+                }
+            }
+            if ($all_scalars) {
+                return implode(', ', $var);
+            }
+            
+            return json_encode($var);
+        }
+        return $var;
+    };
+
+    $to = $convertParam($to, 'to');
+    $subjectOrName = $convertParam($subjectOrName, 'subjectOrName');
+    $messageOrSubject = $convertParam($messageOrSubject, 'messageOrSubject');
+    $message = $convertParam($message, 'message');
 
     // ── Normalize overloaded signature ────────────────────────────────────────
     if ($message === null) {
@@ -158,7 +297,8 @@ function sendEmail($to, $subjectOrName, $messageOrSubject = null, $message = nul
         $body     = trim((string)$message);
     }
 
-    if (empty($toEmail) || !filter_var($toEmail, FILTER_VALIDATE_EMAIL)) {
+    $toAddresses = normalizeEmailAddresses($toEmail);
+    if (empty($toAddresses)) {
         $msg = "Email failed: Invalid recipient email – '$toEmail'";
         writeEmailLog($msg);
         if ($debugInfo !== null) { $debugInfo = $msg; }
@@ -166,6 +306,8 @@ function sendEmail($to, $subjectOrName, $messageOrSubject = null, $message = nul
     }
 
     $cfg = getSmtpConfig();
+    $ccAddresses = normalizeEmailAddresses($GLOBALS['mail_options']['cc'] ?? []);
+    $bccAddresses = normalizeEmailAddresses($GLOBALS['mail_options']['bcc'] ?? []);
 
     // ── Attempt 1: PHPMailer SMTP ─────────────────────────────────────────────
     if (!empty($cfg['username']) && !empty($cfg['password']) && !empty($cfg['from_email'])) {
@@ -190,11 +332,12 @@ function sendEmail($to, $subjectOrName, $messageOrSubject = null, $message = nul
             ];
 
             // From / Reply-To
+            $fromEmail = !empty($GLOBALS['mail_options']['from_email']) ? $GLOBALS['mail_options']['from_email'] : $cfg['from_email'];
             $fromName = $cfg['from_name'];
             if (!empty($GLOBALS['mail_options']['from_name'])) {
                 $fromName = $GLOBALS['mail_options']['from_name'];
             }
-            $mail->setFrom($cfg['from_email'], $fromName);
+            $mail->setFrom($fromEmail, $fromName);
 
             if (!empty($GLOBALS['mail_options']['reply_to']) &&
                 filter_var($GLOBALS['mail_options']['reply_to'], FILTER_VALIDATE_EMAIL)) {
@@ -204,7 +347,21 @@ function sendEmail($to, $subjectOrName, $messageOrSubject = null, $message = nul
                 );
             }
 
-            $mail->addAddress($toEmail, $toName ?: $toEmail);
+            $mail->addAddress($toAddresses[0], $toName ?: $toAddresses[0]);
+            foreach (array_slice($toAddresses, 1) as $extraAddress) {
+                $mail->addAddress($extraAddress, $extraAddress);
+            }
+
+            $ccAddresses = normalizeEmailAddresses($GLOBALS['mail_options']['cc'] ?? []);
+            foreach ($ccAddresses as $ccAddress) {
+                $mail->addCC($ccAddress, $ccAddress);
+            }
+
+            $bccAddresses = normalizeEmailAddresses($GLOBALS['mail_options']['bcc'] ?? []);
+            foreach ($bccAddresses as $bccAddress) {
+                $mail->addBCC($bccAddress, $bccAddress);
+            }
+
             $mail->Subject = $subject;
             $mail->isHTML(true);
             $mail->Body    = $body;
@@ -223,6 +380,31 @@ function sendEmail($to, $subjectOrName, $messageOrSubject = null, $message = nul
 
             $mail->send();
 
+            $attachmentPath = '';
+            if (!empty($GLOBALS['mail_options_attachments'])) {
+                foreach ($GLOBALS['mail_options_attachments'] as $att) {
+                    if (!empty($att['path'])) {
+                        $attachmentPath = (string) $att['path'];
+                        break;
+                    }
+                }
+            }
+
+            $mailContext = $GLOBALS['mail_context'] ?? [];
+            logOutboundEmail([
+                'sender_id' => $mailContext['sender_id'] ?? ($_SESSION['user_id'] ?? 0),
+                'sender_role' => $mailContext['sender_role'] ?? ($_SESSION['role'] ?? ''),
+                'from_email' => $fromEmail,
+                'to_email' => $toAddresses[0],
+                'recipient_email' => $toAddresses[0],
+                'subject' => $subject,
+                'body' => $body,
+                'attachment_path' => $attachmentPath,
+                'status' => 'sent',
+                'sent_at' => date('Y-m-d H:i:s'),
+                'application_id' => $mailContext['application_id'] ?? 0,
+            ]);
+
             writeEmailLog("PHPMailer SMTP: Sent OK to $toEmail | Subject: $subject");
             if ($debugInfo !== null) { $debugInfo = "Sent via PHPMailer SMTP to $toEmail"; }
             return true;
@@ -230,6 +412,21 @@ function sendEmail($to, $subjectOrName, $messageOrSubject = null, $message = nul
         } catch (PHPMailerException $e) {
             $errDetail = $e->getMessage() . ' | ' . $mail->ErrorInfo;
             error_log("Email failed (PHPMailer): $errDetail");
+            $mailContext = $GLOBALS['mail_context'] ?? [];
+            logOutboundEmail([
+                'sender_id' => $mailContext['sender_id'] ?? ($_SESSION['user_id'] ?? 0),
+                'sender_role' => $mailContext['sender_role'] ?? ($_SESSION['role'] ?? ''),
+                'from_email' => $cfg['from_email'] ?? '',
+                'to_email' => $toAddresses[0] ?? '',
+                'recipient_email' => $toAddresses[0] ?? '',
+                'subject' => $subject,
+                'body' => $body,
+                'attachment_path' => '',
+                'status' => 'failed',
+                'error_message' => $errDetail,
+                'sent_at' => date('Y-m-d H:i:s'),
+                'application_id' => $mailContext['application_id'] ?? 0,
+            ]);
             writeEmailLog("PHPMailer SMTP error to $toEmail: $errDetail");
             if ($debugInfo !== null) { $debugInfo = "PHPMailer failed: $errDetail"; }
             // Fall through to Brevo
@@ -239,7 +436,23 @@ function sendEmail($to, $subjectOrName, $messageOrSubject = null, $message = nul
         if (empty($cfg['username']))   $missing[] = 'SMTP_USERNAME';
         if (empty($cfg['password']))   $missing[] = 'SMTP_PASSWORD';
         if (empty($cfg['from_email'])) $missing[] = 'SMTP_FROM';
-        $msg = 'SMTP config missing: ' . implode(', ', $missing) . '. Trying Brevo fallback.';
+        $msg = 'SMTP config missing: ' . implode(', ', $missing) . '. Please configure the portal SMTP sender before sending email.';
+        $mailContext = $GLOBALS['mail_context'] ?? [];
+        $mailContext = $GLOBALS['mail_context'] ?? [];
+        logOutboundEmail([
+            'sender_id' => $mailContext['sender_id'] ?? ($_SESSION['user_id'] ?? 0),
+            'sender_role' => $mailContext['sender_role'] ?? ($_SESSION['role'] ?? ''),
+            'from_email' => $cfg['from_email'] ?? '',
+            'to_email' => $toAddresses[0] ?? '',
+            'recipient_email' => $toAddresses[0] ?? '',
+            'subject' => $subject,
+            'body' => $body,
+            'attachment_path' => '',
+            'status' => 'failed',
+            'error_message' => $msg,
+            'sent_at' => date('Y-m-d H:i:s'),
+            'application_id' => $mailContext['application_id'] ?? 0,
+        ]);
         writeEmailLog($msg);
         if ($debugInfo !== null) { $debugInfo = $msg; }
     }
@@ -248,6 +461,21 @@ function sendEmail($to, $subjectOrName, $messageOrSubject = null, $message = nul
     $apiKey = getenv('BREVO_API_KEY');
     if (empty($apiKey)) {
         $msg = 'Email failed: PHPMailer SMTP failed and BREVO_API_KEY is not set. No email engine available.';
+        $mailContext = $GLOBALS['mail_context'] ?? [];
+        logOutboundEmail([
+            'sender_id' => $mailContext['sender_id'] ?? ($_SESSION['user_id'] ?? 0),
+            'sender_role' => $mailContext['sender_role'] ?? ($_SESSION['role'] ?? ''),
+            'from_email' => $fromEmail ?? '',
+            'to_email' => $toAddresses[0] ?? '',
+            'recipient_email' => $toAddresses[0] ?? '',
+            'subject' => $subject,
+            'body' => $body,
+            'attachment_path' => '',
+            'status' => 'failed',
+            'error_message' => $msg,
+            'sent_at' => date('Y-m-d H:i:s'),
+            'application_id' => $mailContext['application_id'] ?? 0,
+        ]);
         error_log($msg);
         writeEmailLog($msg);
         if ($debugInfo !== null) { $debugInfo = $msg; }
@@ -257,13 +485,30 @@ function sendEmail($to, $subjectOrName, $messageOrSubject = null, $message = nul
     $fromEmail = !empty($cfg['from_email']) ? $cfg['from_email'] : 'noreply@example.com';
     $fromName  = !empty($cfg['from_name'])  ? $cfg['from_name']  : 'IMP Platform';
 
+    $brevoTo = [];
+    foreach ($toAddresses as $index => $address) {
+        $brevoTo[] = ['email' => $address, 'name' => $index === 0 ? ($toName ?: $address) : $address];
+    }
+
     $payload = [
         'sender'      => ['name' => $fromName, 'email' => $fromEmail],
-        'to'          => [['email' => $toEmail, 'name' => $toName ?: $toEmail]],
+        'to'          => $brevoTo,
         'subject'     => $subject,
         'htmlContent' => $body,
         'textContent' => strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $body)),
     ];
+
+    if (!empty($ccAddresses)) {
+        $payload['cc'] = array_map(function ($address) {
+            return ['email' => $address, 'name' => $address];
+        }, $ccAddresses);
+    }
+
+    if (!empty($bccAddresses)) {
+        $payload['bcc'] = array_map(function ($address) {
+            return ['email' => $address, 'name' => $address];
+        }, $bccAddresses);
+    }
 
     $ch = curl_init('https://api.brevo.com/v3/smtp/email');
     curl_setopt_array($ch, [
@@ -284,6 +529,21 @@ function sendEmail($to, $subjectOrName, $messageOrSubject = null, $message = nul
 
     if ($curlError) {
         $msg = "Brevo request error to $toEmail: $curlError";
+        $mailContext = $GLOBALS['mail_context'] ?? [];
+        logOutboundEmail([
+            'sender_id' => $mailContext['sender_id'] ?? ($_SESSION['user_id'] ?? 0),
+            'sender_role' => $mailContext['sender_role'] ?? ($_SESSION['role'] ?? ''),
+            'from_email' => $fromEmail ?? '',
+            'to_email' => $toAddresses[0] ?? '',
+            'recipient_email' => $toAddresses[0] ?? '',
+            'subject' => $subject,
+            'body' => $body,
+            'attachment_path' => '',
+            'status' => 'failed',
+            'error_message' => $msg,
+            'sent_at' => date('Y-m-d H:i:s'),
+            'application_id' => $mailContext['application_id'] ?? 0,
+        ]);
         error_log($msg);
         writeEmailLog($msg);
         if ($debugInfo !== null) { $debugInfo = $msg; }
@@ -291,12 +551,41 @@ function sendEmail($to, $subjectOrName, $messageOrSubject = null, $message = nul
     }
 
     if ($httpCode >= 200 && $httpCode < 300) {
+        $mailContext = $GLOBALS['mail_context'] ?? [];
+        logOutboundEmail([
+            'sender_id' => $mailContext['sender_id'] ?? ($_SESSION['user_id'] ?? 0),
+            'sender_role' => $mailContext['sender_role'] ?? ($_SESSION['role'] ?? ''),
+            'from_email' => $fromEmail ?? '',
+            'to_email' => $toAddresses[0] ?? '',
+            'recipient_email' => $toAddresses[0] ?? '',
+            'subject' => $subject,
+            'body' => $body,
+            'attachment_path' => '',
+            'status' => 'sent',
+            'sent_at' => date('Y-m-d H:i:s'),
+            'application_id' => $mailContext['application_id'] ?? 0,
+        ]);
         writeEmailLog("Brevo API: Sent OK to $toEmail | Subject: $subject (HTTP $httpCode)");
         if ($debugInfo !== null) { $debugInfo = "Sent via Brevo API (HTTP $httpCode)"; }
         return true;
     }
 
     $msg = "Brevo API error to $toEmail (HTTP $httpCode): $responseBody";
+    $mailContext = $GLOBALS['mail_context'] ?? [];
+    logOutboundEmail([
+        'sender_id' => $mailContext['sender_id'] ?? ($_SESSION['user_id'] ?? 0),
+        'sender_role' => $mailContext['sender_role'] ?? ($_SESSION['role'] ?? ''),
+        'from_email' => $fromEmail ?? '',
+        'to_email' => $toAddresses[0] ?? '',
+        'recipient_email' => $toAddresses[0] ?? '',
+        'subject' => $subject,
+        'body' => $body,
+        'attachment_path' => '',
+        'status' => 'failed',
+        'error_message' => $msg,
+        'sent_at' => date('Y-m-d H:i:s'),
+        'application_id' => $mailContext['application_id'] ?? 0,
+    ]);
     error_log($msg);
     writeEmailLog($msg);
     if ($debugInfo !== null) { $debugInfo = $msg; }

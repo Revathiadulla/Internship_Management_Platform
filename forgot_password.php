@@ -4,6 +4,7 @@ session_start();
 include 'db.php';
 include_once __DIR__ . '/includes/mail_helper.php';
 include_once __DIR__ . '/includes/sms_helper.php';
+include_once __DIR__ . '/password_validation.php';
 
 // Ensure password_resets.code column can store SHA-256 hash (64 chars)
 $chk_code = mysqli_query($conn, "SHOW COLUMNS FROM password_resets LIKE 'code'");

@@ -4,6 +4,7 @@ require_once __DIR__ . '/includes/auth.php';
 include 'db.php';
 require_role('mentor');
 include_once __DIR__ . '/includes/hr_module_helpers.php';
+require_once __DIR__ . '/includes/progress_helper.php';
 
 $mentor_id = current_user_id();
 $team_id = isset($_GET['team_id']) ? intval($_GET['team_id']) : 0;
@@ -18,6 +19,59 @@ if ($mentor_id <= 0 || $team_id <= 0) {
     die('Invalid request');
 }
 
+$team_name_param = isset($_GET['team_name']) ? trim($_GET['team_name']) : '';
+$team = null;
+
+// Try to fetch from project_teams first
+$team_stmt = $conn->prepare("SELECT t.id, t.team_name, t.status AS team_status, t.internship_id, t.mentor_id, i.title, i.project_type, i.project_subtype, i.description, i.technology_stack, i.duration, i.start_date, i.end_date, u.full_name AS mentor_name, u.email AS mentor_email FROM project_teams t LEFT JOIN internships i ON t.internship_id = i.id LEFT JOIN users u ON t.mentor_id = u.id WHERE t.id = ? AND t.mentor_id = ? LIMIT 1");
+if ($team_stmt) {
+    $team_stmt->bind_param('ii', $team_id, $mentor_id);
+    $team_stmt->execute();
+    $team = $team_stmt->get_result()->fetch_assoc();
+    $team_stmt->close();
+}
+
+if (!$team) {
+    // Fallback: Check in internship_applications for this team_id or team_name
+    $app_team_stmt = $conn->prepare("
+        SELECT DISTINCT 
+            COALESCE(ia.team_id, 0) AS id,
+            ia.team_name,
+            ia.team_status,
+            ia.internship_id,
+            ia.mentor_id,
+            COALESCE(i.title, ia.internship_name) AS title,
+            COALESCE(i.project_type, 'General') AS project_type,
+            COALESCE(i.project_subtype, ia.applied_subtype, 'General') AS project_subtype,
+            COALESCE(i.description, 'No description available.') AS description,
+            COALESCE(i.technology_stack, ia.tech_stack, '') AS technology_stack,
+            COALESCE(i.duration, ia.internship_duration, '—') AS duration,
+            COALESCE(i.start_date, '—') AS start_date,
+            COALESCE(i.end_date, '—') AS end_date,
+            u.full_name AS mentor_name,
+            u.email AS mentor_email
+        FROM internship_applications ia
+        LEFT JOIN internships i ON ia.internship_id = i.id
+        LEFT JOIN users u ON ia.mentor_id = u.id
+        WHERE ia.mentor_id = ? 
+          AND (
+              (ia.team_id = ? AND ia.team_id > 0)
+              OR (ia.team_name = ? AND ia.team_name != '')
+          )
+        LIMIT 1
+    ");
+    if ($app_team_stmt) {
+        $app_team_stmt->bind_param('iis', $mentor_id, $team_id, $team_name_param);
+        $app_team_stmt->execute();
+        $team = $app_team_stmt->get_result()->fetch_assoc();
+        $app_team_stmt->close();
+    }
+}
+
+if (!$team) {
+    die('Team not found or access denied');
+}
+
 // ── POST Handlers ───────────────────────────────────────────────────────────
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -26,7 +80,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'post_update') {
         $message_text = trim($_POST['team_message'] ?? '');
         if ($message_text === '') {
-            header('Location: mentor_workspace.php?team_id=' . $team_id . '&tab=discussion&error_msg=' . urlencode('Please enter a message before posting.'));
+            header('Location: mentor_workspace.php?team_id=' . $team_id . '&team_name=' . urlencode($team['team_name']) . '&tab=discussion&error_msg=' . urlencode('Please enter a message before posting.'));
             exit();
         }
 
@@ -36,8 +90,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $insert_stmt->close();
 
         $student_ids = [];
-        $student_stmt = $conn->prepare("SELECT student_id FROM project_team_members WHERE project_team_id = ?");
-        $student_stmt->bind_param('i', $team_id);
+        $student_stmt = $conn->prepare("
+            SELECT DISTINCT student_id FROM (
+                SELECT student_id FROM project_team_members WHERE project_team_id = ?
+                UNION
+                SELECT user_id AS student_id FROM internship_applications 
+                WHERE mentor_id = ? AND team_name = ?
+                  AND status IN ('Project Assigned', 'Team Assigned', 'Internship Started', 'Started', 'Active Intern', 'Selected')
+            ) AS combined_students
+        ");
+        $student_stmt->bind_param('iis', $team_id, $mentor_id, $team['team_name']);
         $student_stmt->execute();
         $student_result = $student_stmt->get_result();
         while ($student_row = $student_result->fetch_assoc()) {
@@ -50,7 +112,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if (!empty($student_ids)) {
             $notify_stmt = $conn->prepare("INSERT INTO notifications (user_id, role, title, message, type, link) VALUES (?, 'student', 'Mentor update', ?, 'info', ?)");
-            $notify_link = 'mentor_workspace.php?team_id=' . $team_id;
+            $notify_link = 'mentor_workspace.php?team_id=' . $team_id . '&team_name=' . urlencode($team['team_name']);
             $notify_msg = 'A mentor update was shared for your team: ' . mb_substr($message_text, 0, 120);
             foreach ($student_ids as $student_id) {
                 $notify_stmt->bind_param('iss', $student_id, $notify_msg, $notify_link);
@@ -59,7 +121,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $notify_stmt->close();
         }
 
-        header('Location: mentor_workspace.php?team_id=' . $team_id . '&tab=discussion&success_msg=' . urlencode('Team update posted successfully.'));
+        header('Location: mentor_workspace.php?team_id=' . $team_id . '&team_name=' . urlencode($team['team_name']) . '&tab=discussion&success_msg=' . urlencode('Team update posted successfully.'));
         exit();
     }
 
@@ -67,15 +129,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $subject = trim($_POST['notification_subject'] ?? '');
         $message = trim($_POST['notification_message'] ?? '');
         if ($subject === '' || $message === '') {
-            header('Location: mentor_workspace.php?team_id=' . $team_id . '&tab=discussion&error_msg=' . urlencode('Please complete the notification details.'));
+            header('Location: mentor_workspace.php?team_id=' . $team_id . '&team_name=' . urlencode($team['team_name']) . '&tab=discussion&error_msg=' . urlencode('Please complete the notification details.'));
             exit();
         }
 
-        $student_stmt = $conn->prepare("SELECT student_id FROM project_team_members WHERE project_team_id = ?");
-        $student_stmt->bind_param('i', $team_id);
+        $student_ids = [];
+        $student_stmt = $conn->prepare("
+            SELECT DISTINCT student_id FROM (
+                SELECT student_id FROM project_team_members WHERE project_team_id = ?
+                UNION
+                SELECT user_id AS student_id FROM internship_applications 
+                WHERE mentor_id = ? AND team_name = ?
+                  AND status IN ('Project Assigned', 'Team Assigned', 'Internship Started', 'Started', 'Active Intern', 'Selected')
+            ) AS combined_students
+        ");
+        $student_stmt->bind_param('iis', $team_id, $mentor_id, $team['team_name']);
         $student_stmt->execute();
         $student_result = $student_stmt->get_result();
-        $student_ids = [];
         while ($student_row = $student_result->fetch_assoc()) {
             $student_id = intval($student_row['student_id'] ?? 0);
             if ($student_id > 0 && !in_array($student_id, $student_ids, true)) {
@@ -85,14 +155,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $student_stmt->close();
 
         $notify_stmt = $conn->prepare("INSERT INTO notifications (user_id, role, title, message, type, link) VALUES (?, 'student', ?, ?, 'info', ?)");
-        $notify_link = 'mentor_workspace.php?team_id=' . $team_id;
+        $notify_link = 'mentor_workspace.php?team_id=' . $team_id . '&team_name=' . urlencode($team['team_name']);
         foreach ($student_ids as $student_id) {
             $notify_stmt->bind_param('isss', $student_id, $subject, $message, $notify_link);
             $notify_stmt->execute();
         }
         $notify_stmt->close();
 
-        header('Location: mentor_workspace.php?team_id=' . $team_id . '&tab=discussion&success_msg=' . urlencode('Notification sent to the team.'));
+        header('Location: mentor_workspace.php?team_id=' . $team_id . '&team_name=' . urlencode($team['team_name']) . '&tab=discussion&success_msg=' . urlencode('Notification sent to the team.'));
         exit();
     }
 
@@ -102,7 +172,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $reason = trim($_POST['reason'] ?? '');
         $remarks = trim($_POST['remarks'] ?? '');
         if ($student_id <= 0 || $internship_id <= 0 || $reason === '') {
-            header('Location: mentor_workspace.php?team_id=' . $team_id . '&tab=students&error_msg=' . urlencode('Please complete the dropout request form.'));
+            header('Location: mentor_workspace.php?team_id=' . $team_id . '&team_name=' . urlencode($team['team_name']) . '&tab=students&error_msg=' . urlencode('Please complete the dropout request form.'));
             exit();
         }
 
@@ -155,22 +225,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
-        header('Location: mentor_workspace.php?team_id=' . $team_id . '&tab=students&success_msg=' . urlencode('Dropout request submitted successfully.'));
+        header('Location: mentor_workspace.php?team_id=' . $team_id . '&team_name=' . urlencode($team['team_name']) . '&tab=students&success_msg=' . urlencode('Dropout request submitted successfully.'));
         exit();
     }
 }
 
 // ── Data Queries ────────────────────────────────────────────────────────────
-
-$team_stmt = $conn->prepare("SELECT t.id, t.team_name, t.status AS team_status, t.internship_id, t.mentor_id, i.title, i.project_type, i.project_subtype, i.description, i.technology_stack, i.duration, i.start_date, i.end_date, u.full_name AS mentor_name, u.email AS mentor_email FROM project_teams t LEFT JOIN internships i ON t.internship_id = i.id LEFT JOIN users u ON t.mentor_id = u.id WHERE t.id = ? AND t.mentor_id = ? LIMIT 1");
-$team_stmt->bind_param('ii', $team_id, $mentor_id);
-$team_stmt->execute();
-$team = $team_stmt->get_result()->fetch_assoc();
-$team_stmt->close();
-
-if (!$team) {
-    die('Team not found or access denied');
-}
 
 // Students — extended with college_name from student_profiles
 $students = [];
@@ -184,10 +244,55 @@ while ($row = $students_res->fetch_assoc()) {
 }
 $students_stmt->close();
 
+if (empty($students)) {
+    // Fallback to internship_applications
+    $students_stmt = $conn->prepare("
+        SELECT u.id, u.full_name, u.email, COALESCE(sp.college_name, '') AS college_name, 
+               COALESCE(a.status, 'Active Intern') AS app_status, a.id AS application_id, 
+               a.internship_id, dr.status AS dropout_status 
+        FROM internship_applications a
+        JOIN users u ON a.user_id = u.id
+        LEFT JOIN student_profiles sp ON sp.user_id = u.id
+        LEFT JOIN dropout_requests dr ON dr.application_id = a.id AND dr.status IN ('Requested', 'Pending')
+        WHERE a.mentor_id = ? 
+          AND a.team_name = ?
+          AND a.status IN ('Project Assigned', 'Team Assigned', 'Internship Started', 'Started', 'Active Intern', 'Selected')
+        ORDER BY u.full_name ASC
+    ");
+    $students_stmt->bind_param('is', $mentor_id, $team['team_name']);
+    $students_stmt->execute();
+    $students_res = $students_stmt->get_result();
+    while ($row = $students_res->fetch_assoc()) {
+        $students[] = $row;
+    }
+    $students_stmt->close();
+}
+
 // Daily Logs
 $logs = [];
-$logs_stmt = $conn->prepare("SELECT dl.id, dl.log_date, dl.tasks_completed, dl.time_spent, dl.focus_level, dl.issues_faced, dl.next_plan, dl.is_reviewed, dl.review_status, dl.reviewer_remarks, u.full_name FROM daily_logs dl JOIN users u ON dl.user_id = u.id JOIN project_team_members ptm ON ptm.student_id = dl.user_id WHERE ptm.project_team_id = ? ORDER BY dl.log_date DESC, dl.id DESC LIMIT 10");
-$logs_stmt->bind_param('i', $team_id);
+$logs_stmt = $conn->prepare("
+    SELECT dl.id, dl.log_date, dl.tasks_completed, dl.time_spent, dl.focus_level, 
+           dl.issues_faced, dl.next_plan, dl.is_reviewed, dl.review_status, 
+           dl.reviewer_remarks, u.full_name 
+    FROM daily_logs dl 
+    JOIN users u ON dl.user_id = u.id 
+    WHERE dl.user_id IN (
+        SELECT ptm.student_id 
+        FROM project_team_members ptm 
+        WHERE ptm.project_team_id = ?
+        
+        UNION
+        
+        SELECT ia.user_id AS student_id 
+        FROM internship_applications ia 
+        WHERE ia.mentor_id = ? 
+          AND ia.team_name = ?
+          AND ia.status IN ('Project Assigned', 'Team Assigned', 'Internship Started', 'Started', 'Active Intern', 'Selected')
+    )
+    ORDER BY dl.log_date DESC, dl.id DESC 
+    LIMIT 10
+");
+$logs_stmt->bind_param('iis', $team_id, $mentor_id, $team['team_name']);
 $logs_stmt->execute();
 $logs_res = $logs_stmt->get_result();
 while ($log_row = $logs_res->fetch_assoc()) {
@@ -207,24 +312,9 @@ while ($message_row = $messages_res->fetch_assoc()) {
 $messages_stmt->close();
 
 // Phase progress mapping
-$phase_progress_map = [
-    'Planning' => 25,
-    'Active' => 50,
-    'In Progress' => 60,
-    'Mid Review' => 75,
-    'Final Review' => 85,
-    'Completed' => 100,
-    'Paused' => 35,
-    'Started' => 55,
-    'Applied' => 20,
-    'Shortlisted' => 35,
-    'Selected' => 45,
-    'Internship Started' => 70,
-    'Internship Active' => 85,
-    'Active Intern' => 80,
-];
+$prog_data = calculate_team_progress($conn, $team_id, $team['team_name'] ?? '');
 $current_phase = trim($team['team_status'] ?? 'Active');
-$phase_progress = $phase_progress_map[$current_phase] ?? 45;
+$phase_progress = $prog_data['progress_percentage'];
 
 // ── Render Page ─────────────────────────────────────────────────────────────
 
@@ -408,8 +498,8 @@ page_shell_start('projects', 'Mentor Workspace', e($team['title'] ?: 'Assigned P
                 <p class="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Current Phase</p>
                 <p class="mt-1.5 text-sm font-semibold text-slate-700"><?= e($current_phase) ?></p>
             </div>
-            <div class="summary-item">
-                <p class="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Current Phase Progress</p>
+            <div class="summary-item col-span-2 lg:col-span-1">
+                <p class="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Project Progress <span class="text-[9px] text-slate-400 font-normal normal-case ml-0.5">(<?= intval($prog_data['approved_logs']) ?>/<?= intval($prog_data['expected_logs']) ?> Logs)</span></p>
                 <div class="mt-2 flex items-center gap-2.5">
                     <div class="flex-1 h-2 rounded-full bg-slate-200 overflow-hidden">
                         <div class="h-full rounded-full bg-blue-600 transition-all duration-500" style="width: <?= intval($phase_progress) ?>%"></div>
@@ -473,17 +563,18 @@ page_shell_start('projects', 'Mentor Workspace', e($team['title'] ?: 'Assigned P
             </div>
         <?php else: ?>
             <!-- Table Header -->
-            <div class="data-grid-header hidden md:grid grid-cols-[1.2fr_1.4fr_1fr_100px_250px] gap-4 items-center px-4 py-2.5 rounded-lg bg-slate-50 border border-slate-100 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 mb-2">
+            <div class="data-grid-header hidden md:grid grid-cols-[1.2fr_1.4fr_1fr_100px_100px_250px] gap-4 items-center px-4 py-2.5 rounded-lg bg-slate-50 border border-slate-100 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 mb-2">
                 <span>Name</span>
                 <span>Email</span>
                 <span>College</span>
+                <span class="text-center" style="min-width:100px">Progress</span>
                 <span class="text-center" style="min-width:100px">Status</span>
                 <span class="text-center" style="min-width:250px">Action</span>
             </div>
             <!-- Table Rows -->
             <div class="space-y-2">
                 <?php foreach ($students as $student): ?>
-                <div class="data-grid-row grid grid-cols-[1.2fr_1.4fr_1fr_100px_250px] gap-4 items-center rounded-xl border border-slate-100 bg-white hover:bg-slate-50 transition-colors px-4 py-3.5">
+                <div class="data-grid-row grid grid-cols-[1.2fr_1.4fr_1fr_100px_100px_250px] gap-4 items-center rounded-xl border border-slate-100 bg-white hover:bg-slate-50 transition-colors px-4 py-3.5">
                     <div data-label="Name">
                         <p class="text-sm font-semibold text-slate-800"><?= e($student['full_name']) ?></p>
                     </div>
@@ -492,6 +583,13 @@ page_shell_start('projects', 'Mentor Workspace', e($team['title'] ?: 'Assigned P
                     </div>
                     <div data-label="College">
                         <p class="text-sm text-slate-600"><?= e($student['college_name'] ?: '—') ?></p>
+                    </div>
+                    <div data-label="Progress" class="text-center" style="min-width:100px">
+                        <?php
+                            $prog_data = calculate_internship_progress($conn, $student['id'], $student['internship_id']);
+                        ?>
+                        <p class="text-sm font-bold text-blue-600"><?= $prog_data['progress_percentage'] ?>%</p>
+                        <p class="text-[10px] text-slate-400"><?= $prog_data['approved_logs'] ?>/<?= $prog_data['expected_logs'] ?> Logs</p>
                     </div>
                     <div data-label="Status" class="text-center" style="min-width:100px">
                         <?php

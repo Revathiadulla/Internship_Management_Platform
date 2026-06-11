@@ -4,6 +4,7 @@ require_once __DIR__ . '/includes/auth.php';
 include 'db.php';
 require_role('mentor');
 include_once __DIR__ . '/includes/hr_module_helpers.php';
+require_once __DIR__ . '/includes/progress_helper.php';
 
 $mentor_id = current_user_id();
 if ($mentor_id <= 0) {
@@ -35,22 +36,85 @@ $active_projects = 0;
 $pending_logs = 0;
 $unread_notifications_count = 0;
 
-$assigned_interns_stmt = $conn->prepare("SELECT COUNT(DISTINCT ptm.student_id) AS cnt FROM project_teams t JOIN project_team_members ptm ON ptm.project_team_id = t.id WHERE t.mentor_id = ?");
-$assigned_interns_stmt->bind_param('i', $mentor_id);
+$assigned_interns_stmt = $conn->prepare("
+    SELECT COUNT(DISTINCT student_id) AS cnt FROM (
+        SELECT ptm.student_id 
+        FROM project_teams t 
+        JOIN project_team_members ptm ON ptm.project_team_id = t.id 
+        WHERE t.mentor_id = ?
+        
+        UNION
+        
+        SELECT ia.user_id AS student_id 
+        FROM internship_applications ia 
+        WHERE ia.mentor_id = ? 
+          AND ia.status IN ('Project Assigned', 'Team Assigned', 'Internship Started', 'Started', 'Active Intern', 'Selected')
+        
+        UNION
+        
+        SELECT ma.student_id 
+        FROM mentor_assignments ma 
+        WHERE ma.mentor_id = ? AND ma.status = 'active'
+    ) AS assigned
+");
+$assigned_interns_stmt->bind_param('iii', $mentor_id, $mentor_id, $mentor_id);
 $assigned_interns_stmt->execute();
 $assigned_interns_row = $assigned_interns_stmt->get_result()->fetch_assoc();
 $assigned_interns = intval($assigned_interns_row['cnt'] ?? 0);
 $assigned_interns_stmt->close();
 
-$projects_stmt = $conn->prepare("SELECT COUNT(DISTINCT internship_id) AS cnt FROM project_teams WHERE mentor_id = ? AND internship_id > 0");
-$projects_stmt->bind_param('i', $mentor_id);
+$projects_stmt = $conn->prepare("
+    SELECT COUNT(DISTINCT internship_id) AS cnt FROM (
+        SELECT internship_id 
+        FROM project_teams 
+        WHERE mentor_id = ? AND internship_id > 0
+        
+        UNION
+        
+        SELECT COALESCE(assigned_project_id, internship_id) AS internship_id 
+        FROM internship_applications 
+        WHERE mentor_id = ? 
+          AND status IN ('Project Assigned', 'Team Assigned', 'Internship Started', 'Started', 'Active Intern', 'Selected')
+          AND COALESCE(assigned_project_id, internship_id) > 0
+          
+        UNION
+        
+        SELECT COALESCE(project_id, internship_id) AS internship_id 
+        FROM mentor_assignments ma 
+        WHERE ma.mentor_id = ? AND ma.status = 'active' AND COALESCE(project_id, internship_id) > 0
+    ) AS proj
+");
+$projects_stmt->bind_param('iii', $mentor_id, $mentor_id, $mentor_id);
 $projects_stmt->execute();
 $projects_row = $projects_stmt->get_result()->fetch_assoc();
 $active_projects = intval($projects_row['cnt'] ?? 0);
 $projects_stmt->close();
 
-$logs_stmt = $conn->prepare("SELECT COUNT(*) AS cnt FROM daily_logs dl JOIN project_team_members ptm ON ptm.student_id = dl.user_id JOIN project_teams t ON ptm.project_team_id = t.id WHERE t.mentor_id = ? AND dl.is_reviewed = 0");
-$logs_stmt->bind_param('i', $mentor_id);
+$logs_stmt = $conn->prepare("
+    SELECT COUNT(*) AS cnt 
+    FROM daily_logs dl 
+    WHERE LOWER(dl.status) IN ('submitted', 'pending_review') 
+      AND dl.user_id IN (
+          SELECT ptm.student_id 
+          FROM project_teams t 
+          JOIN project_team_members ptm ON ptm.project_team_id = t.id 
+          WHERE t.mentor_id = ?
+          
+          UNION
+          
+          SELECT ia.user_id AS student_id 
+          FROM internship_applications ia 
+          WHERE ia.mentor_id = ? 
+            AND ia.status IN ('Project Assigned', 'Team Assigned', 'Internship Started', 'Started', 'Active Intern', 'Selected')
+            
+          UNION
+          
+          SELECT ma.student_id 
+          FROM mentor_assignments ma 
+          WHERE ma.mentor_id = ? AND ma.status = 'active'
+      )
+");
+$logs_stmt->bind_param('iii', $mentor_id, $mentor_id, $mentor_id);
 $logs_stmt->execute();
 $logs_row = $logs_stmt->get_result()->fetch_assoc();
 $pending_logs = intval($logs_row['cnt'] ?? 0);
@@ -64,9 +128,17 @@ $unread_notifications_count = intval($notif_count_row['cnt'] ?? 0);
 $notif_count_stmt->close();
 
 $team_updates = 0;
-$updates_stmt = $conn->prepare("SELECT COUNT(*) AS cnt FROM team_discussion_messages tdm JOIN project_teams pt ON tdm.team_id = pt.id WHERE pt.mentor_id = ?");
+$updates_stmt = $conn->prepare("
+    SELECT COUNT(*) AS cnt 
+    FROM team_discussion_messages tdm 
+    WHERE tdm.team_id IN (
+        SELECT id FROM project_teams WHERE mentor_id = ?
+        UNION
+        SELECT DISTINCT COALESCE(team_id, 0) FROM internship_applications WHERE mentor_id = ? AND team_id > 0
+    )
+");
 if ($updates_stmt) {
-    $updates_stmt->bind_param('i', $mentor_id);
+    $updates_stmt->bind_param('ii', $mentor_id, $mentor_id);
     $updates_stmt->execute();
     $updates_row = $updates_stmt->get_result()->fetch_assoc();
     $team_updates = intval($updates_row['cnt'] ?? 0);
@@ -85,6 +157,9 @@ $notif_stmt->close();
 
 // Fetch project details for summary cards
 $dashboard_projects = [];
+$team_ids_added = [];
+$team_names_added = [];
+
 $team_sql = "SELECT t.id, t.team_name, t.status, t.internship_id, i.title AS project_title, i.project_type, i.project_subtype, i.technology_stack, i.duration, i.start_date, i.end_date, u.full_name AS mentor_name
              FROM project_teams t
              LEFT JOIN internships i ON t.internship_id = i.id
@@ -98,6 +173,8 @@ if ($team_stmt) {
     $team_result = $team_stmt->get_result();
     while ($row = $team_result->fetch_assoc()) {
         $team_id = intval($row['id']);
+        $team_name = trim($row['team_name'] ?? '');
+        
         // Fetch student count
         $member_sql = "SELECT COUNT(*) AS student_count FROM project_team_members WHERE project_team_id = ?";
         $member_stmt = $conn->prepare($member_sql);
@@ -112,41 +189,111 @@ if ($team_stmt) {
             $member_stmt->close();
         }
 
-        $phase_map = [
-            'Planning' => 25,
-            'Active' => 50,
-            'In Progress' => 60,
-            'Mid Review' => 75,
-            'Final Review' => 85,
-            'Completed' => 100,
-            'Paused' => 35,
-            'Started' => 55,
-            'Applied' => 20,
-            'Shortlisted' => 35,
-            'Selected' => 45,
-            'Internship Started' => 70,
-            'Internship Active' => 85,
-            'Active Intern' => 80,
-        ];
-        $progress = $phase_map[trim($row['status'] ?? '')] ?? 45;
+        $prog_data = calculate_team_progress($conn, $team_id, $team_name);
+        $progress = $prog_data['progress_percentage'];
 
         $dashboard_projects[] = [
             'team_id' => $team_id,
-            'team_name' => $row['team_name'] ?: 'Project Team',
+            'team_name' => $team_name ?: 'Project Team',
             'project_title' => $row['project_title'] ?: 'Assigned Project',
+            'project_type' => $row['project_type'] ?: 'General',
             'project_subtype' => $row['project_subtype'] ?: 'General',
             'current_phase' => trim($row['status'] ?: 'Active'),
             'progress_percent' => $progress,
+            'approved_logs' => $prog_data['approved_logs'],
+            'expected_logs' => $prog_data['expected_logs'],
             'student_count' => $member_count,
             'mentor_name' => $row['mentor_name'] ?: 'Mentor',
             'technology_stack' => $row['technology_stack'] ?: '',
             'duration' => $row['duration'] ?: '—',
             'start_date' => $row['start_date'] ?: '—',
             'end_date' => $row['end_date'] ?: '—',
+            'assigned_date' => $row['start_date'] ?: '—',
         ];
+        
+        if ($team_id > 0) {
+            $team_ids_added[$team_id] = true;
+        }
+        if ($team_name !== '') {
+            $team_names_added[strtolower($team_name)] = true;
+        }
     }
     $team_stmt->close();
 }
+
+// Fallback: Query from internship_applications
+$app_teams_sql = "SELECT DISTINCT ia.team_name, ia.team_status, ia.internship_id, ia.internship_name, 
+                          COALESCE(i.title, ia.internship_name) as project_title,
+                          COALESCE(i.project_type, 'General') as project_type,
+                          COALESCE(i.project_subtype, ia.applied_subtype, 'General') as project_subtype,
+                          COALESCE(i.technology_stack, ia.tech_stack, '') as technology_stack,
+                          COALESCE(i.duration, ia.internship_duration, '—') as duration,
+                          i.start_date, i.end_date,
+                          ia.team_id, u.full_name AS mentor_name, MIN(ia.applied_date) as assigned_date
+                  FROM internship_applications ia
+                  LEFT JOIN internships i ON ia.internship_id = i.id
+                  LEFT JOIN users u ON ia.mentor_id = u.id
+                  WHERE ia.mentor_id = ? 
+                    AND ia.status IN ('Project Assigned', 'Team Assigned', 'Internship Started', 'Started', 'Active Intern', 'Selected')
+                    AND ia.team_name IS NOT NULL AND ia.team_name != ''
+                  GROUP BY ia.team_name, ia.internship_id";
+$app_teams_stmt = $conn->prepare($app_teams_sql);
+if ($app_teams_stmt) {
+    $app_teams_stmt->bind_param('i', $mentor_id);
+    $app_teams_stmt->execute();
+    $app_teams_result = $app_teams_stmt->get_result();
+    while ($row = $app_teams_result->fetch_assoc()) {
+        $team_name = trim($row['team_name'] ?? '');
+        $team_id = intval($row['team_id'] ?? 0);
+        $internship_id = intval($row['internship_id']);
+
+        if ($team_id > 0 && isset($team_ids_added[$team_id])) {
+            continue;
+        }
+        if (isset($team_names_added[strtolower($team_name)])) {
+            continue;
+        }
+
+        // Count students in internship_applications
+        $cnt_stmt = $conn->prepare("SELECT COUNT(DISTINCT user_id) as cnt FROM internship_applications WHERE mentor_id = ? AND team_name = ? AND status IN ('Project Assigned', 'Team Assigned', 'Internship Started', 'Started', 'Active Intern', 'Selected')");
+        $student_count = 0;
+        if ($cnt_stmt) {
+            $cnt_stmt->bind_param('is', $mentor_id, $team_name);
+            $cnt_stmt->execute();
+            $student_count = intval($cnt_stmt->get_result()->fetch_assoc()['cnt'] ?? 0);
+            $cnt_stmt->close();
+        }
+
+        $prog_data = calculate_team_progress($conn, $team_id, $team_name);
+        $progress = $prog_data['progress_percentage'];
+
+        $dashboard_projects[] = [
+            'team_id' => $team_id > 0 ? $team_id : -1,
+            'team_name' => $team_name,
+            'project_title' => $row['project_title'] ?: 'Assigned Project',
+            'project_type' => $row['project_type'] ?: 'General',
+            'project_subtype' => $row['project_subtype'] ?: 'General',
+            'current_phase' => trim($row['team_status'] ?: 'Active'),
+            'progress_percent' => $progress,
+            'approved_logs' => $prog_data['approved_logs'],
+            'expected_logs' => $prog_data['expected_logs'],
+            'student_count' => $student_count,
+            'mentor_name' => $row['mentor_name'] ?: 'Mentor',
+            'technology_stack' => $row['technology_stack'] ?: '',
+            'duration' => $row['duration'] ?: '—',
+            'start_date' => $row['start_date'] ?: '—',
+            'end_date' => $row['end_date'] ?: '—',
+            'assigned_date' => $row['assigned_date'] ?: '—',
+        ];
+
+        if ($team_name !== '') {
+            $team_names_added[strtolower($team_name)] = true;
+        }
+    }
+    $app_teams_stmt->close();
+}
+
+
 
 $action_html = '<a href="mentor_projects.php" class="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:bg-blue-700">Open Projects</a>';
 page_shell_start('dashboard', 'Mentor Dashboard', 'Track assigned interns, active projects, pending daily logs, and your latest updates.', $action_html);
@@ -279,6 +426,10 @@ page_shell_start('dashboard', 'Mentor Dashboard', 'Track assigned interns, activ
                                     <div>
                                         <p class="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">Project Info</p>
                                         <div class="flex flex-wrap gap-2.5">
+                                            <span class="inline-flex items-center gap-1.5 rounded-full bg-blue-50 border border-blue-100 px-3 py-1 text-xs font-semibold text-blue-700 shadow-sm">
+                                                <span class="material-symbols-outlined text-[14px]">domain</span>
+                                                <?= htmlspecialchars($project['project_type']) ?>
+                                            </span>
                                             <span class="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 border border-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-700 shadow-sm">
                                                 <span class="material-symbols-outlined text-[14px]">category</span>
                                                 <?= htmlspecialchars($project['project_subtype']) ?>
@@ -320,7 +471,7 @@ page_shell_start('dashboard', 'Mentor Dashboard', 'Track assigned interns, activ
                                         <div class="flex items-center justify-between text-xs font-bold text-slate-500 mb-2">
                                             <span class="flex items-center gap-1.5">
                                                 <span class="material-symbols-outlined text-base text-slate-400">track_changes</span>
-                                                Current Phase Progress
+                                                Project Progress <span class="text-[10px] text-slate-400 font-normal ml-1">(<?= intval($project['approved_logs']) ?> / <?= intval($project['expected_logs']) ?> Logs)</span>
                                             </span>
                                             <span class="text-slate-800 font-extrabold text-sm"><?= intval($project['progress_percent']) ?>%</span>
                                         </div>
@@ -336,14 +487,19 @@ page_shell_start('dashboard', 'Mentor Dashboard', 'Track assigned interns, activ
                                         <?php
                                             $s_date = ($project['start_date'] && $project['start_date'] !== '—') ? date('M d, Y', strtotime($project['start_date'])) : '—';
                                             $e_date = ($project['end_date'] && $project['end_date'] !== '—') ? date('M d, Y', strtotime($project['end_date'])) : '—';
+                                            $assigned_date_display = ($project['assigned_date'] && $project['assigned_date'] !== '—') ? date('M d, Y', strtotime($project['assigned_date'])) : '—';
                                         ?>
-                                        <p class="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Start - End Dates</p>
+                                        <p class="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Assigned Date &amp; Timeline</p>
                                         <p class="text-xs text-slate-700 font-bold mt-1 flex items-center gap-1">
-                                            <span class="material-symbols-outlined text-[14px] text-slate-450">date_range</span>
+                                            <span class="material-symbols-outlined text-[14px] text-slate-450">assignment_turned_in</span>
+                                            Assigned: <span class="text-blue-600"><?= $assigned_date_display ?></span>
+                                        </p>
+                                        <p class="text-xs text-slate-500 font-semibold mt-0.5 flex items-center gap-1">
+                                            <span class="material-symbols-outlined text-[14px] text-slate-400">date_range</span>
                                             <?= $s_date ?> - <?= $e_date ?>
                                         </p>
                                     </div>
-                                    <a href="mentor_workspace.php?team_id=<?= intval($project['team_id']) ?>" class="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-650 px-5 py-2.5 text-xs font-bold text-white hover:from-blue-700 hover:to-indigo-700 transition-all duration-300 shadow-md shadow-blue-100 hover:shadow-lg whitespace-nowrap cursor-pointer transform hover:-translate-y-0.5">
+                                    <a href="mentor_workspace.php?team_id=<?= intval($project['team_id']) ?>&team_name=<?= urlencode($project['team_name']) ?>" class="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-650 px-5 py-2.5 text-xs font-bold text-white hover:from-blue-700 hover:to-indigo-700 transition-all duration-300 shadow-md shadow-blue-100 hover:shadow-lg whitespace-nowrap cursor-pointer transform hover:-translate-y-0.5">
                                         <span class="material-symbols-outlined text-[16px]">terminal</span>
                                         Open Workspace
                                     </a>

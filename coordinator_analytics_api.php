@@ -44,6 +44,13 @@ if ($internship_id > 0) {
     $internship_cond .= " AND i.project_subtype = '" . mysqli_real_escape_string($conn, $subtype) . "'";
 }
 
+$team_filter_cond = "(t.created_by = $coordinator_id OR i.coordinator_id = $coordinator_id)";
+if ($internship_id > 0) {
+    $team_filter_cond .= " AND i.id = $internship_id";
+} else {
+    $team_filter_cond .= " AND i.project_subtype = '" . mysqli_real_escape_string($conn, $subtype) . "'";
+}
+
 // Get user_ids assigned to internships of the selected group
 $intern_ids = [];
 $uid_res = mysqli_query($conn,
@@ -63,73 +70,174 @@ if (!empty($intern_ids)) {
     $log_where = "AND 1=0";
 }
 
-// ── Metrics ───────────────────────────────────────────────────────────────────
-
-// Total interns (students assigned to this coordinator's internships)
-$total_interns = intval(mysqli_fetch_assoc(mysqli_query($conn,
-    "SELECT COUNT(DISTINCT a.user_id) as c 
-     FROM internship_applications a
-     JOIN internships i ON a.internship_id = i.id
-     WHERE $internship_cond"))['c'] ?? 0);
-
-// Active interns for selected subtype (or global for this coordinator)
-$active_q = "SELECT COUNT(DISTINCT a.user_id) as c 
-             FROM internship_applications a
-             JOIN internships i ON a.internship_id = i.id
-             WHERE a.status IN ('Started','Internship Started','Active Intern','Selected') 
-               AND $internship_cond";
-$active_interns = intval(mysqli_fetch_assoc(mysqli_query($conn, $active_q))['c'] ?? 0);
-
-// Total logs
-$total_logs = intval(mysqli_fetch_assoc(mysqli_query($conn,
-    "SELECT COUNT(*) as c FROM daily_logs d WHERE 1=1 $log_where"))['c'] ?? 0);
-
-// Completed logs (submitted today or any day — count all)
-$completed_logs = $total_logs;
-
-// Missing logs (active interns of this coordinator who haven't logged today)
-if (!empty($intern_ids)) {
-    $ids_str = implode(',', $intern_ids);
-    $missing_q = "SELECT COUNT(DISTINCT a.user_id) as c
-                  FROM internship_applications a
-                  WHERE a.status IN ('Started','Internship Started','Active Intern')
-                    AND a.user_id IN ($ids_str)
-                    AND a.user_id NOT IN (
-                        SELECT DISTINCT user_id FROM daily_logs WHERE log_date = CURDATE()
-                    )";
-} else {
-    $missing_q = "SELECT 0 as c";
+if (!function_exists('executeSafeCountQuery')) {
+    function executeSafeCountQuery($conn, $query, $metric_name) {
+        $res = mysqli_query($conn, $query);
+        if (!$res) {
+            error_log("IMP Coordinator Analytics API Error ($metric_name): " . mysqli_error($conn));
+            return 0;
+        }
+        $row = mysqli_fetch_assoc($res);
+        return intval($row['c'] ?? 0);
+    }
 }
-$missing_logs = intval(mysqli_fetch_assoc(mysqli_query($conn, $missing_q))['c'] ?? 0);
 
-// Pending logs = active interns - those who logged today
-$logged_today_q = "SELECT COUNT(DISTINCT d.user_id) as c FROM daily_logs d WHERE d.log_date = CURDATE() $log_where";
-$logged_today = intval(mysqli_fetch_assoc(mysqli_query($conn, $logged_today_q))['c'] ?? 0);
+// 8 counts
+$created_projects = executeSafeCountQuery($conn, "SELECT COUNT(*) as c FROM internships i WHERE $internship_cond AND i.is_deleted = 0", 'Created Projects');
+
+$pending_applications = executeSafeCountQuery($conn, "
+    SELECT COUNT(*) as c 
+    FROM internship_applications a
+    JOIN internships i ON a.internship_id = i.id
+    WHERE $internship_cond 
+      AND a.status IN ('Applied', 'Pending', 'Verified', 'HR Review', 'Shortlisted', 'Exam Mail Sent', 'HOD Pending', 'HOD Approval Pending', 'Forwarded to HOD', 'HOD Approved')
+      AND i.is_deleted = 0
+", 'Pending Applications');
+
+$selected_students = executeSafeCountQuery($conn, "
+    SELECT COUNT(DISTINCT ptm.student_id) as c 
+    FROM project_team_members ptm
+    JOIN project_teams t ON ptm.project_team_id = t.id
+    LEFT JOIN internships i ON t.internship_id = i.id
+    WHERE $team_filter_cond AND i.is_deleted = 0
+", 'Selected Students');
+
+$assigned_teams = executeSafeCountQuery($conn, "
+    SELECT COUNT(*) as c 
+    FROM project_teams t
+    LEFT JOIN internships i ON t.internship_id = i.id
+    WHERE $team_filter_cond AND i.is_deleted = 0
+", 'Assigned Teams');
+
+$active_projects = executeSafeCountQuery($conn, "
+    SELECT COUNT(*) as c 
+    FROM internships i
+    WHERE $internship_cond 
+      AND i.status IN ('Active', 'Approved', 'Admin-Approved') 
+      AND i.is_deleted = 0
+", 'Active Projects');
+
+$assigned_mentors = executeSafeCountQuery($conn, "
+    SELECT COUNT(DISTINCT t.mentor_id) as c 
+    FROM project_teams t
+    LEFT JOIN internships i ON t.internship_id = i.id
+    WHERE $team_filter_cond AND t.mentor_id IS NOT NULL AND i.is_deleted = 0
+", 'Assigned Mentors');
+
+$total_interns = executeSafeCountQuery($conn, "
+    SELECT COUNT(DISTINCT a.user_id) as c 
+    FROM internship_applications a
+    JOIN internships i ON a.internship_id = i.id
+    WHERE $internship_cond AND i.is_deleted = 0
+", 'Total Interns');
+
+$active_interns = executeSafeCountQuery($conn, "
+    SELECT COUNT(DISTINCT a.user_id) as c 
+    FROM internship_applications a
+    JOIN internships i ON a.internship_id = i.id
+    WHERE a.status IN ('Started','Internship Started','Active Intern','Internship Active','Selected', 'Project Assigned')
+      AND $internship_cond AND i.is_deleted = 0
+", 'Active Interns');
+
+$total_logs = executeSafeCountQuery($conn, "
+    SELECT COUNT(*) as c 
+    FROM daily_logs d
+    JOIN internships i ON d.internship_id = i.id
+    WHERE $internship_cond AND i.is_deleted = 0
+", 'Total Logs');
+
+$logged_today = executeSafeCountQuery($conn, "
+    SELECT COUNT(DISTINCT d.user_id) as c 
+    FROM daily_logs d
+    JOIN internships i ON d.internship_id = i.id
+    WHERE d.log_date = CURDATE() AND $internship_cond AND i.is_deleted = 0
+", 'Logged Today');
+
 $pending_logs = max(0, $active_interns - $logged_today);
+$completed_logs = $total_logs;
+$missing_logs = 0; // fallback / legacy compatibility
+$unread_count = executeSafeCountQuery($conn, "SELECT COUNT(*) as c FROM notifications WHERE user_id = $coordinator_id AND role = 'coordinator' AND is_read = 0", 'Unread Notifications');
 
-// Completed internships
-$completed_q = "SELECT COUNT(*) as c 
-                FROM internship_applications a 
-                JOIN internships i ON a.internship_id = i.id
-                WHERE a.status = 'Completed' AND $internship_cond";
-$completed_internships = intval(mysqli_fetch_assoc(mysqli_query($conn, $completed_q))['c'] ?? 0);
+$completed_internships = executeSafeCountQuery($conn, "
+    SELECT COUNT(*) as c 
+    FROM internship_applications a
+    JOIN internships i ON a.internship_id = i.id
+    WHERE a.status = 'Completed' AND $internship_cond AND i.is_deleted = 0
+", 'Completed Internships');
 
-// Completion %
 $total_prog = $completed_internships + $active_interns;
 $completion_pct = $total_prog > 0 ? round(($completed_internships / $total_prog) * 100) : 0;
-
-// Assigned %
 $assigned_pct = $total_interns > 0 ? round(($active_interns / $total_interns) * 100) : 0;
+$open_projects = $created_projects; // Open projects is the created projects count for this subtype
 
-// Open projects
-$open_projects_q = "SELECT COUNT(*) as c FROM internships i WHERE i.status IN ('Active','Approved','Admin-Approved','Admin Approved') AND $internship_cond";
-$open_projects = intval(mysqli_fetch_assoc(mysqli_query($conn, $open_projects_q))['c'] ?? 0);
+// Recent Activities (unified feed)
+$recent_activities = [];
+$activity_sql = "
+    SELECT * FROM (
+        SELECT 
+            'application' AS activity_type,
+            a.id AS ref_id,
+            COALESCE(u.full_name, a.full_name) AS primary_name,
+            i.title AS detail_name,
+            a.status AS extra_info,
+            a.applied_date AS activity_time
+        FROM internship_applications a
+        JOIN internships i ON a.internship_id = i.id
+        LEFT JOIN users u ON a.user_id = u.id
+        WHERE $internship_cond AND i.is_deleted = 0
 
-// Internship title (if filtered)
-$internship_title = '';
-if ($internship_id > 0) {
-    $t_res = mysqli_query($conn, "SELECT title FROM internships i WHERE i.id = $internship_id AND $internship_cond LIMIT 1");
-    if ($t_row = mysqli_fetch_assoc($t_res)) $internship_title = $t_row['title'];
+        UNION ALL
+
+        SELECT 
+            'team' AS activity_type,
+            t.id AS ref_id,
+            t.team_name AS primary_name,
+            i.title AS detail_name,
+            t.status AS extra_info,
+            t.created_at AS activity_time
+        FROM project_teams t
+        LEFT JOIN internships i ON t.internship_id = i.id
+        WHERE $team_filter_cond AND (i.is_deleted = 0 OR i.id IS NULL)
+
+        UNION ALL
+
+        SELECT 
+            'assignment' AS activity_type,
+            ptm.id AS ref_id,
+            u.full_name AS primary_name,
+            t.team_name AS detail_name,
+            i.title AS extra_info,
+            ptm.created_at AS activity_time
+        FROM project_team_members ptm
+        JOIN project_teams t ON ptm.project_team_id = t.id
+        LEFT JOIN internships i ON t.internship_id = i.id
+        JOIN users u ON ptm.student_id = u.id
+        WHERE $team_filter_cond AND (i.is_deleted = 0 OR i.id IS NULL)
+
+        UNION ALL
+
+        SELECT 
+            'log' AS activity_type,
+            d.id AS ref_id,
+            u.full_name AS primary_name,
+            d.tasks_completed AS detail_name,
+            CAST(d.time_spent AS CHAR) AS extra_info,
+            d.created_at AS activity_time
+        FROM daily_logs d
+        JOIN users u ON d.user_id = u.id
+        JOIN internships i ON d.internship_id = i.id
+        WHERE $internship_cond AND i.is_deleted = 0
+    ) AS combined_activity
+    ORDER BY activity_time DESC
+    LIMIT 8
+";
+$activity_res = mysqli_query($conn, $activity_sql);
+if ($activity_res) {
+    while ($act = mysqli_fetch_assoc($activity_res)) {
+        $recent_activities[] = $act;
+    }
+} else {
+    error_log("IMP Coordinator Analytics API Error (Recent Activities): " . mysqli_error($conn));
 }
 
 // ── Daily log trend (last 7 days) ─────────────────────────────────────────────
@@ -139,12 +247,14 @@ $trend_q = "SELECT d.log_date, COUNT(*) as cnt, SUM(d.time_spent) as hrs
             GROUP BY d.log_date ORDER BY d.log_date ASC";
 $trend_res = mysqli_query($conn, $trend_q);
 $daily_trend = [];
-while ($tr = mysqli_fetch_assoc($trend_res)) {
-    $daily_trend[] = [
-        'date'  => date('D', strtotime($tr['log_date'])),
-        'count' => intval($tr['cnt']),
-        'hours' => round(floatval($tr['hrs']), 1),
-    ];
+if ($trend_res) {
+    while ($tr = mysqli_fetch_assoc($trend_res)) {
+        $daily_trend[] = [
+            'date'  => date('D', strtotime($tr['log_date'])),
+            'count' => intval($tr['cnt']),
+            'hours' => round(floatval($tr['hrs']), 1),
+        ];
+    }
 }
 
 // ── Recent logs (last 5) ──────────────────────────────────────────────────────
@@ -157,16 +267,18 @@ $recent_q = "SELECT d.log_date, d.tasks_completed, d.time_spent, d.focus_level,
              ORDER BY d.created_at DESC LIMIT 5";
 $recent_res = mysqli_query($conn, $recent_q);
 $recent_logs = [];
-while ($rl = mysqli_fetch_assoc($recent_res)) {
-    $recent_logs[] = [
-        'full_name'       => $rl['full_name'],
-        'course'          => $rl['course'] ?? 'Student',
-        'college_name'    => $rl['college_name'] ?? 'University',
-        'tasks_completed' => mb_strimwidth($rl['tasks_completed'], 0, 40, '…'),
-        'time_spent'      => floatval($rl['time_spent']),
-        'focus_level'     => $rl['focus_level'],
-        'log_date'        => date('M d', strtotime($rl['log_date'])),
-    ];
+if ($recent_res) {
+    while ($rl = mysqli_fetch_assoc($recent_res)) {
+        $recent_logs[] = [
+            'full_name'       => $rl['full_name'],
+            'course'          => $rl['course'] ?? 'Student',
+            'college_name'    => $rl['college_name'] ?? 'University',
+            'tasks_completed' => mb_strimwidth($rl['tasks_completed'], 0, 40, '…'),
+            'time_spent'      => floatval($rl['time_spent']),
+            'focus_level'     => $rl['focus_level'],
+            'log_date'        => date('M d', strtotime($rl['log_date'])),
+        ];
+    }
 }
 
 // ── Pipeline projects ─────────────────────────────────────────────────────────
@@ -190,7 +302,7 @@ $pipe_q = "
         LEFT JOIN internships i ON t.internship_id = i.id
         LEFT JOIN users mu ON t.mentor_id = mu.id
         WHERE t.status IN ('Active', 'Confirmed', 'confirmed', 'active')
-          AND $internship_cond
+          AND $team_filter_cond AND (i.is_deleted = 0 OR i.id IS NULL)
 
         UNION ALL
 
@@ -206,7 +318,7 @@ $pipe_q = "
                'internship' AS source
         FROM internships i
         WHERE i.status IN ('Active', 'Approved', 'Admin-Approved', 'Admin Approved')
-          AND $internship_cond
+          AND $internship_cond AND i.is_deleted = 0
            AND i.id NOT IN (
                SELECT DISTINCT internship_id FROM project_teams
            )
@@ -330,5 +442,13 @@ echo json_encode([
         return $projects_by_subtype;
     })(),
     'internship_timeline'=> $internship_timeline,
+    'created_projects'     => $created_projects,
+    'pending_applications' => $pending_applications,
+    'selected_students'    => $selected_students,
+    'assigned_teams'       => $assigned_teams,
+    'active_projects'      => $active_projects,
+    'assigned_mentors'     => $assigned_mentors,
+    'unread_notifications' => $unread_count,
+    'recent_activities'    => $recent_activities,
 ]);
 ?>

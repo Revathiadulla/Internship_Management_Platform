@@ -69,9 +69,9 @@ $hod_phone = !empty($app['hod_phone']) ? $app['hod_phone'] : ($app['sp_hod_phone
 
 $allowed_statuses = [];
 if ($user_role === 'hr') {
-    $allowed_statuses = ['Applied', 'HR Review', 'Shortlisted', 'Exam Mail Sent', 'HOD Pending', 'HOD Approved', 'Selected', 'Rejected'];
+    $allowed_statuses = ['Applied', 'Shortlisted', 'Exam Mail Sent', 'Exam Qualified', 'HOD Pending', 'HOD Approved', 'Selected', 'Rejected', 'Exam Link Sent', 'Exam Completed', 'HR Review'];
 } elseif ($user_role === 'coordinator' || $user_role === 'admin') {
-    $allowed_statuses = ['Applied', 'HR Review', 'Shortlisted', 'Exam Mail Sent', 'HOD Pending', 'HOD Approved', 'Selected', 'Project Assigned', 'Active Intern', 'Rejected', 'Completed'];
+    $allowed_statuses = ['Applied', 'Shortlisted', 'Exam Mail Sent', 'Exam Qualified', 'HOD Pending', 'HOD Approved', 'Selected', 'Project Assigned', 'Active Intern', 'Rejected', 'Completed', 'Exam Link Sent', 'Exam Completed', 'HR Review'];
 }
 
 // Log status transition attempt
@@ -90,16 +90,47 @@ if (!in_array($new_status, $allowed_statuses)) {
 }
 
 // Enforce status flow constraints
-if ($new_status === 'Selected') {
-    if (!in_array($old_status_key, ['exam_sent', 'hod_approved', 'selected'], true)) {
-        echo json_encode(['success' => false, 'message' => 'Cannot select candidate before sending exam mail or completing HOD approval.']);
+if ($new_status === 'Rejected') {
+    $blocked_rejection_statuses = [
+        'project_assigned', 'team_assigned', 'started', 'internship_started', 
+        'active_intern', 'completed', 'internship_completed', 'certificate_issued'
+    ];
+    if (in_array($old_status_key, $blocked_rejection_statuses, true) || 
+        in_array(strtolower($old_status), ['project assigned', 'team assigned', 'internship started', 'internship completed', 'certificate issued', 'started', 'completed', 'active intern'])) {
+        echo json_encode(['success' => false, 'message' => 'Candidate rejection is not allowed after project assignment or completion.']);
+        exit();
+    }
+}
+if ($new_status === 'Exam Mail Sent') {
+    if (!in_array($old_status_key, ['shortlisted', 'applied', 'exam_sent', 'exam_link_sent', 'exam_mail_sent'], true)) {
+        echo json_encode(['success' => false, 'message' => 'Exam email can only be sent after the candidate is shortlisted.']);
+        exit();
+    }
+}
+if ($new_status === 'Exam Qualified') {
+    if (!in_array($old_status_key, ['exam_sent', 'exam_link_sent', 'exam_mail_sent'], true)) {
+        echo json_encode(['success' => false, 'message' => 'This candidate can only be marked as exam qualified after the exam email has been sent.']);
         exit();
     }
 }
 if ($new_status === 'HOD Pending') {
-    if (!is_exam_sent_status($old_status)) {
-        echo json_encode(['success' => false, 'message' => 'Cannot request HOD approval before sending exam mail.']);
+    if (!in_array($old_status_key, ['exam_sent', 'exam_mail_sent', 'exam_qualified'], true)) {
+        echo json_encode(['success' => false, 'message' => 'Cannot request HOD approval before exam details are sent or qualified.']);
         exit();
+    }
+}
+if ($new_status === 'Selected') {
+    $is_pursuing_be = is_pursuing_student($education_status, $app['student_type'] ?? null);
+    if ($is_pursuing_be) {
+        if (!in_array($old_status_key, ['hod_approved', 'selected'], true) && strtolower((string) ($app['hod_approval_status'] ?? '')) !== 'approved') {
+            echo json_encode(['success' => false, 'message' => 'Cannot select this candidate. Please complete HOD approval first.']);
+            exit();
+        }
+    } else {
+        if (!in_array($old_status_key, ['exam_sent', 'exam_mail_sent', 'exam_qualified', 'hod_approved', 'selected'], true)) {
+            echo json_encode(['success' => false, 'message' => 'Cannot select this candidate before the exam is sent or qualified.']);
+            exit();
+        }
     }
 }
 

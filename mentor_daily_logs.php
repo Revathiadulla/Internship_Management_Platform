@@ -19,8 +19,22 @@ if (isset($_GET['ajax_action']) && $_GET['ajax_action'] === 'history') {
     $student_id = intval($_GET['student_id']);
     
     // Ensure student is assigned to this mentor
-    $chk_stmt = $conn->prepare("SELECT tm.id FROM project_team_members tm JOIN project_teams t ON tm.project_team_id = t.id WHERE t.mentor_id = ? AND tm.student_id = ? AND t.status = 'Active' LIMIT 1");
-    $chk_stmt->bind_param('ii', $mentor_id, $student_id);
+    $chk_stmt = $conn->prepare("
+        SELECT 1 FROM (
+            SELECT ptm.student_id 
+            FROM project_team_members ptm 
+            JOIN project_teams t ON ptm.project_team_id = t.id 
+            WHERE t.mentor_id = ? AND ptm.student_id = ? AND t.status = 'Active'
+            
+            UNION
+            
+            SELECT ia.user_id AS student_id 
+            FROM internship_applications ia 
+            WHERE ia.mentor_id = ? AND ia.user_id = ? 
+              AND ia.status IN ('Project Assigned', 'Team Assigned', 'Internship Started', 'Started', 'Active Intern', 'Selected')
+        ) AS assigned LIMIT 1
+    ");
+    $chk_stmt->bind_param('iiii', $mentor_id, $student_id, $mentor_id, $student_id);
     $chk_stmt->execute();
     if (!$chk_stmt->get_result()->fetch_assoc()) {
         header('Content-Type: application/json');
@@ -55,13 +69,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $chk_stmt = $conn->prepare("
                 SELECT dl.id, dl.user_id, dl.application_id, u.full_name, dl.log_date 
                 FROM daily_logs dl 
-                JOIN project_team_members tm ON dl.user_id = tm.student_id
-                JOIN project_teams t ON tm.project_team_id = t.id
                 JOIN users u ON dl.user_id = u.id 
-                WHERE dl.id = ? AND t.mentor_id = ? AND t.status = 'Active'
+                WHERE dl.id = ? AND dl.user_id IN (
+                    SELECT ptm.student_id 
+                    FROM project_team_members ptm 
+                    JOIN project_teams t ON ptm.project_team_id = t.id 
+                    WHERE t.mentor_id = ?
+                    
+                    UNION
+                    
+                    SELECT ia.user_id AS student_id 
+                    FROM internship_applications ia 
+                    WHERE ia.mentor_id = ? 
+                      AND ia.status IN ('Project Assigned', 'Team Assigned', 'Internship Started', 'Started', 'Active Intern', 'Selected')
+                )
                 LIMIT 1
             ");
-            $chk_stmt->bind_param('ii', $log_id, $mentor_id);
+            $chk_stmt->bind_param('iii', $log_id, $mentor_id, $mentor_id);
             $chk_stmt->execute();
             $log_row = $chk_stmt->get_result()->fetch_assoc();
             
@@ -176,13 +200,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $chk_stmt = $conn->prepare("
                 SELECT dl.id, dl.user_id, dl.application_id, u.full_name, dl.log_date 
                 FROM daily_logs dl 
-                JOIN project_team_members tm ON dl.user_id = tm.student_id
-                JOIN project_teams t ON tm.project_team_id = t.id
                 JOIN users u ON dl.user_id = u.id 
-                WHERE dl.id = ? AND t.mentor_id = ? AND t.status = 'Active'
+                WHERE dl.id = ? AND dl.user_id IN (
+                    SELECT ptm.student_id 
+                    FROM project_team_members ptm 
+                    JOIN project_teams t ON ptm.project_team_id = t.id 
+                    WHERE t.mentor_id = ?
+                    
+                    UNION
+                    
+                    SELECT ia.user_id AS student_id 
+                    FROM internship_applications ia 
+                    WHERE ia.mentor_id = ? 
+                      AND ia.status IN ('Project Assigned', 'Team Assigned', 'Internship Started', 'Started', 'Active Intern', 'Selected')
+                )
                 LIMIT 1
             ");
-            $chk_stmt->bind_param('ii', $log_id, $mentor_id);
+            $chk_stmt->bind_param('iii', $log_id, $mentor_id, $mentor_id);
             $chk_stmt->execute();
             $log_row = $chk_stmt->get_result()->fetch_assoc();
             
@@ -286,8 +320,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $student_id = intval($_POST['student_id']);
             
             // Validate student belongs to mentor
-            $chk_stmt = $conn->prepare("SELECT tm.id FROM project_team_members tm JOIN project_teams t ON tm.project_team_id = t.id WHERE t.mentor_id = ? AND tm.student_id = ? AND t.status = 'Active' LIMIT 1");
-            $chk_stmt->bind_param('ii', $mentor_id, $student_id);
+            $chk_stmt = $conn->prepare("
+                SELECT 1 FROM (
+                    SELECT ptm.student_id 
+                    FROM project_team_members ptm 
+                    JOIN project_teams t ON ptm.project_team_id = t.id 
+                    WHERE t.mentor_id = ? AND ptm.student_id = ? AND t.status = 'Active'
+                    
+                    UNION
+                    
+                    SELECT ia.user_id AS student_id 
+                    FROM internship_applications ia 
+                    WHERE ia.mentor_id = ? AND ia.user_id = ? 
+                      AND ia.status IN ('Project Assigned', 'Team Assigned', 'Internship Started', 'Started', 'Active Intern', 'Selected')
+                ) AS assigned LIMIT 1
+            ");
+            $chk_stmt->bind_param('iiii', $mentor_id, $student_id, $mentor_id, $student_id);
             $chk_stmt->execute();
             if ($chk_stmt->get_result()->fetch_assoc()) {
                 $notif_msg = "Your mentor has sent you a reminder to log your daily activity.";
@@ -313,7 +361,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // Setup WHERE condition from filters
-$where = ["pt.mentor_id = $mentor_id", "pt.status = 'Active'"];
+$where = ["1=1"];
 
 $filter_student_id = isset($_GET['student_id']) ? intval($_GET['student_id']) : 0;
 if ($filter_student_id > 0) {
@@ -348,15 +396,42 @@ $limit = 20;
 $page = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
 $offset = ($page - 1) * $limit;
 
+// Union representing all student assignments for this mentor
+$assigned_students_subquery = "
+    (
+        SELECT DISTINCT 
+            ptm.student_id, 
+            pt.team_name, 
+            COALESCE(i.title, app.internship_name) as internship_name,
+            COALESCE(i.title, app.internship_name) as internship_title,
+            app.id as app_id
+        FROM project_team_members ptm
+        JOIN project_teams pt ON ptm.project_team_id = pt.id
+        LEFT JOIN internships i ON pt.internship_id = i.id
+        LEFT JOIN internship_applications app ON ptm.student_id = app.user_id AND pt.internship_id = app.internship_id
+        WHERE pt.mentor_id = $mentor_id
+        
+        UNION
+        
+        SELECT DISTINCT 
+            ia.user_id AS student_id,
+            ia.team_name,
+            COALESCE(i.title, ia.internship_name) as internship_name,
+            COALESCE(i.title, ia.internship_name) as internship_title,
+            ia.id as app_id
+        FROM internship_applications ia
+        LEFT JOIN internships i ON ia.internship_id = i.id
+        WHERE ia.mentor_id = $mentor_id
+          AND ia.status IN ('Project Assigned', 'Team Assigned', 'Internship Started', 'Started', 'Active Intern', 'Selected')
+    )
+";
+
 // Count total matching logs
 $count_query = "
     SELECT COUNT(DISTINCT dl.id) as total
     FROM daily_logs dl
     JOIN users u ON dl.user_id = u.id
-    JOIN project_team_members ptm ON dl.user_id = ptm.student_id
-    JOIN project_teams pt ON ptm.project_team_id = pt.id
-    LEFT JOIN internships i ON pt.internship_id = i.id
-    LEFT JOIN internship_applications app ON dl.user_id = app.user_id AND pt.internship_id = app.internship_id
+    JOIN $assigned_students_subquery ast ON dl.user_id = ast.student_id
     WHERE $where_sql
 ";
 $count_result = mysqli_query($conn, $count_query);
@@ -370,16 +445,13 @@ $logs_query = "
         dl.next_plan AS next_day_plan,
         u.full_name as student_name, 
         u.email as student_email,
-        pt.team_name,
-        COALESCE(i.title, app.internship_name) as internship_name,
-        COALESCE(i.title, app.internship_name) as internship_title,
-        app.id as app_id
+        ast.team_name,
+        ast.internship_name,
+        ast.internship_title,
+        ast.app_id
     FROM daily_logs dl
     JOIN users u ON dl.user_id = u.id
-    JOIN project_team_members ptm ON dl.user_id = ptm.student_id
-    JOIN project_teams pt ON ptm.project_team_id = pt.id
-    LEFT JOIN internships i ON pt.internship_id = i.id
-    LEFT JOIN internship_applications app ON dl.user_id = app.user_id AND pt.internship_id = app.internship_id
+    JOIN $assigned_students_subquery ast ON dl.user_id = ast.student_id
     WHERE $where_sql
     ORDER BY dl.log_date DESC, dl.id DESC
     LIMIT $limit OFFSET $offset
@@ -389,13 +461,20 @@ $logs_result = mysqli_query($conn, $logs_query);
 // Fetch assigned students list for dropdowns
 $dropdown_students_stmt = $conn->prepare("
     SELECT DISTINCT u.id, u.full_name
-    FROM project_team_members tm
-    JOIN project_teams t ON tm.project_team_id = t.id
-    JOIN users u ON tm.student_id = u.id
-    WHERE t.mentor_id = ? AND t.status = 'Active'
+    FROM users u
+    WHERE u.id IN (
+        SELECT student_id FROM project_team_members tm
+        JOIN project_teams t ON tm.project_team_id = t.id
+        WHERE t.mentor_id = ?
+        
+        UNION
+        
+        SELECT user_id AS student_id FROM internship_applications
+        WHERE mentor_id = ? AND status IN ('Project Assigned', 'Team Assigned', 'Internship Started', 'Started', 'Active Intern', 'Selected')
+    )
     ORDER BY u.full_name ASC
 ");
-$dropdown_students_stmt->bind_param('i', $mentor_id);
+$dropdown_students_stmt->bind_param('ii', $mentor_id, $mentor_id);
 $dropdown_students_stmt->execute();
 $dropdown_students = $dropdown_students_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 
@@ -403,19 +482,38 @@ $dropdown_students = $dropdown_students_stmt->get_result()->fetch_all(MYSQLI_ASS
 $pending_count_stmt = $conn->prepare("
     SELECT COUNT(*) as count 
     FROM daily_logs dl 
-    JOIN project_team_members tm ON dl.user_id = tm.student_id
-    JOIN project_teams t ON tm.project_team_id = t.id
-    WHERE t.mentor_id = ? AND t.status = 'Active' AND dl.status = 'Submitted'
+    WHERE dl.status = 'Submitted' AND dl.user_id IN (
+        SELECT tm.student_id FROM project_team_members tm
+        JOIN project_teams t ON tm.project_team_id = t.id
+        WHERE t.mentor_id = ?
+        
+        UNION
+        
+        SELECT user_id AS student_id FROM internship_applications
+        WHERE mentor_id = ? AND status IN ('Project Assigned', 'Team Assigned', 'Internship Started', 'Started', 'Active Intern', 'Selected')
+    )
 ");
-$pending_count_stmt->bind_param('i', $mentor_id);
+$pending_count_stmt->bind_param('ii', $mentor_id, $mentor_id);
 $pending_count_stmt->execute();
 $total_pending = $pending_count_stmt->get_result()->fetch_assoc()['count'] ?? 0;
 
 // Extra Debug Counts
-$db_team_res = mysqli_query($conn, "SELECT COUNT(*) as cnt FROM project_teams WHERE mentor_id = $mentor_id AND status = 'Active'");
+$db_team_res = mysqli_query($conn, "
+    SELECT COUNT(DISTINCT team_name) as cnt FROM (
+        SELECT team_name FROM project_teams WHERE mentor_id = $mentor_id
+        UNION
+        SELECT team_name FROM internship_applications WHERE mentor_id = $mentor_id AND status IN ('Project Assigned', 'Team Assigned', 'Internship Started', 'Started', 'Active Intern', 'Selected') AND team_name IS NOT NULL AND team_name != ''
+    ) AS teams
+");
 $assigned_teams_count = intval(mysqli_fetch_assoc($db_team_res)['cnt'] ?? 0);
 
-$db_stud_res = mysqli_query($conn, "SELECT COUNT(DISTINCT student_id) as cnt FROM project_team_members ptm JOIN project_teams pt ON ptm.project_team_id = pt.id WHERE pt.mentor_id = $mentor_id AND pt.status = 'Active'");
+$db_stud_res = mysqli_query($conn, "
+    SELECT COUNT(DISTINCT student_id) as cnt FROM (
+        SELECT student_id FROM project_team_members ptm JOIN project_teams pt ON ptm.project_team_id = pt.id WHERE pt.mentor_id = $mentor_id
+        UNION
+        SELECT user_id AS student_id FROM internship_applications WHERE mentor_id = $mentor_id AND status IN ('Project Assigned', 'Team Assigned', 'Internship Started', 'Started', 'Active Intern', 'Selected')
+    ) AS students
+");
 $assigned_students_count = intval(mysqli_fetch_assoc($db_stud_res)['cnt'] ?? 0);
 ?>
 <?php

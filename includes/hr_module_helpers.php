@@ -549,7 +549,7 @@ function status_badge(string $status): string {
 
 
 function page_head(string $title): void {
-    echo '<!DOCTYPE html><html lang="en"><head>
+    echo '<!DOCTYPE html><html lang="en" class="light"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>' . e($title) . ' - IMP</title>
@@ -597,13 +597,46 @@ function page_head(string $title): void {
     cursor: pointer !important;
 }
 .profile-menu .dropdown a:hover { background: #f8fafc; color: #1d4ed8; }
+
+/* Sidebar and Layout Responsive Structure */
+aside {
+    position: fixed !important;
+    left: 0;
+    top: 0;
+    height: 100vh !important;
+    width: 240px !important;
+    z-index: 50 !important;
+    transition: transform 0.3s ease-in-out;
+    box-sizing: border-box;
+}
+main {
+    margin-left: 240px !important;
+    min-height: 100vh;
+    min-width: 0;
+    width: calc(100% - 240px);
+    overflow-x: hidden;
+    box-sizing: border-box;
+    transition: margin-left 0.3s ease-in-out, width 0.3s ease-in-out;
+}
+@media (max-width: 1024px) {
+    aside {
+        transform: translateX(-100%);
+    }
+    main {
+        margin-left: 0 !important;
+        width: 100% !important;
+    }
+    body.sidebar-open aside {
+        transform: translateX(0);
+    }
+}
 </style>
-</head><body class="bg-[#f8f9fa] text-slate-900 antialiased">';
+</head><body class="bg-[#f8f9fa] text-slate-900 antialiased transition-colors duration-200">';
 }
 
 
 function hr_sidebar(string $active): void {
-    $visible = [];
+    $role = strtolower($_SESSION['role'] ?? '');
     $items = [
         ['Dashboard', 'hr_dashboard.php', 'dashboard', 'dashboard'],
         ['Applications', 'hr_applications.php', 'assignment', 'applications'],
@@ -613,11 +646,13 @@ function hr_sidebar(string $active): void {
         ['Reports', 'hr_reports.php', 'analytics', 'reports'],
         ['Notifications', 'admin_received_notifications.php', 'notifications', 'notifications'],
     ];
-    foreach ($items as $item) {
-        if (function_exists('can_access_module') && can_access_module($item[3])) {
-            $visible[] = $item;
-        }
+    if ($role === 'hr' || $role === 'admin') {
+        $items[] = ['Confirmation Letter Template', 'confirmation_letter_template.php', 'description', 'confirmation_template'];
     }
+    if ($role === 'admin') {
+        $items[] = ['Certificate Template', 'certificate_template.php', 'workspace_premium', 'certificate_template'];
+    }
+    $visible = $items;
     echo '<aside class="fixed left-0 top-0 z-50 flex h-screen w-60 flex-col border-r border-gray-200 bg-gray-50 py-6 text-sm font-medium">
 <div class="mb-8 px-6"><a href="index.html" class="flex items-center gap-2"><span class="grid h-8 w-8 place-items-center rounded-lg bg-blue-600 text-sm font-extrabold text-white">IMP</span><span class="text-xl font-bold text-blue-600">IMP</span></a><p class="ml-1 mt-2 text-[10px] font-bold uppercase tracking-widest text-gray-500">HR Portal</p></div>
 <nav class="flex-1 space-y-1 px-4">';
@@ -863,17 +898,23 @@ function page_shell_start(string $active, string $title, string $subtitle = '', 
     } else {
         hr_sidebar($active);
     }
-    echo '<main class="min-h-screen pl-60"><header class="sticky top-0 z-40 border-b border-gray-200 bg-white px-8 py-4 shadow-sm">';
+    echo '<main class="min-h-screen">';
+    echo '<header class="sticky top-0 z-40 border-b border-gray-200 bg-white px-8 py-4 shadow-sm">';
     $is_dashboard_style = in_array($active, ['dashboard', 'workflows', 'candidates', 'postings', 'applications', 'archived_applications'], true) && in_array($title, ['Dashboard', 'Workflows', 'Candidates', 'Postings', 'Applications', 'Archived Applications'], true);
     
-    echo '<div class="mb-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] items-start">';
+    echo '<div class="mb-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">';
+    echo '<div class="flex items-center gap-3">';
+    echo '<button id="sidebar-toggle" class="p-1 hover:bg-slate-100 rounded-lg transition-colors focus:outline-none cursor-pointer lg:hidden flex items-center justify-center">';
+    echo '<span class="material-symbols-outlined text-slate-600 text-2xl">menu</span>';
+    echo '</button>';
     echo '<div><h1 class="text-2xl font-extrabold text-slate-900">' . e($title) . '</h1>';
     if ($subtitle !== '') {
         echo '<p class="mt-1 text-sm text-slate-500">' . e($subtitle) . '</p>';
     }
     echo '</div>';
+    echo '</div>'; // close flex items-center gap-3
     echo '<div class="flex items-center justify-end gap-4">' . module_topbar($active, $action_html, false) . '</div>';
-    echo '</div>';
+    echo '</div>'; // close flex/grid container
     echo '</header>';
     
     if ($is_dashboard_style) {
@@ -886,6 +927,19 @@ function page_shell_start(string $active, string $title, string $subtitle = '', 
 function page_shell_end(): void {
     echo '</section></main>
 <script>
+// Mobile sidebar toggler
+document.getElementById("sidebar-toggle")?.addEventListener("click", function(e) {
+    e.stopPropagation();
+    document.body.classList.toggle("sidebar-open");
+});
+document.addEventListener("click", function(e) {
+    var sidebar = document.querySelector("aside");
+    var toggleBtn = document.getElementById("sidebar-toggle");
+    if (sidebar && !sidebar.contains(e.target) && toggleBtn && !toggleBtn.contains(e.target)) {
+        document.body.classList.remove("sidebar-open");
+    }
+});
+
 // ── IMP Profile Dropdown — click-to-toggle, click-outside-to-close ──────────
 function impToggleProfileMenu(event) {
     event.stopPropagation();

@@ -12,11 +12,12 @@ $menu_items = [
     'admin_project_categories.php' => ['icon' => 'category', 'label' => 'Project Categories'],
     'admin_coordinator_assignments.php' => ['icon' => 'assignment_ind', 'label' => 'Coordinator Assignments'],
     'admin_daily_logs.php' => ['icon' => 'monitoring', 'label' => 'Daily Logs'],
-    'admin_student_reports.php' => ['icon' => 'warning', 'label' => 'Student Reports'],
     'admin_dropout_requests.php' => ['icon' => 'person_remove', 'label' => 'Dropout Requests'],
     'admin_reports.php' => ['icon' => 'analytics', 'label' => 'Reports'],
     'admin_received_notifications.php' => ['icon' => 'campaign', 'label' => 'Notifications'],
-    'admin_talent_pool.php' => ['icon' => 'stars', 'label' => 'Talent Pool']
+    'admin_talent_pool.php' => ['icon' => 'stars', 'label' => 'Talent Pool'],
+    'confirmation_letter_template.php' => ['icon' => 'description', 'label' => 'Confirmation Letter Template'],
+    'certificate_template.php' => ['icon' => 'workspace_premium', 'label' => 'Certificate Template']
 ];
 ?>
 <aside class="w-64 bg-white border-r border-gray-200 p-6 flex flex-col justify-between overflow-y-auto shrink-0">

@@ -153,32 +153,73 @@ $insert_sql = "INSERT INTO internship_applications (
 
 if (mysqli_query($conn, $insert_sql)) {
 
+    $app_id_inserted = mysqli_insert_id($conn);
+    
+    // Fetch details for notifications
+    $fetch_sql = "SELECT a.id AS application_id, u.full_name AS student_name, u.email AS student_email, jp.project_type, COALESCE(jp.project_subtype, a.project_subtype, a.applied_subtype, 'Not specified') AS applied_subtype, jp.duration, jp.mode FROM internship_applications a JOIN users u ON u.id = a.user_id LEFT JOIN internships jp ON jp.id = a.internship_id WHERE a.id = ?";
+    $stmt = $conn->prepare($fetch_sql);
+    $stmt->bind_param("i", $app_id_inserted);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    $app_data = $res->fetch_assoc();
+    $stmt->close();
+    
+    $applied_subtype = $app_data['applied_subtype'] ?? 'Not specified';
+    $project_type    = $app_data['project_type'] ?? 'Not specified';
+    $duration        = $app_data['duration'] ?? 'Not specified';
+    $mode            = $app_data['mode'] ?? 'Not specified';
+
+    $shared_metadata = [
+        'event'              => 'New Internship Application',
+        'student_name'       => $full_name,
+        'applied_internship' => $applied_subtype,
+        'project_type'       => $project_type,
+        'duration'           => $duration,
+        'mode'               => $mode
+    ];
+
     // ── Notify student ──
     $notif_title = 'Application Submitted';
-    $notif_msg = "Your application for '$internship_name' has been submitted. Status: $app_status.";
+    $notif_msg = "Your application for '$applied_subtype' has been submitted. Status: $app_status.";
     notifyUser($user_id, 'student', $email, $notif_title, $notif_msg, [
         'event' => 'Application Submitted',
-        'internship_title' => $internship_name,
+        'applied_internship' => $applied_subtype,
         'current_status' => $app_status,
         'action_url' => 'http://localhost/IMP/student_applications.php',
         'action_label' => 'View Application Status'
     ], 'application');
 
+    // ── Notify HR ──
+    $hr_res = mysqli_query($conn, "SELECT id, email FROM users WHERE LOWER(role) = 'hr'");
+    if ($hr_res) {
+        $hr_title = 'New Internship Application Submitted';
+        $hr_msg = "New application received from $full_name for '$applied_subtype'.";
+        while ($hr_row = mysqli_fetch_assoc($hr_res)) {
+            $hr_id = intval($hr_row['id']);
+            $hr_email = trim($hr_row['email']);
+            
+            $hr_metadata = $shared_metadata;
+            $hr_metadata['action_url'] = 'http://localhost/IMP/hr_applications.php';
+            $hr_metadata['action_label'] = 'Review Application';
+            
+            notifyUser($hr_id, 'hr', $hr_email, $hr_title, $hr_msg, $hr_metadata, 'new_application');
+        }
+    }
+
     // ── Notify coordinators ──
     $coord_res = mysqli_query($conn, "SELECT id, email, full_name FROM users WHERE LOWER(role) = 'coordinator'");
     if ($coord_res) {
         $c_title = 'New Student Application';
-        $c_msg = "New application received from $full_name for '$internship_name'.";
+        $c_msg = "New application received from $full_name for '$applied_subtype'.";
         while ($c_row = mysqli_fetch_assoc($coord_res)) {
             $coord_id = intval($c_row['id']);
             $coord_email = trim($c_row['email']);
-            notifyUser($coord_id, 'coordinator', $coord_email, $c_title, $c_msg, [
-                'event' => 'New Internship Application',
-                'student_name' => $full_name,
-                'internship_title' => $internship_name,
-                'action_url' => 'http://localhost/IMP/coordinator_applications.php',
-                'action_label' => 'Review Application'
-            ], 'new_application');
+            
+            $coord_metadata = $shared_metadata;
+            $coord_metadata['action_url'] = 'http://localhost/IMP/coordinator_applications.php';
+            $coord_metadata['action_label'] = 'Review Application';
+            
+            notifyUser($coord_id, 'coordinator', $coord_email, $c_title, $c_msg, $coord_metadata, 'new_application');
         }
     }
 
@@ -186,26 +227,25 @@ if (mysqli_query($conn, $insert_sql)) {
     $admin_res = mysqli_query($conn, "SELECT id, email FROM users WHERE LOWER(role) = 'admin'");
     if ($admin_res) {
         $admin_title = 'New Internship Application Submitted';
-        $admin_msg = "A new application from $full_name has been submitted for '$internship_name'.";
+        $admin_msg = "A new application from $full_name has been submitted for '$applied_subtype'.";
         while ($admin_row = mysqli_fetch_assoc($admin_res)) {
             $admin_id = intval($admin_row['id']);
             $admin_email = trim($admin_row['email']);
-            notifyUser($admin_id, 'admin', $admin_email, $admin_title, $admin_msg, [
-                'event' => 'New Application Received',
-                'student_name' => $full_name,
-                'internship_title' => $internship_name,
-                'action_url' => 'http://localhost/IMP/admin_applications.php',
-                'action_label' => 'View Applications'
-            ], 'new_application');
+            
+            $admin_metadata = $shared_metadata;
+            $admin_metadata['action_url'] = 'http://localhost/IMP/admin_applications.php';
+            $admin_metadata['action_label'] = 'View Applications';
+            
+            notifyUser($admin_id, 'admin', $admin_email, $admin_title, $admin_msg, $admin_metadata, 'new_application');
         }
     }
 
     // Send email notification for internship application
-    $app_subject = "IMP Application Submitted: $internship_name";
-    $app_message = "Dear " . $_POST['full_name'] . ",\n\nYour application for the \"$internship_name\" internship has been successfully submitted to the platform.\n\nYour current application status is: **$app_status**.\n\nPlease remember that you are required to complete your skills assessment test (if applicable) within 48 hours of application submission.\n\nThank you for choosing IMP!";
+    $app_subject = "IMP Application Submitted: $applied_subtype";
+    $app_message = "Dear " . $_POST['full_name'] . ",\n\nYour application for the \"$applied_subtype\" internship has been successfully submitted to the platform.\n\nYour current application status is: **$app_status**.\n\nPlease remember that you are required to complete your skills assessment test (if applicable) within 48 hours of application submission.\n\nThank you for choosing IMP!";
     sendStudentNotification($user_id, $_POST['full_name'] ?? '', $app_subject, $app_message, [
         'event' => 'Internship Application',
-        'internship_position' => $internship_name,
+        'applied_internship' => $applied_subtype,
         'education_status' => $education_status,
         'current_status' => $app_status,
         'action_url' => 'http://localhost/IMP/student_applications.php',

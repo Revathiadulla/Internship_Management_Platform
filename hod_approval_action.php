@@ -2,6 +2,9 @@
 // hod_approval_action.php
 // Stateless HOD approval action handler for email links.
 
+ini_set('display_errors', 0);
+error_reporting(E_ALL);
+
 include 'db.php';
 include_once __DIR__ . '/includes/mail_helper.php';
 include_once __DIR__ . '/includes/hod_helpers.php';
@@ -22,7 +25,7 @@ if ($application_id <= 0 || empty($token) || !isset($allowed_actions[$action])) 
 
 // 1. Fetch application details by ID only (without matching token in SQL to allow detailed mismatch debugging)
 $stmt = $conn->prepare(
-    'SELECT a.id, a.status, a.hod_approval_status, a.hod_status, a.hod_token, a.user_id, a.hod_name, a.hod_email, a.internship_id, COALESCE(i.title, a.internship_name) AS internship_title, u.full_name AS student_name, u.email AS student_email, sp.full_name AS profile_name, sp.hod_name AS profile_hod_name
+    'SELECT a.id, a.status, a.hod_approval_status, a.hod_status, a.hod_token, a.user_id, a.hod_name, a.hod_email, a.internship_id, COALESCE(i.project_subtype, a.project_subtype, a.applied_subtype, \'Not specified\') AS applied_subtype, u.full_name AS student_name, u.email AS student_email, sp.full_name AS profile_name, sp.hod_name AS profile_hod_name
      FROM internship_applications a
      LEFT JOIN internships i ON a.internship_id = i.id AND a.internship_id > 0
      LEFT JOIN users u ON a.user_id = u.id
@@ -70,7 +73,7 @@ $student_user_id = intval($app['user_id']);
 $current_status = $app['status'] ?: 'Unknown';
 $current_hod_status = !empty($app['hod_approval_status']) ? trim($app['hod_approval_status']) : (!empty($app['hod_status']) ? trim($app['hod_status']) : 'Pending');
 $student_name = $app['profile_name'] ?: $app['student_name'] ?: 'Student';
-$internship_title = $app['internship_title'] ?: 'Internship';
+$applied_subtype = $app['applied_subtype'] ?: 'Not specified';
 $hod_name = $app['hod_name'] ?: $app['profile_hod_name'] ?: 'HOD';
 
 // 3. Normalize current HOD approval status for decision check
@@ -140,10 +143,10 @@ mysqli_query($conn, "INSERT INTO application_status_history
 // Notify the student
 $base_url = get_base_url();
 $student_subject = "Your application status is now $new_status";
-$student_message = "Your HOD has $decision_text your internship application for '$internship_title'.\n\nCurrent status: $new_status.";
+$student_message = "Your HOD has $decision_text your internship application for '$applied_subtype'.\n\nCurrent status: $new_status.";
 notifyUser($student_user_id, 'student', $app['student_email'], $student_subject, $student_message, [
     'event' => 'HOD Decision',
-    'internship' => $internship_title,
+    'applied_internship' => $applied_subtype,
     'status' => $new_status,
     'action_url' => rtrim($base_url, '/') . '/student_applications.php',
     'action_label' => 'View Application Status'
@@ -151,7 +154,7 @@ notifyUser($student_user_id, 'student', $app['student_email'], $student_subject,
 
 // Notify HR and Admin staff
 $staff_subject = "Internship Application status updated to $new_status";
-$staff_message = "The HOD has $decision_text the internship application for '$student_name' ($internship_title). Current status: $new_status.";
+$staff_message = "The HOD has $decision_text the internship application for '$student_name' ($applied_subtype). Current status: $new_status.";
 $staff_query = "SELECT id, email, full_name, role FROM users WHERE LOWER(role) IN ('hr', 'admin')";
 $staff_result = mysqli_query($conn, $staff_query);
 if ($staff_result) {
@@ -164,7 +167,7 @@ if ($staff_result) {
         }
         notifyUser($userId, $role === 'admin' ? 'admin' : 'hr', $email, $staff_subject, $staff_message, [
             'event' => 'HOD Decision',
-            'internship' => $internship_title,
+            'applied_internship' => $applied_subtype,
             'action_url' => rtrim($base_url, '/') . '/hr_applications.php',
             'action_label' => 'Review Applications'
         ], 'info');
@@ -172,7 +175,7 @@ if ($staff_result) {
 }
 
 // 5. Output successful response matching HOD approval requirements
-echo render_page('Thank you.', 'The student approval status has been updated.', 'success');
+echo render_page('Thank you.', 'Your decision has been recorded successfully.', 'success');
 
 function render_page(string $title, string $message, string $type = 'info'): string {
     $icon_map = [

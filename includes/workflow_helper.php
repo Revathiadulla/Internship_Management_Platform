@@ -63,10 +63,13 @@ function normalize_workflow_status($value) {
         'hr_review' => 'hr_review',
         'hr_reviews' => 'hr_review',
         'shortlisted' => 'shortlisted',
+        'exam_link_sent' => 'exam_sent',
         'exam_sent' => 'exam_sent',
-        'exam_mail_sent' => 'exam_sent',
-        'exam_mail' => 'exam_sent',
-        'exam_sent_mail' => 'exam_sent',
+        'exam_mail_sent' => 'exam_mail_sent',
+        'exam_mail' => 'exam_mail_sent',
+        'exam_sent_mail' => 'exam_mail_sent',
+        'exam_qualified' => 'exam_qualified',
+        'exam_completed' => 'exam_completed',
         'hod_pending' => 'hod_pending',
         'hod_approval_pending' => 'hod_pending',
         'hod_approval' => 'hod_pending',
@@ -89,7 +92,16 @@ function is_status_key($status, $expected) {
 }
 
 function is_exam_sent_status($status) {
-    return normalize_workflow_status($status) === 'exam_sent';
+    $normalized = normalize_workflow_status($status);
+    return in_array($normalized, ['exam_sent', 'exam_mail_sent'], true);
+}
+
+function is_exam_completed_status($status) {
+    return normalize_workflow_status($status) === 'exam_completed';
+}
+
+function is_hr_review_status($status) {
+    return normalize_workflow_status($status) === 'hr_review';
 }
 
 function is_hod_pending_status($status) {

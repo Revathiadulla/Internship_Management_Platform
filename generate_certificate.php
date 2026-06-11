@@ -34,16 +34,19 @@ if (!$profile) {
     die("Student profile not found. Please fill in your profile details first.");
 }
 
-// Fetch active/started internship details
-$intern_sql = "SELECT a.id as app_id, a.applied_date, a.education_status, a.certificate_path,
+// Fetch active/started internship details with full placeholder support
+$intern_sql = "SELECT a.id as app_id, a.applied_date, a.education_status, a.certificate_path, a.team_name, a.internship_duration AS app_duration, a.start_date, a.end_date,
                       COALESCE(i.title, a.internship_name) as title,
                       COALESCE(i.duration, '3 Months') as duration,
                       COALESCE(i.mode, 'Remote') as mode,
                       ss.score as ss_score,
-                      ss.total_questions as ss_total_questions
+                      ss.total_questions as ss_total_questions,
+                      m.full_name AS mentor_name,
+                      i.project_subtype
                FROM internship_applications a
                LEFT JOIN internships i ON a.internship_id = i.id AND a.internship_id > 0
                LEFT JOIN student_scores ss ON a.id = ss.application_id
+               LEFT JOIN users m ON a.mentor_id = m.id
                WHERE a.user_id = '$target_user_id' AND a.status = 'Started'
                LIMIT 1";
 $intern_res  = mysqli_query($conn, $intern_sql);
@@ -70,10 +73,81 @@ if (isset($intern['ss_score']) && $intern['ss_score'] !== null) {
     $cert_total = intval($intern['ss_total_questions'] ?: 30);
 }
 
-$start_date = new DateTime($intern['applied_date']);
-$end_date   = clone $start_date;
-$end_date->modify('+3 months');
+$start_date = !empty($intern['start_date']) ? new DateTime($intern['start_date']) : new DateTime($intern['applied_date']);
+$end_date   = !empty($intern['end_date']) ? new DateTime($intern['end_date']) : (clone $start_date)->modify('+3 months');
 $cert_id    = 'IMP-' . date('Y') . '-' . strtoupper(substr($profile['full_name'], 0, 2)) . '-' . str_pad($target_user_id, 5, '0', STR_PAD_LEFT);
+
+// Fetch the active template from database
+$template_res = mysqli_query($conn, "SELECT * FROM certificate_templates WHERE is_active = 1 LIMIT 1");
+$template = mysqli_fetch_assoc($template_res);
+
+$content_template = $template ? $template['content'] : "has successfully completed the internship program as a {project_title} at the {company_name}.";
+$sig_name = $template ? $template['signature_name'] : "Program Coordinator";
+$sig_designation = $template ? $template['signature_designation'] : "IMP Platform Director";
+$logo_path = $template ? $template['logo_path'] : "";
+$seal_image = $template ? $template['seal_image'] : "";
+
+// Fetch helper to download/resolve logo/seal path for FPDF
+if (!function_exists('get_local_image_path')) {
+    function get_local_image_path($path) {
+        if (empty($path)) return '';
+        if (strpos($path, 'http://') === 0 || strpos($path, 'https://') === 0) {
+            $temp_dir = sys_get_temp_dir();
+            $filename = 'fpdf_img_' . md5($path) . '.' . pathinfo($path, PATHINFO_EXTENSION);
+            $local = $temp_dir . DIRECTORY_SEPARATOR . $filename;
+            if (!file_exists($local)) {
+                $ch = curl_init($path);
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+                curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+                $data = curl_exec($ch);
+                curl_close($ch);
+                if ($data) {
+                    @file_put_contents($local, $data);
+                }
+            }
+            if (file_exists($local) && filesize($local) > 0) {
+                return $local;
+            }
+        } else {
+            $local = __DIR__ . '/' . ltrim($path, '/');
+            if (file_exists($local)) {
+                return $local;
+            }
+        }
+        return '';
+    }
+}
+
+// Resolve Placeholders
+$resolved_project_title = $intern['title'] ?: 'Intern';
+$resolved_project_subtype = $intern['project_subtype'] ?? 'General';
+$resolved_duration = !empty($intern['app_duration']) ? $intern['app_duration'] : $intern['duration'];
+$resolved_mode = !empty($intern['app_mode']) ? $intern['app_mode'] : $intern['mode'];
+$resolved_mentor = !empty($intern['mentor_name']) ? $intern['mentor_name'] : 'Not assigned';
+$resolved_team = !empty($intern['team_name']) ? $intern['team_name'] : 'Not assigned';
+$resolved_start_date = $start_date->format('M d, Y');
+$resolved_completion_date = $end_date->format('M d, Y');
+$resolved_company = "Internship Management Platform (IMP)";
+
+$placeholders = [
+    '{student_name}' => $profile['full_name'],
+    '{certificate_id}' => $cert_id,
+    '{project_title}' => $resolved_project_title,
+    '{project_subtype}' => $resolved_project_subtype,
+    '{duration}' => $resolved_duration,
+    '{mode}' => $resolved_mode,
+    '{mentor_name}' => $resolved_mentor,
+    '{team_name}' => $resolved_team,
+    '{start_date}' => $resolved_start_date,
+    '{completion_date}' => $resolved_completion_date,
+    '{company_name}' => $resolved_company
+];
+
+$resolved_content = $content_template;
+foreach ($placeholders as $ph => $val) {
+    $resolved_content = str_replace($ph, $val, $resolved_content);
+}
 
 // Generate PDF
 require_once __DIR__ . '/includes/fpdf.php';
@@ -91,6 +165,13 @@ $pdf->Rect(13, 13, 271, 184);
 
 // Logo / Branding
 $pdf->SetY(25);
+$local_logo = get_local_image_path($logo_path);
+if (!empty($local_logo)) {
+    // Render custom logo
+    $pdf->Image($local_logo, 138, 20, 20);
+    $pdf->SetY(42);
+}
+
 $pdf->SetFont('Arial', 'B', 28);
 $pdf->SetTextColor(29, 78, 216); // Blue
 $pdf->Cell(0, 12, 'IMP', 0, 1, 'C');
@@ -123,9 +204,7 @@ $pdf->Cell(0, 15, $profile['full_name'], 0, 1, 'C');
 $pdf->Ln(2);
 $pdf->SetFont('Arial', '', 12);
 $pdf->SetTextColor(51, 65, 85); // Slate-700
-$title_text = $intern['title'] ? $intern['title'] : 'Intern';
-$msg = "has successfully completed the internship program as a " . $title_text . " at the Internship Management Platform (IMP).";
-$pdf->Cell(0, 8, $msg, 0, 1, 'C');
+$pdf->Cell(0, 8, $resolved_content, 0, 1, 'C');
 
 // Details Box
 $pdf->Ln(8);
@@ -148,28 +227,14 @@ $pdf->SetX(40);
 $pdf->SetFont('Arial', 'B', 10);
 $pdf->SetTextColor(30, 41, 59); // Slate-800
 
-// Resolve project name (same as student_certificate.php)
-$p_name = 'General Internship Project';
-$t = strtolower($intern['title']);
-if (strpos($t,'mobile')!==false||strpos($t,'android')!==false||strpos($t,'flutter')!==false)
-    $p_name = 'Mobile App Development Project';
-elseif (strpos($t,'frontend')!==false||strpos($t,'react')!==false||strpos($t,'web')!==false)
-    $p_name = 'Responsive Web Application';
-elseif (strpos($t,'data')!==false||strpos($t,'python')!==false)
-    $p_name = 'Sales Data Analysis Dashboard';
-elseif (strpos($t,'ui')!==false||strpos($t,'ux')!==false||strpos($t,'design')!==false)
-    $p_name = 'Mobile App UI Redesign';
-elseif (strpos($t,'backend')!==false||strpos($t,'node')!==false)
-    $p_name = 'RESTful API Service';
-    
-$pdf->Cell(70, 7, $p_name, 0, 0);
+$pdf->Cell(70, 7, $resolved_project_title, 0, 0);
 
 // Dates value
-$date_range = $start_date->format('M d, Y') . ' - ' . $end_date->format('M d, Y');
+$date_range = $resolved_start_date . ' - ' . $resolved_completion_date;
 $pdf->Cell(50, 7, $date_range, 0, 0);
 
 // Duration value
-$pdf->Cell(40, 7, $intern['duration'], 0, 0);
+$pdf->Cell(40, 7, $resolved_duration, 0, 0);
 
 // Score value
 $score_text = 'N/A';
@@ -182,19 +247,26 @@ $pdf->SetY(162);
 $pdf->SetX(35);
 $pdf->SetFont('Times', 'I', 14);
 $pdf->SetTextColor(71, 85, 105);
-$pdf->Cell(65, 6, 'IMP Coordinator', 'B', 0, 'C');
+$pdf->Cell(65, 6, $sig_name, 'B', 0, 'C');
 
 // Center Seal
 $pdf->SetX(110);
-$pdf->SetFont('Arial', 'B', 8);
-$pdf->SetTextColor(29, 78, 216);
-$pdf->Cell(77, 6, 'OFFICIAL SEAL - VERIFIED', 0, 0, 'C');
+$local_seal = get_local_image_path($seal_image);
+if (!empty($local_seal)) {
+    $pdf->Image($local_seal, 138, 150, 20);
+    // placeholder space
+    $pdf->Cell(77, 6, '', 0, 0, 'C');
+} else {
+    $pdf->SetFont('Arial', 'B', 8);
+    $pdf->SetTextColor(29, 78, 216);
+    $pdf->Cell(77, 6, 'OFFICIAL SEAL - VERIFIED', 0, 0, 'C');
+}
 
 // Right Signee
 $pdf->SetX(197);
 $pdf->SetFont('Times', 'I', 14);
 $pdf->SetTextColor(71, 85, 105);
-$pdf->Cell(65, 6, 'IMP Director', 'B', 1, 'C');
+$pdf->Cell(65, 6, $sig_designation, 'B', 1, 'C');
 
 // Signee Titles
 $pdf->SetY(169);

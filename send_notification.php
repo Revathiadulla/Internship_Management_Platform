@@ -1,8 +1,31 @@
 <?php
-session_start();
-if (!isset($_SESSION['user_id']) || !isset($_SESSION['role']) || !in_array(strtolower($_SESSION['role']), ['coordinator', 'admin'], true)) {
-    header('Location: login.php');
-    exit();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+$is_ajax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') || (isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'application/json') !== false);
+
+if (!isset($_SESSION['user_id']) || !isset($_SESSION['role'])) {
+    if ($is_ajax) {
+        header('Content-Type: application/json');
+        echo json_encode(['success' => false, 'message' => 'Session expired. Please login again.']);
+        exit();
+    } else {
+        header('Location: login.php?error=' . urlencode('Session expired. Please login again.'));
+        exit();
+    }
+}
+
+$sender_role = strtolower($_SESSION['role']);
+if (!in_array($sender_role, ['coordinator', 'admin', 'hr', 'mentor'], true)) {
+    if ($is_ajax) {
+        header('Content-Type: application/json');
+        echo json_encode(['success' => false, 'message' => 'Unauthorized access.']);
+        exit();
+    } else {
+        header('Location: login.php?error=' . urlencode('Unauthorized access.'));
+        exit();
+    }
 }
 
 include 'db.php';
@@ -11,8 +34,15 @@ require_once 'includes/mail_helper.php';
 require_once 'includes/notification_attachment_helper.php';
 
 $error_msg = '';
-$sender_role = strtolower($_SESSION['role']);
-$redirect_page = ($sender_role === 'admin') ? 'admin_notifications.php' : 'coordinator_notifications.php';
+if ($sender_role === 'admin') {
+    $redirect_page = 'admin_notifications.php';
+} elseif ($sender_role === 'hr') {
+    $redirect_page = 'hr_notifications.php';
+} elseif ($sender_role === 'coordinator') {
+    $redirect_page = 'coordinator_notifications.php';
+} else {
+    $redirect_page = 'mentor_notifications.php';
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'send_notification') {
     $recipient_type = trim($_POST['recipient_type'] ?? '');

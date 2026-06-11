@@ -5,7 +5,7 @@ include_once __DIR__ . '/includes/auth.php';
 // Check auth
 if (!is_logged_in()) {
     header('Content-Type: application/json');
-    echo json_encode(['success'=>false,'message'=>'Unauthorized']);
+    echo json_encode(['success'=>false,'message'=>'Session expired. Please login again.']);
     exit();
 }
 

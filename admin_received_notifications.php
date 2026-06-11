@@ -112,25 +112,52 @@ $header_photo = (!empty($header_user['profile_photo']) ? $header_user['profile_p
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet" />
     <style>
-        body { font-family: 'Inter', sans-serif; }
+        body { font-family: 'Inter', sans-serif; overflow-x: hidden; }
         .material-symbols-outlined {
             font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
             vertical-align: middle;
         }
-        aside { transition: transform 0.3s ease-in-out; }
-        main { transition: margin-left 0.3s ease-in-out; min-width: 0; overflow-x: hidden; }
-        @media (max-width: 767px) {
-            aside { transform: translateX(-100%); }
-            main { margin-left: 0 !important; }
-            body.sidebar-open aside { transform: translateX(0); }
+        /* Keep sidebar fixed width and height */
+        aside {
+            position: fixed !important;
+            left: 0;
+            top: 0;
+            height: 100vh !important;
+            width: 240px !important;
+            z-index: 50 !important;
+            transition: transform 0.3s ease-in-out;
+            box-sizing: border-box;
         }
-        @media (min-width: 768px) {
-            body.sidebar-closed aside { transform: translateX(-100%); }
-            body.sidebar-closed main { margin-left: 0 !important; }
+        /* Main content area should start after the sidebar */
+        main {
+            margin-left: 240px !important;
+            min-height: 100vh;
+            min-width: 0;
+            width: calc(100% - 240px);
+            overflow-x: hidden;
+            box-sizing: border-box;
+            transition: margin-left 0.3s ease-in-out, width 0.3s ease-in-out;
+        }
+        
+        /* Mobile and tablet responsiveness */
+        @media (max-width: 1024px) {
+            aside {
+                transform: translateX(-100%);
+            }
+            main {
+                margin-left: 0 !important;
+                width: 100% !important;
+            }
+            body.sidebar-open aside {
+                transform: translateX(0);
+            }
+            body.sidebar-closed aside {
+                transform: translateX(-100%);
+            }
         }
     </style>
 </head>
-<body class="bg-gray-100 text-gray-800">
+<body class="bg-gray-100 text-gray-800 transition-colors duration-250">
     <div class="flex min-h-screen">
         <!-- SideNavBar -->
         <?php 
@@ -143,11 +170,11 @@ $header_photo = (!empty($header_user['profile_photo']) ? $header_user['profile_p
         ?>
 
         <!-- Main Content Area -->
-        <main class="flex-1 flex flex-col min-h-screen <?php echo ($user_role === 'hr') ? 'pl-64' : ''; ?>">
+        <main class="flex-1 flex flex-col min-h-screen">
             <!-- TopNavBar -->
             <header class="w-full sticky top-0 z-40 bg-white border-b border-gray-200 shadow-sm flex items-center justify-between px-8 py-3 font-sans antialiased text-sm">
                 <div class="flex items-center gap-4">
-                    <button id="sidebar-toggle" class="p-1 hover:bg-gray-100 rounded-lg transition-colors focus:outline-none cursor-pointer md:hidden">
+                    <button id="sidebar-toggle" class="p-1 hover:bg-gray-100 rounded-lg transition-colors focus:outline-none cursor-pointer lg:hidden">
                         <span class="material-symbols-outlined text-gray-600 text-2xl">menu</span>
                     </button>
                     <div>
@@ -192,7 +219,7 @@ $header_photo = (!empty($header_user['profile_photo']) ? $header_user['profile_p
                         </h1>
                         <p class="text-gray-500 text-sm mt-1">Send and review messages sent to students and platform users.</p>
                     </div>
-                    <a href="admin_notifications.php?tab=compose" class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all shadow-sm">
+                    <a href="<?php echo basename($_SERVER['PHP_SELF']); ?>?tab=compose" class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all shadow-sm">
                         <span class="material-symbols-outlined">add</span> Send Notification
                     </a>
                 </div>
@@ -218,7 +245,7 @@ $header_photo = (!empty($header_user['profile_photo']) ? $header_user['profile_p
                     foreach ($tabs as $key => $label):
                         $active_class = ($active_tab === $key) ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50';
                     ?>
-                        <a href="admin_notifications.php?tab=<?php echo $key; ?>" class="px-4 py-2 rounded-full text-sm font-semibold transition-all border border-gray-200 <?php echo $active_class; ?>"><?php echo $label; ?></a>
+                        <a href="<?php echo basename($_SERVER['PHP_SELF']); ?>?tab=<?php echo $key; ?>" class="px-4 py-2 rounded-full text-sm font-semibold transition-all border border-gray-200 <?php echo $active_class; ?>"><?php echo $label; ?></a>
                     <?php endforeach; ?>
                 </div>
 
@@ -259,7 +286,7 @@ $header_photo = (!empty($header_user['profile_photo']) ? $header_user['profile_p
                                 ?>
                                     <?php $notif_link = !empty($row['link']) ? $row['link'] : ''; ?>
                                     <?php if ($notif_link): ?>
-                                    <a href="mark_notification_read.php?action=read_redirect&id=<?php echo $row['id']; ?>&fallback=admin_notifications.php" class="notification-card block bg-white rounded-2xl border <?php echo $is_read ? 'border-gray-200' : 'border-blue-200 shadow-sm'; ?> p-5 transition-all flex items-start gap-4 hover:border-blue-400 cursor-pointer" data-id="<?php echo $row['id']; ?>" data-type="<?php echo htmlspecialchars(strtolower($type)); ?>" data-read="<?php echo $is_read ? 'true' : 'false'; ?>">
+                                    <a href="mark_notification_read.php?action=read_redirect&id=<?php echo $row['id']; ?>&fallback=<?php echo urlencode(basename($_SERVER['PHP_SELF']) . ($active_tab !== 'inbox' ? '?tab=' . $active_tab : '')); ?>" class="notification-card block bg-white rounded-2xl border <?php echo $is_read ? 'border-gray-200' : 'border-blue-200 shadow-sm'; ?> p-5 transition-all flex items-start gap-4 hover:border-blue-400 cursor-pointer" data-id="<?php echo $row['id']; ?>" data-type="<?php echo htmlspecialchars(strtolower($type)); ?>" data-read="<?php echo $is_read ? 'true' : 'false'; ?>">
                                     <?php else: ?>
                                     <div class="notification-card bg-white rounded-2xl border <?php echo $is_read ? 'border-gray-200' : 'border-blue-200 shadow-sm'; ?> p-5 transition-all flex items-start gap-4" data-id="<?php echo $row['id']; ?>" data-type="<?php echo htmlspecialchars(strtolower($type)); ?>" data-read="<?php echo $is_read ? 'true' : 'false'; ?>">
                                     <?php endif; ?>
@@ -473,8 +500,9 @@ $header_photo = (!empty($header_user['profile_photo']) ? $header_user['profile_p
 
             const sidebarToggle = document.getElementById('sidebar-toggle');
             if (sidebarToggle) {
-                sidebarToggle.addEventListener('click', () => {
-                    if (window.innerWidth < 768) {
+                sidebarToggle.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (window.innerWidth <= 1024) {
                         document.body.classList.toggle('sidebar-open');
                         document.body.classList.remove('sidebar-closed');
                     } else {
@@ -483,6 +511,14 @@ $header_photo = (!empty($header_user['profile_photo']) ? $header_user['profile_p
                     }
                 });
             }
+
+            // Close mobile sidebar on click outside
+            document.addEventListener('click', (e) => {
+                var sidebar = document.querySelector('aside');
+                if (window.innerWidth <= 1024 && sidebar && !sidebar.contains(e.target) && sidebarToggle && !sidebarToggle.contains(e.target)) {
+                    document.body.classList.remove('sidebar-open');
+                }
+            });
 
             const filterPills = document.querySelectorAll('.filter-pill');
             const cards = document.querySelectorAll('.notification-card');

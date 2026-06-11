@@ -1,0 +1,69 @@
+﻿Created At: 2026-06-10T14:58:40Z
+Completed At: 2026-06-10T14:58:41Z
+File Path: `file:///c:/xampp/htdocs/IMP/hr_applicant_detail.php`
+Total Lines: 1681
+Total Bytes: 92063
+Showing lines 1500 to 1681
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+1500:       if (examComposeTo) examComposeTo.value = '<?php echo htmlspecialchars($email, ENT_QUOTES); ?>';
+1501:       if (examComposeSubject) examComposeSubject.value = <?php echo json_encode($exam_default_subject, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
+1502:       if (examComposeMessage) examComposeMessage.value = <?php echo json_encode($exam_default_message, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
+1503:       if (examComposeCc) examComposeCc.value = '';
+1504:       if (examComposeBcc) examComposeBcc.value = '';
+1505:       if (examComposeAttachment) examComposeAttachment.value = '';
+1506:       examComposeModal.classList.remove('hidden');
+1507:       examComposeModal.classList.add('flex');
+1508:       if (examComposeTo) examComposeTo.focus();
+1509:     }
+1510: 
+1511:     function closeExamComposeModal() {
+1512:       if (!examComposeModal) return;
+1513:       examComposeModal.classList.add('hidden');
+1514:       examComposeModal.classList.remove('flex');
+1515:     }
+1516: 
+1517:     if (btnSendExamLink) {
+1518:       btnSendExamLink.addEventListener('click', function() {
+1519:         openExamComposeModal();
+1520:       });
+1521:     }
+1522: 
+1523:     if (closeExamComposeModalBtn) {
+1524:       closeExamComposeModalBtn.addEventListener('click', closeExamComposeModal);
+1525:     }
+1526: 
+1527:     if (cancelExamComposeModalBtn) {
+1528:       cancelExamComposeModalBtn.addEventListener('click', closeExamComposeModal);
+1529:     }
+1530: 
+1531:     if (examComposeModal) {
+1532:       examComposeModa
+<truncated 6658 bytes>
+
+1657:         </label>
+1658:         <label class="block text-sm font-medium text-slate-700">
+1659:           <span class="mb-1 block">Subject</span>
+1660:           <input id="exam-compose-subject" name="subject" type="text" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" value="<?php echo htmlspecialchars($exam_default_subject); ?>" required>
+1661:         </label>
+1662:         <label class="block text-sm font-medium text-slate-700">
+1663:           <span class="mb-1 block">Message</span>
+1664:           <textarea id="exam-compose-message" name="message" rows="8" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" required><?php echo htmlspecialchars($exam_default_message); ?></textarea>
+1665:         </label>
+1666:         <label class="block text-sm font-medium text-slate-700">
+1667:           <span class="mb-1 block">Attachment (optional)</span>
+1668:           <input id="exam-compose-attachment" name="attachment_file" type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm">
+1669:           <span class="mt-1 block text-xs text-slate-500">Allowed: PDF, DOC, DOCX, JPG, PNG. Max 5MB.</span>
+1670:         </label>
+1671:         <div class="flex justify-end gap-3 border-t border-slate-200 pt-4">
+1672:           <button type="button" id="close-exam-compose-modal-btn" class="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Cancel</button>
+1673:           <button type="submit" id="exam-compose-send" class="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Send</button>
+1674:         </div>
+1675:       </form>
+1676:     </div>
+1677:   </div>
+1678: <?php print_resume_not_found_js(); ?>
+1679: </body>
+1680: </html>
+1681: 
+The above content does NOT show the entire file contents. If you need to view any lines of the file which were not shown to complete your task, call this tool again to view those lines.
+

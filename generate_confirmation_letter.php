@@ -14,9 +14,9 @@ if ($app_id <= 0) {
 }
 
 // Fetch application + student + internship info
-$sql = "SELECT a.id, a.user_id, a.internship_id, a.internship_name, a.status, a.applied_date, a.start_date, a.duration, a.mode, a.confirmation_letter_path,
+$sql = "SELECT a.id, a.user_id, a.internship_id, a.internship_name, a.applied_subtype, a.status, a.applied_date, a.start_date, a.internship_duration AS app_duration, a.confirmation_letter_path,
                u.email AS student_email, u.full_name AS student_name,
-               i.title AS internship_title, i.organization_name
+               i.title AS internship_title, i.project_subtype, i.duration AS intern_duration, i.mode AS intern_mode
         FROM internship_applications a
         LEFT JOIN users u ON a.user_id = u.id
         LEFT JOIN internships i ON a.internship_id = i.id
@@ -30,11 +30,29 @@ if (!$app) {
 // Prepare confirmation details
 $student_name = $app['student_name'] ?: 'Student';
 $internship_title = $app['internship_title'] ?: ($app['internship_name'] ?: 'Internship');
-$mode = $app['mode'] ?: 'Remote';
-$duration = $app['duration'] ?: 'TBD';
+$mode = trim($app['intern_mode'] ?? 'Remote');
+$duration = trim($app['intern_duration'] ?? ($app['app_duration'] ?? 'TBD'));
 $start_date = $app['start_date'] ?: date('Y-m-d');
-$organization = $app['organization_name'] ?: 'Organization';
+$organization = 'Internship Management Platform (IMP)';
 $reference = 'IMP-CONF-' . str_pad($app['id'], 6, '0', STR_PAD_LEFT);
+
+$project_subtype  = trim($app['project_subtype'] ?? '');
+$applied_subtype  = trim($app['applied_subtype'] ?? '');
+
+// Correct fallback order:
+// internship_name = project_subtype
+// if project_subtype empty, use internship subtype (applied_subtype)
+// if subtype empty, use internship title
+$resolved_internship_name = $project_subtype;
+if (empty($resolved_internship_name)) {
+    $resolved_internship_name = $applied_subtype;
+}
+if (empty($resolved_internship_name)) {
+    $resolved_internship_name = $internship_title;
+}
+if (empty($resolved_internship_name)) {
+    $resolved_internship_name = 'Internship';
+}
 
 // Build PDF
 $pdf = new FPDF('P', 'mm', 'A4');
@@ -51,7 +69,7 @@ $pdf->MultiCell(0, 6, "Date: " . date('M d, Y') . "\nReference No: $reference\n\
 $body = "To,\n$student_name\n\nSubject: Confirmation of Internship Placement\n\n";
 $body .= "Dear $student_name,\n\n";
 $body .= "We are pleased to confirm your placement for the following internship:\n\n";
-$body .= "Internship Title: $internship_title\nMode: $mode\nDuration: $duration\nStart Date: " . date('M d, Y', strtotime($start_date)) . "\nOrganization: $organization\n\n";
+$body .= "Internship Name: $resolved_internship_name\nMode: $mode\nDuration: $duration\nStart Date: " . date('M d, Y', strtotime($start_date)) . "\nOrganization: $organization\n\n";
 $body .= "Please treat this as an official confirmation letter. Kindly retain a copy for your records.\n\n";
 $body .= "Best regards,\nHuman Resources\n$organization\n";
 
@@ -65,7 +83,14 @@ $pdf->Cell(0, 6, 'This is a system generated confirmation letter from Internship
 
 // Save file
 $dir = __DIR__ . '/uploads/confirmation_letters';
-if (!is_dir($dir)) { mkdir($dir, 0755, true); }
+if (!is_dir($dir)) {
+    if (!@mkdir($dir, 0777, true)) {
+        throw new Exception("Unable to create uploads folder: $dir");
+    }
+}
+if (!is_writable($dir)) {
+    @chmod($dir, 0777);
+}
 $filename = 'Confirmation_' . $app['id'] . '_' . time() . '.pdf';
 $path = $dir . '/' . $filename;
 $pdf->Output('F', $path);
@@ -75,9 +100,9 @@ $esc_path = mysqli_real_escape_string($conn, 'uploads/confirmation_letters/' . $
 
 // Send email with attachment
 $to = $app['student_email'];
-$subject = 'Confirmation Letter - ' . $internship_title;
+$subject = 'Confirmation Letter - ' . $resolved_internship_name;
 $html = "<p>Dear " . htmlspecialchars($student_name) . ",</p>\n";
-$html .= "<p>Please find attached your confirmation letter for the internship: <strong>" . htmlspecialchars($internship_title) . "</strong>.</p>\n";
+$html .= "<p>Please find attached your confirmation letter for the internship: <strong>" . htmlspecialchars($resolved_internship_name) . "</strong>.</p>\n";
 $html .= "<p>Reference: <strong>$reference</strong></p>\n";
 $html .= "<p>Regards,<br/>HR Team</p>\n";
 

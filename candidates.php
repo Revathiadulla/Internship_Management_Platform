@@ -93,44 +93,22 @@ page_shell_start('candidates', 'Candidates', 'Central applicant database with re
     <table class="w-full text-left text-sm">
         <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500 border-b border-slate-100">
             <tr>
-                <th class="px-6 py-4">Candidate</th>
-                <th class="px-6 py-4">College</th>
-                <th class="px-6 py-4">Skills</th>
-                <th class="px-6 py-4">Status</th>
-                <th class="px-6 py-4 text-right">Profile</th>
+                <th class="px-8 py-4 w-5/12">Candidate</th>
+                <th class="px-6 py-4 w-3/12">College</th>
+                <th class="px-8 py-4 w-3/12">Status</th>
+                <th class="px-8 py-4 text-right w-1/12">Profile</th>
             </tr>
         </thead>
         <tbody class="divide-y divide-slate-100">
         <?php if ($result && $total_rows > 0): while ($row = mysqli_fetch_assoc($result)): ?>
             <tr class="hover:bg-slate-50/50 transition-colors">
-                <td class="px-6 py-4">
+                <td class="px-8 py-4">
                     <div class="font-semibold text-slate-900"><?php echo e($row['full_name']); ?></div>
                     <div class="text-xs text-slate-500"><?php echo e($row['email']); ?> <?php echo $row['phone'] ? '· ' . e($row['phone']) : ''; ?></div>
                 </td>
                 <td class="px-6 py-4 text-slate-600"><?php echo e($row['college'] ?: 'Not added'); ?></td>
-                <td class="px-6 py-4 text-slate-600">
-                    <div class="flex flex-wrap gap-1">
-                        <?php 
-                        $skills_arr = array_filter(array_map('trim', explode(',', $row['skills'] ?? '')));
-                        if (empty($skills_arr)): 
-                            echo '<span class="text-slate-400 text-xs">Not added</span>';
-                        else:
-                            $count = 0;
-                            foreach ($skills_arr as $sk): 
-                                if ($count < 3):
-                                    echo '<span class="inline-flex items-center rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">' . e($sk) . '</span>';
-                                else:
-                                    echo '<span class="inline-flex items-center rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-400">+' . (count($skills_arr) - 3) . ' more</span>';
-                                    break;
-                                endif;
-                                $count++;
-                            endforeach;
-                        endif;
-                        ?>
-                    </div>
-                </td>
-                <td class="px-6 py-4"><?php echo status_badge($row['current_status'] ?: 'Applied'); ?></td>
-                <td class="px-6 py-4 text-right">
+                <td class="px-8 py-4"><?php echo status_badge($row['current_status'] ?: 'Applied'); ?></td>
+                <td class="px-8 py-4 text-right">
                     <a class="inline-flex items-center gap-1 font-semibold text-blue-700 hover:text-blue-900 transition-colors hover:underline" href="hr_applicant_detail.php?app_id=<?php echo (int) $row['latest_application_id']; ?>">
                         <span class="material-symbols-outlined text-[16px]">visibility</span> View
                     </a>
@@ -138,7 +116,7 @@ page_shell_start('candidates', 'Candidates', 'Central applicant database with re
             </tr>
         <?php endwhile; else: ?>
             <tr>
-                <td colspan="5" class="px-6 py-12">
+                <td colspan="4" class="px-6 py-12">
                     <div class="flex flex-col items-center justify-center text-center">
                         <div class="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 mb-4 animate-pulse">
                             <span class="material-symbols-outlined text-3xl">group_off</span>

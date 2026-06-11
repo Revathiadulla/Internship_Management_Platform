@@ -21,7 +21,7 @@ if ($app_id <= 0) {
 }
 
 // Fetch application and student details
-$stmt = $conn->prepare('SELECT a.education_status, a.hod_email, a.hod_approval_status, i.title AS internship_title, sp.full_name, sp.email AS student_email FROM internship_applications a LEFT JOIN internships i ON a.internship_id = i.id LEFT JOIN student_profiles sp ON a.user_id = sp.user_id WHERE a.id = ?');
+$stmt = $conn->prepare('SELECT a.education_status, a.hod_email, a.hod_approval_status, COALESCE(i.project_subtype, a.project_subtype, a.applied_subtype, \'Not specified\') AS applied_subtype, sp.full_name, sp.email AS student_email FROM internship_applications a LEFT JOIN internships i ON a.internship_id = i.id LEFT JOIN student_profiles sp ON a.user_id = sp.user_id WHERE a.id = ?');
 $stmt->bind_param('i', $app_id);
 $stmt->execute();
 $res = $stmt->get_result();
@@ -56,7 +56,7 @@ $update->close();
 $approve_link = hod_approval_url($app_id, $token, 'approve');
 $reject_link = hod_approval_url($app_id, $token, 'reject');
 $subject = "HOD Approval Required for Internship Application #$app_id";
-$message = "<html><body>\n<p>Dear HOD,</p>\n<p>The student <strong>{$app['full_name']}</strong> ({$app['student_email']}) is ready for review for the internship <strong>{$app['internship_title']}</strong>.</p>\n<p>Please review and make a decision:</p>\n<p><a href='$approve_link'>Approve Application</a> | <a href='$reject_link'>Reject Application</a></p>\n<p>This link will expire in 7 days.</p>\n<p>Best regards,<br/>Internship Management System</p>\n</body></html>";
+$message = "<html><body>\n<p>Dear HOD,</p>\n<p>The student <strong>{$app['full_name']}</strong> ({$app['student_email']}) is ready for review for the applied internship <strong>{$app['applied_subtype']}</strong>.</p>\n<p>Please review and make a decision:</p>\n<p><a href='$approve_link'>Approve Application</a> | <a href='$reject_link'>Reject Application</a></p>\n<p>This link will expire in 7 days.</p>\n<p>Best regards,<br/>Internship Management System</p>\n</body></html>";
 $headers = "MIME-Version: 1.0\r\n".
     "Content-type: text/html; charset=UTF-8\r\n".
     "From: no-reply@internshipplatform.com\r\n";

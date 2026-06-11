@@ -57,11 +57,15 @@ try {
             mysqli_close($conn);
         }
     });
-    log_debug('Database connection opened and shutdown handler registered.');
 } catch (Throwable $e) {
     $db_connection_error = $e->getMessage();
     error_log('Database connection failed: ' . $db_connection_error);
     $conn = null;
+}
+
+// Log after try/catch to avoid calling log_debug before it is defined
+if ($conn && function_exists('log_debug')) {
+    log_debug('Database connection opened and shutdown handler registered.');
 }
 
 if (!$conn) {
@@ -413,150 +417,162 @@ if (!function_exists('getDocumentViewUrl')) {
     }
 }
 
-function get_resume_view_link($profile) {
-    if (!$profile) {
-        return '#';
-    }
-    $resume_url = !empty($profile['resume_url']) ? trim($profile['resume_url']) : (!empty($profile['resume_file']) ? trim($profile['resume_file']) : '');
-    $resolved = getDocumentUrl($resume_url);
-    if ($resolved === 'unavailable') {
-        return '#';
-    }
-    if (strpos($resolved, 'http://') === 0 || strpos($resolved, 'https://') === 0) {
-        return $resolved;
-    }
-    return 'resume_serve.php?file=' . urlencode(basename($resolved)) . '&mode=view';
-}
-
-function get_resume_download_link($profile) {
-    if (!$profile) {
-        return '#';
-    }
-    $resume_url = !empty($profile['resume_url']) ? trim($profile['resume_url']) : (!empty($profile['resume_file']) ? trim($profile['resume_file']) : '');
-    $resolved = getDocumentUrl($resume_url);
-    if ($resolved === 'unavailable') {
-        return '#';
-    }
-    if (strpos($resolved, 'http://') === 0 || strpos($resolved, 'https://') === 0) {
-        return $resolved;
-    }
-    return 'resume_serve.php?file=' . urlencode(basename($resolved)) . '&mode=download';
-}
-
-function log_debug($message) {
-    $log_dir = __DIR__ . '/uploads/';
-    if (!is_dir($log_dir)) {
-        @mkdir($log_dir, 0777, true);
-    }
-    $log_file = $log_dir . 'resume_debug.log';
-    $timestamp = date('Y-m-d H:i:s');
-    @file_put_contents($log_file, "[$timestamp] $message\n", FILE_APPEND);
-}
-
-function resolve_resume_file_path($filename) {
-    if (empty($filename)) {
-        log_debug("resolve_resume_file_path: Filename is empty.");
-        return null;
-    }
-    $filename = basename($filename);
-    $search_dirs = [
-        __DIR__ . '/uploads/resumes/',
-        __DIR__ . '/uploads/secure/',
-        __DIR__ . '/uploads/aadhaar/',
-        __DIR__ . '/uploads/pan/',
-        __DIR__ . '/uploads/profile/',
-        __DIR__ . '/uploads/',
-        sys_get_temp_dir() . '/imp_uploads/',
-    ];
-    $checked_paths = [];
-    $resolved = null;
-    foreach ($search_dirs as $dir) {
-        $candidate = $dir . $filename;
-        $checked_paths[] = $candidate;
-        $real = realpath($candidate);
-        $real_dir = realpath($dir);
-        if ($real !== false && $real_dir !== false && strncmp($real, $real_dir, strlen($real_dir)) === 0) {
-            if (is_file($real)) {
-                $resolved = $real;
-                break;
-            }
+if (!function_exists('get_resume_view_link')) {
+    function get_resume_view_link($profile) {
+        if (!$profile) {
+            return '#';
         }
+        $resume_url = !empty($profile['resume_url']) ? trim($profile['resume_url']) : (!empty($profile['resume_file']) ? trim($profile['resume_file']) : '');
+        $resolved = getDocumentUrl($resume_url);
+        if ($resolved === 'unavailable') {
+            return '#';
+        }
+        if (strpos($resolved, 'http://') === 0 || strpos($resolved, 'https://') === 0) {
+            return $resolved;
+        }
+        return 'resume_serve.php?file=' . urlencode(basename($resolved)) . '&mode=view';
     }
-    log_debug("resolve_resume_file_path check for filename '$filename':\n- Database path/filename: $filename\n- Checked paths: " . implode(', ', $checked_paths) . "\n- Resolved path: " . ($resolved ?: 'NONE'));
-    return $resolved;
 }
 
-function check_resume_exists($profile) {
-    if (!$profile) {
-        return false;
+if (!function_exists('get_resume_download_link')) {
+    function get_resume_download_link($profile) {
+        if (!$profile) {
+            return '#';
+        }
+        $resume_url = !empty($profile['resume_url']) ? trim($profile['resume_url']) : (!empty($profile['resume_file']) ? trim($profile['resume_file']) : '');
+        $resolved = getDocumentUrl($resume_url);
+        if ($resolved === 'unavailable') {
+            return '#';
+        }
+        if (strpos($resolved, 'http://') === 0 || strpos($resolved, 'https://') === 0) {
+            return $resolved;
+        }
+        return 'resume_serve.php?file=' . urlencode(basename($resolved)) . '&mode=download';
     }
-    $resume_url = !empty($profile['resume_url']) ? trim($profile['resume_url']) : (!empty($profile['resume_file']) ? trim($profile['resume_file']) : '');
-    $resolved = getDocumentUrl($resume_url);
-    if ($resolved === 'unavailable') {
-        return false;
-    }
-    if (strpos($resolved, 'http://') === 0 || strpos($resolved, 'https://') === 0) {
-        return true;
-    }
-    $path = resolve_resume_file_path($resolved);
-    return ($path !== null && is_file($path));
 }
 
+if (!function_exists('log_debug')) {
+    function log_debug($message) {
+        $log_dir = __DIR__ . '/uploads/';
+        if (!is_dir($log_dir)) {
+            @mkdir($log_dir, 0777, true);
+        }
+        $log_file = $log_dir . 'resume_debug.log';
+        $timestamp = date('Y-m-d H:i:s');
+        @file_put_contents($log_file, "[$timestamp] $message\n", FILE_APPEND);
+    }
+}
 
-function print_resume_not_found_js() {
-    ?>
-    <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        document.addEventListener('click', function(e) {
-            var resumeLink = e.target.closest('[data-resume-exists]');
-            if (resumeLink) {
-                var exists = resumeLink.getAttribute('data-resume-exists') === 'true';
-                if (!exists) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    showResumeNotFoundModal();
+if (!function_exists('resolve_resume_file_path')) {
+    function resolve_resume_file_path($filename) {
+        if (empty($filename)) {
+            log_debug("resolve_resume_file_path: Filename is empty.");
+            return null;
+        }
+        $filename = basename($filename);
+        $search_dirs = [
+            __DIR__ . '/uploads/resumes/',
+            __DIR__ . '/uploads/secure/',
+            __DIR__ . '/uploads/aadhaar/',
+            __DIR__ . '/uploads/pan/',
+            __DIR__ . '/uploads/profile/',
+            __DIR__ . '/uploads/',
+            sys_get_temp_dir() . '/imp_uploads/',
+        ];
+        $checked_paths = [];
+        $resolved = null;
+        foreach ($search_dirs as $dir) {
+            $candidate = $dir . $filename;
+            $checked_paths[] = $candidate;
+            $real = realpath($candidate);
+            $real_dir = realpath($dir);
+            if ($real !== false && $real_dir !== false && strncmp($real, $real_dir, strlen($real_dir)) === 0) {
+                if (is_file($real)) {
+                    $resolved = $real;
+                    break;
                 }
             }
-        });
-    });
-
-    function showResumeNotFoundModal() {
-        var existing = document.getElementById('resume-not-found-modal');
-        if (existing) {
-            existing.remove();
         }
-        var modal = document.createElement('div');
-        modal.id = 'resume-not-found-modal';
-        modal.className = 'fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4';
-        modal.innerHTML = `
-            <div class="bg-white rounded-2xl max-w-md w-full border border-slate-100 shadow-2xl p-8 text-center transform scale-95 transition-all duration-300" id="resume-not-found-content">
-                <div class="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6">
-                    <svg class="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
-                    </svg>
-                </div>
-                <h3 class="text-xl font-bold text-slate-800 mb-2">Resume Not Found</h3>
-                <p class="text-slate-600 mb-6 text-sm">Resume file not found. Please re-upload resume.</p>
-                <div class="flex flex-col gap-2">
-                    <a href="student_profile_form.php" class="w-full py-2.5 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-semibold block text-center shadow-sm">
-                        Re-upload Resume
-                    </a>
-                    <button onclick="document.getElementById('resume-not-found-modal').remove();" class="w-full py-2.5 px-4 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors text-sm font-semibold">
-                        Close
-                    </button>
-                </div>
-            </div>
-        `;
-        document.body.appendChild(modal);
-        setTimeout(function() {
-            var content = document.getElementById('resume-not-found-content');
-            if (content) {
-                content.classList.remove('scale-95');
-                content.classList.add('scale-100');
-            }
-        }, 10);
+        log_debug("resolve_resume_file_path check for filename '$filename':\n- Database path/filename: $filename\n- Checked paths: " . implode(', ', $checked_paths) . "\n- Resolved path: " . ($resolved ?: 'NONE'));
+        return $resolved;
     }
-    </script>
-    <?php
+}
+
+if (!function_exists('check_resume_exists')) {
+    function check_resume_exists($profile) {
+        if (!$profile) {
+            return false;
+        }
+        $resume_url = !empty($profile['resume_url']) ? trim($profile['resume_url']) : (!empty($profile['resume_file']) ? trim($profile['resume_file']) : '');
+        $resolved = getDocumentUrl($resume_url);
+        if ($resolved === 'unavailable') {
+            return false;
+        }
+        if (strpos($resolved, 'http://') === 0 || strpos($resolved, 'https://') === 0) {
+            return true;
+        }
+        $path = resolve_resume_file_path($resolved);
+        return ($path !== null && is_file($path));
+    }
+}
+
+
+if (!function_exists('print_resume_not_found_js')) {
+    function print_resume_not_found_js() {
+        ?>
+        <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            document.addEventListener('click', function(e) {
+                var resumeLink = e.target.closest('[data-resume-exists]');
+                if (resumeLink) {
+                    var exists = resumeLink.getAttribute('data-resume-exists') === 'true';
+                    if (!exists) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        showResumeNotFoundModal();
+                    }
+                }
+            });
+        });
+
+        function showResumeNotFoundModal() {
+            var existing = document.getElementById('resume-not-found-modal');
+            if (existing) {
+                existing.remove();
+            }
+            var modal = document.createElement('div');
+            modal.id = 'resume-not-found-modal';
+            modal.className = 'fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4';
+            modal.innerHTML = `
+                <div class="bg-white rounded-2xl max-w-md w-full border border-slate-100 shadow-2xl p-8 text-center transform scale-95 transition-all duration-300" id="resume-not-found-content">
+                    <div class="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <svg class="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-bold text-slate-800 mb-2">Resume Not Found</h3>
+                    <p class="text-slate-600 mb-6 text-sm">Resume file not found. Please re-upload resume.</p>
+                    <div class="flex flex-col gap-2">
+                        <a href="student_profile_form.php" class="w-full py-2.5 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-semibold block text-center shadow-sm">
+                            Re-upload Resume
+                        </a>
+                        <button onclick="document.getElementById('resume-not-found-modal').remove();" class="w-full py-2.5 px-4 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors text-sm font-semibold">
+                            Close
+                        </button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            setTimeout(function() {
+                var content = document.getElementById('resume-not-found-content');
+                if (content) {
+                    content.classList.remove('scale-95');
+                    content.classList.add('scale-100');
+                }
+            }, 10);
+        }
+        </script>
+        <?php
+    }
 }
 ?>

@@ -5,6 +5,7 @@ if (!isset($_SESSION['user_id']) || strtolower($_SESSION['role']) !== 'coordinat
     exit();
 }
 include "db.php";
+require_once __DIR__ . '/includes/progress_helper.php';
 $notif_unread_res = mysqli_query($conn, "SELECT COUNT(*) as count FROM notifications WHERE user_id = " . intval($_SESSION['user_id']) . " AND role = 'coordinator' AND is_read = 0");
 $notif_unread_row = mysqli_fetch_assoc($notif_unread_res);
 $unread_count = $notif_unread_row['count'] ?? 0;
@@ -83,126 +84,163 @@ if (empty($selected_subtype) && !empty($assigned_subtypes)) {
     $selected_subtype = ''; 
 }
 
+if (!function_exists('executeSafeCountQuery')) {
+    function executeSafeCountQuery($conn, $query, $metric_name) {
+        $res = mysqli_query($conn, $query);
+        if (!$res) {
+            error_log("IMP Coordinator Dashboard Error ($metric_name): " . mysqli_error($conn));
+            return 0;
+        }
+        $row = mysqli_fetch_assoc($res);
+        return intval($row['c'] ?? 0);
+    }
+}
+
+$created_projects_count = 0;
+$pending_applications_count = 0;
+$selected_students_count = 0;
+$assigned_teams_count = 0;
+$active_projects_count = 0;
+$assigned_mentors_count = 0;
+$pending_logs = 0;
+$unread_notifications_count = $unread_count;
+
 $total_interns = 0;
 $active_interns = 0;
 $total_logs = 0;
 $logged_today = 0;
-$pending_logs = 0;
 $completed_internships = 0;
 $completion_pct = 0;
 $open_projects = 0;
 $assigned_pct = 0;
 $pipeline_projects = [];
 $recent_logs = [];
+$recent_activities = [];
 
 if (empty($assigned_subtypes)) {
     // User has no assignments. We'll show a friendly empty state later in HTML.
     $selected_subtype = '';
-} elseif (!empty($selected_subtype)) {
-    // 1. Total interns for selected subtype
-    $total_interns_stmt = mysqli_prepare($conn, "
+} else {
+    // Build filter condition
+    $filter_cond = "i.coordinator_id = $coordinator_id";
+    if (!empty($selected_subtype)) {
+        $filter_cond .= " AND i.project_subtype = '" . mysqli_real_escape_string($conn, $selected_subtype) . "'";
+    }
+
+    // Filter for teams (to catch teams created by this coordinator even if project owner is different)
+    $team_filter_cond = "(t.created_by = $coordinator_id OR i.coordinator_id = $coordinator_id)";
+    if (!empty($selected_subtype)) {
+        $team_filter_cond .= " AND i.project_subtype = '" . mysqli_real_escape_string($conn, $selected_subtype) . "'";
+    }
+
+    // 1. Created Projects Count
+    $created_projects_count = executeSafeCountQuery($conn, "SELECT COUNT(*) as c FROM internships i WHERE $filter_cond AND i.is_deleted = 0", 'Created Projects');
+
+    // 2. Pending Applications Count
+    $pending_applications_count = executeSafeCountQuery($conn, "
+        SELECT COUNT(*) as c 
+        FROM internship_applications a
+        JOIN internships i ON a.internship_id = i.id
+        WHERE $filter_cond 
+          AND a.status IN ('Applied', 'Pending', 'Verified', 'HR Review', 'Shortlisted', 'Exam Mail Sent', 'HOD Pending', 'HOD Approval Pending', 'Forwarded to HOD', 'HOD Approved')
+          AND i.is_deleted = 0
+    ", 'Pending Applications');
+
+    // 3. Assigned Students Count (Replaces Selected Students)
+    $selected_students_count = executeSafeCountQuery($conn, "
+        SELECT COUNT(DISTINCT ptm.student_id) as c 
+        FROM project_team_members ptm
+        JOIN project_teams t ON ptm.project_team_id = t.id
+        LEFT JOIN internships i ON t.internship_id = i.id
+        WHERE $team_filter_cond AND i.is_deleted = 0
+    ", 'Assigned Students');
+
+    // 4. Assigned Teams Count
+    $assigned_teams_count = executeSafeCountQuery($conn, "
+        SELECT COUNT(*) as c 
+        FROM project_teams t
+        LEFT JOIN internships i ON t.internship_id = i.id
+        WHERE $team_filter_cond AND i.is_deleted = 0
+    ", 'Assigned Teams');
+
+    // 5. Active Projects Count
+    $active_projects_count = executeSafeCountQuery($conn, "
+        SELECT COUNT(*) as c 
+        FROM internships i
+        WHERE $filter_cond 
+          AND i.status IN ('Active', 'Approved', 'Admin-Approved') 
+          AND i.is_deleted = 0
+    ", 'Active Projects');
+
+    // 6. Assigned Mentors Count
+    $assigned_mentors_count = executeSafeCountQuery($conn, "
+        SELECT COUNT(DISTINCT t.mentor_id) as c 
+        FROM project_teams t
+        LEFT JOIN internships i ON t.internship_id = i.id
+        WHERE $team_filter_cond AND t.mentor_id IS NOT NULL AND i.is_deleted = 0
+    ", 'Assigned Mentors');
+
+    // 7. Total interns (for old ratio display)
+    $total_interns = executeSafeCountQuery($conn, "
         SELECT COUNT(DISTINCT a.user_id) as c 
         FROM internship_applications a
         JOIN internships i ON a.internship_id = i.id
-        WHERE i.coordinator_id = ? AND i.project_subtype = ?
-    ");
-    if ($total_interns_stmt) {
-        mysqli_stmt_bind_param($total_interns_stmt, "is", $coordinator_id, $selected_subtype);
-        mysqli_stmt_execute($total_interns_stmt);
-        $res = mysqli_stmt_get_result($total_interns_stmt);
-        if ($row = mysqli_fetch_assoc($res)) $total_interns = intval($row['c']);
-        mysqli_stmt_close($total_interns_stmt);
-    }
+        WHERE $filter_cond AND i.is_deleted = 0
+    ", 'Total Interns');
 
-    // 2. Active interns for selected subtype
-    $active_interns_stmt = mysqli_prepare($conn, "
+    // 8. Active interns (for old display)
+    $active_interns = executeSafeCountQuery($conn, "
         SELECT COUNT(DISTINCT a.user_id) as c 
         FROM internship_applications a
         JOIN internships i ON a.internship_id = i.id
-        WHERE a.status IN ('Started','Internship Started','Active Intern','Internship Active','Selected')
-          AND i.coordinator_id = ? AND i.project_subtype = ?
-    ");
-    if ($active_interns_stmt) {
-        mysqli_stmt_bind_param($active_interns_stmt, "is", $coordinator_id, $selected_subtype);
-        mysqli_stmt_execute($active_interns_stmt);
-        $res = mysqli_stmt_get_result($active_interns_stmt);
-        if ($row = mysqli_fetch_assoc($res)) $active_interns = intval($row['c']);
-        mysqli_stmt_close($active_interns_stmt);
-    }
+        WHERE a.status IN ('Started','Internship Started','Active Intern','Internship Active','Selected', 'Project Assigned')
+          AND $filter_cond AND i.is_deleted = 0
+    ", 'Active Interns');
 
-    // 3. Total logs
-    $total_logs_stmt = mysqli_prepare($conn, "
+    // 9. Total logs
+    $total_logs = executeSafeCountQuery($conn, "
         SELECT COUNT(*) as c 
         FROM daily_logs d
         JOIN internships i ON d.internship_id = i.id
-        WHERE i.coordinator_id = ? AND i.project_subtype = ?
-    ");
-    if ($total_logs_stmt) {
-        mysqli_stmt_bind_param($total_logs_stmt, "is", $coordinator_id, $selected_subtype);
-        mysqli_stmt_execute($total_logs_stmt);
-        $res = mysqli_stmt_get_result($total_logs_stmt);
-        if ($row = mysqli_fetch_assoc($res)) $total_logs = intval($row['c']);
-        mysqli_stmt_close($total_logs_stmt);
-    }
+        WHERE $filter_cond AND i.is_deleted = 0
+    ", 'Total Logs');
 
-    // 4. Logged today
-    $logged_today_stmt = mysqli_prepare($conn, "
+    // 10. Logged today
+    $logged_today = executeSafeCountQuery($conn, "
         SELECT COUNT(DISTINCT d.user_id) as c 
         FROM daily_logs d
         JOIN internships i ON d.internship_id = i.id
-        WHERE d.log_date = CURDATE() AND i.coordinator_id = ? AND i.project_subtype = ?
-    ");
-    if ($logged_today_stmt) {
-        mysqli_stmt_bind_param($logged_today_stmt, "is", $coordinator_id, $selected_subtype);
-        mysqli_stmt_execute($logged_today_stmt);
-        $res = mysqli_stmt_get_result($logged_today_stmt);
-        if ($row = mysqli_fetch_assoc($res)) $logged_today = intval($row['c']);
-        mysqli_stmt_close($logged_today_stmt);
-    }
+        WHERE d.log_date = CURDATE() AND $filter_cond AND i.is_deleted = 0
+    ", 'Logged Today');
 
     $pending_logs = max(0, $active_interns - $logged_today);
 
-    // 5. Completed internships
-    $completed_stmt = mysqli_prepare($conn, "
+    // 11. Completed internships
+    $completed_internships = executeSafeCountQuery($conn, "
         SELECT COUNT(*) as c 
         FROM internship_applications a
         JOIN internships i ON a.internship_id = i.id
-        WHERE a.status = 'Completed' AND i.coordinator_id = ? AND i.project_subtype = ?
-    ");
-    if ($completed_stmt) {
-        mysqli_stmt_bind_param($completed_stmt, "is", $coordinator_id, $selected_subtype);
-        mysqli_stmt_execute($completed_stmt);
-        $res = mysqli_stmt_get_result($completed_stmt);
-        if ($row = mysqli_fetch_assoc($res)) $completed_internships = intval($row['c']);
-        mysqli_stmt_close($completed_stmt);
-    }
+        WHERE a.status = 'Completed' AND $filter_cond AND i.is_deleted = 0
+    ", 'Completed Internships');
 
     $total_prog = $completed_internships + $active_interns;
     $completion_pct = $total_prog > 0 ? round(($completed_internships / $total_prog) * 100) : 0;
 
-    // 6. Open projects
-    $open_projects_stmt = mysqli_prepare($conn, "
+    // 12. Open projects
+    $open_projects = executeSafeCountQuery($conn, "
         SELECT COUNT(*) as c 
-        FROM internships 
-        WHERE status IN ('Active','Approved','Admin-Approved','Admin Approved')
-          AND coordinator_id = ? AND project_subtype = ?
-    ");
-    if ($open_projects_stmt) {
-        mysqli_stmt_bind_param($open_projects_stmt, "is", $coordinator_id, $selected_subtype);
-        mysqli_stmt_execute($open_projects_stmt);
-        $res = mysqli_stmt_get_result($open_projects_stmt);
-        if ($row = mysqli_fetch_assoc($res)) $open_projects = intval($row['c']);
-        mysqli_stmt_close($open_projects_stmt);
-    }
+        FROM internships i
+        WHERE i.status IN ('Active','Approved','Admin-Approved','Admin Approved')
+          AND $filter_cond AND i.is_deleted = 0
+    ", 'Open Projects');
 
     $assigned_pct = $total_interns > 0 ? round(($active_interns / $total_interns) * 100) : 0;
 
-    // 7. Pipeline: fetch from confirmed project_teams + fallback internships
+    // 13. Pipeline
     $pipeline_sql = "
         SELECT p.id, p.title, p.project_subtype, p.duration, p.mode, p.status,
                p.mentor_name, p.team_name, p.assigned_count, p.source
         FROM (
-            /* Source 1: Confirmed project_teams linked to internships */
             SELECT i.id,
                    COALESCE(i.title, MIN(t.team_name)) AS title,
                    COALESCE(i.project_subtype, MIN(t.project_subtype)) AS project_subtype,
@@ -217,12 +255,11 @@ if (empty($assigned_subtypes)) {
             JOIN project_teams t ON t.internship_id = i.id
             LEFT JOIN users mu ON t.mentor_id = mu.id
             LEFT JOIN project_team_members ptm ON ptm.project_team_id = t.id
-            WHERE i.coordinator_id = ? AND i.project_subtype = ?
+            WHERE $team_filter_cond AND i.is_deleted = 0
             GROUP BY i.id
 
             UNION ALL
 
-            /* Source 2: Internships without any linked team or applications */
             SELECT i.id, i.title, i.project_subtype, i.duration, i.mode,
                    CASE WHEN i.status IN ('Closed', 'Completed') THEN 'Completed' ELSE 'Available' END AS status,
                    'Mentor Not Assigned' AS mentor_name,
@@ -230,34 +267,28 @@ if (empty($assigned_subtypes)) {
                    0 AS assigned_count,
                    'internship' AS source
             FROM internships i
-            WHERE i.status IN ('Approved', 'Admin-Approved', 'Admin Approved')
-              AND i.coordinator_id = ? AND i.project_subtype = ?
+            WHERE i.status IN ('Active', 'Approved', 'Admin-Approved', 'Admin Approved')
+              AND $filter_cond AND i.is_deleted = 0
               AND NOT EXISTS (SELECT 1 FROM project_teams pt WHERE pt.internship_id = i.id)
-              AND NOT EXISTS (SELECT 1 FROM internship_applications a WHERE a.internship_id = i.id)
         ) p
         ORDER BY p.assigned_count DESC, p.id DESC
         LIMIT 12
     ";
-    $pipeline_stmt = mysqli_prepare($conn, $pipeline_sql);
-    if ($pipeline_stmt) {
-        mysqli_stmt_bind_param($pipeline_stmt, "isis", $coordinator_id, $selected_subtype, $coordinator_id, $selected_subtype);
-        mysqli_stmt_execute($pipeline_stmt);
-        $pipeline_res = mysqli_stmt_get_result($pipeline_stmt);
-        $pipeline_projects = [];
-    while ($proj = mysqli_fetch_assoc($pipeline_res)) {
-        $id = $proj['id'];
-        // If not already added, store it. Prefer the first occurrence (team source)
-        if (!isset($pipeline_projects[$id])) {
-            $pipeline_projects[$id] = $proj;
+    $pipeline_res = mysqli_query($conn, $pipeline_sql);
+    if ($pipeline_res) {
+        while ($proj = mysqli_fetch_assoc($pipeline_res)) {
+            $id = $proj['id'];
+            if (!isset($pipeline_projects[$id])) {
+                $pipeline_projects[$id] = $proj;
+            }
         }
-    }
-    // Re-index to numeric array for later foreach usage
-    $pipeline_projects = array_values($pipeline_projects);
-        mysqli_stmt_close($pipeline_stmt);
+        $pipeline_projects = array_values($pipeline_projects);
+    } else {
+        error_log("IMP Error - Pipeline Projects: " . mysqli_error($conn));
     }
 
-    // 8. Recent Logs
-    $logs_stmt = mysqli_prepare($conn, "
+    // 14. Recent Logs (for the table display)
+    $logs_sql = "
         SELECT d.tasks_completed, d.time_spent, d.focus_level, d.status,
                u.full_name,
                COALESCE(sp.course, 'Student') AS course,
@@ -266,16 +297,86 @@ if (empty($assigned_subtypes)) {
         JOIN users u ON d.user_id = u.id
         LEFT JOIN student_profiles sp ON u.id = sp.user_id
         JOIN internships i ON d.internship_id = i.id
-        WHERE i.coordinator_id = ? AND i.project_subtype = ?
+        WHERE $filter_cond AND i.is_deleted = 0
         ORDER BY d.created_at DESC
         LIMIT 8
-    ");
-    if ($logs_stmt) {
-        mysqli_stmt_bind_param($logs_stmt, "is", $coordinator_id, $selected_subtype);
-        mysqli_stmt_execute($logs_stmt);
-        $logs_res = mysqli_stmt_get_result($logs_stmt);
-        while ($log = mysqli_fetch_assoc($logs_res)) $recent_logs[] = $log;
-        mysqli_stmt_close($logs_stmt);
+    ";
+    $logs_res = mysqli_query($conn, $logs_sql);
+    if ($logs_res) {
+        while ($log = mysqli_fetch_assoc($logs_res)) {
+            $recent_logs[] = $log;
+        }
+    } else {
+        error_log("IMP Error - Recent Logs: " . mysqli_error($conn));
+    }
+
+    // 15. Recent Activities (unified feed)
+    $activity_sql = "
+        SELECT * FROM (
+            SELECT 
+                'application' AS activity_type,
+                a.id AS ref_id,
+                COALESCE(u.full_name, a.full_name) AS primary_name,
+                i.title AS detail_name,
+                a.status AS extra_info,
+                a.applied_date AS activity_time
+            FROM internship_applications a
+            JOIN internships i ON a.internship_id = i.id
+            LEFT JOIN users u ON a.user_id = u.id
+            WHERE $filter_cond AND i.is_deleted = 0
+
+            UNION ALL
+
+            SELECT 
+                'team' AS activity_type,
+                t.id AS ref_id,
+                t.team_name AS primary_name,
+                i.title AS detail_name,
+                t.status AS extra_info,
+                t.created_at AS activity_time
+            FROM project_teams t
+            LEFT JOIN internships i ON t.internship_id = i.id
+            WHERE $team_filter_cond AND (i.is_deleted = 0 OR i.id IS NULL)
+
+            UNION ALL
+
+            SELECT 
+                'assignment' AS activity_type,
+                ptm.id AS ref_id,
+                u.full_name AS primary_name,
+                t.team_name AS detail_name,
+                i.title AS extra_info,
+                ptm.created_at AS activity_time
+            FROM project_team_members ptm
+            JOIN project_teams t ON ptm.project_team_id = t.id
+            LEFT JOIN internships i ON t.internship_id = i.id
+            JOIN users u ON ptm.student_id = u.id
+            WHERE $team_filter_cond AND (i.is_deleted = 0 OR i.id IS NULL)
+
+            UNION ALL
+
+            SELECT 
+                'log' AS activity_type,
+                d.id AS ref_id,
+                u.full_name AS primary_name,
+                d.tasks_completed AS detail_name,
+                CAST(d.time_spent AS CHAR) AS extra_info,
+                d.created_at AS activity_time
+            FROM daily_logs d
+            JOIN users u ON d.user_id = u.id
+            JOIN internships i ON d.internship_id = i.id
+            WHERE $filter_cond AND i.is_deleted = 0
+        ) AS combined_activity
+        ORDER BY activity_time DESC
+        LIMIT 8
+    ";
+    $activity_res = mysqli_query($conn, $activity_sql);
+    if ($activity_res) {
+        while ($act = mysqli_fetch_assoc($activity_res)) {
+            $recent_activities[] = $act;
+        }
+    } else {
+        error_log("IMP Error - Recent Activities: " . mysqli_error($conn));
     }
 }
 
@@ -410,10 +511,7 @@ function subtypeBadgeClass($subtype) {
         <a href="coordinator_reports.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
             <span class="material-symbols-outlined text-[20px]">analytics</span> Reports
         </a>
-						<a href="coordinator_student_reports.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
-							<span class="material-symbols-outlined text-[20px]">warning</span> Student Reports
-						</a>
-        <a href="coordinator_teams.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
+						<a href="coordinator_teams.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
             <span class="material-symbols-outlined text-[20px]">manage_accounts</span> Teams
         </a>
     </nav>
@@ -571,26 +669,86 @@ function subtypeBadgeClass($subtype) {
                         <?php endif; ?>
                     </div>
                 </div>
-                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <!-- Total Logs -->
-                    <div class="stat-card p-4 bg-blue-50 rounded-xl border-l-4 border-blue-500">
-                        <p class="text-xs font-bold text-blue-600 uppercase tracking-wide">Total Logs</p>
-                        <p class="text-2xl font-black text-blue-700 mt-1" id="stat-total-logs"><?php echo $total_logs; ?></p>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    <!-- Created Projects/Internships -->
+                    <div class="stat-card p-5 bg-blue-50/80 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/50 rounded-2xl flex items-center gap-4 transition-all duration-300">
+                        <div class="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
+                            <span class="material-symbols-outlined text-[28px]">work</span>
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <p class="text-[11px] font-extrabold text-blue-600 dark:text-blue-400 uppercase tracking-widest truncate">Created Projects</p>
+                            <p class="text-2xl font-black text-blue-900 dark:text-white mt-1 leading-none" id="stat-created-projects"><?php echo $created_projects_count; ?></p>
+                        </div>
                     </div>
-                    <!-- Active Interns -->
-                    <div class="stat-card p-4 bg-red-50 rounded-xl border-l-4 border-red-500">
-                        <p class="text-xs font-bold text-red-600 uppercase tracking-wide">Active Interns</p>
-                        <p class="text-2xl font-black text-red-600 mt-1" id="stat-active-interns"><?php echo $active_interns; ?></p>
+                    <!-- Pending Applications -->
+                    <div class="stat-card p-5 bg-amber-50/80 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/50 rounded-2xl flex items-center gap-4 transition-all duration-300">
+                        <div class="w-12 h-12 bg-amber-500/10 rounded-xl flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0">
+                            <span class="material-symbols-outlined text-[28px]">rate_review</span>
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <p class="text-[11px] font-extrabold text-amber-600 dark:text-amber-400 uppercase tracking-widest truncate">Pending Apps</p>
+                            <p class="text-2xl font-black text-amber-900 dark:text-white mt-1 leading-none" id="stat-pending-applications"><?php echo $pending_applications_count; ?></p>
+                        </div>
                     </div>
-                    <!-- Completion % -->
-                    <div class="stat-card p-4 bg-green-50 rounded-xl border-l-4 border-green-500">
-                        <p class="text-xs font-bold text-green-600 uppercase tracking-wide">Completion</p>
-                        <p class="text-2xl font-black text-green-700 mt-1" id="stat-completion-pct"><?php echo $completion_pct; ?>%</p>
+                    <!-- Selected Students -->
+                    <div class="stat-card p-5 bg-emerald-50/80 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/50 rounded-2xl flex items-center gap-4 transition-all duration-300">
+                        <div class="w-12 h-12 bg-emerald-500/10 rounded-xl flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
+                            <span class="material-symbols-outlined text-[28px]">check_circle</span>
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <p class="text-[11px] font-extrabold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest truncate">Assigned Students</p>
+                            <p class="text-2xl font-black text-emerald-900 dark:text-white mt-1 leading-none" id="stat-selected-students"><?php echo $selected_students_count; ?></p>
+                        </div>
                     </div>
-                    <!-- Pending Logs -->
-                    <div class="stat-card p-4 bg-amber-50 rounded-xl border-l-4 border-amber-500">
-                        <p class="text-xs font-bold text-amber-600 uppercase tracking-wide">Pending Logs</p>
-                        <p class="text-2xl font-black text-amber-600 mt-1" id="stat-pending-logs"><?php echo $pending_logs; ?></p>
+                    <!-- Assigned Teams -->
+                    <div class="stat-card p-5 bg-purple-50/80 dark:bg-purple-950/20 border border-purple-100 dark:border-purple-900/50 rounded-2xl flex items-center gap-4 transition-all duration-300">
+                        <div class="w-12 h-12 bg-purple-500/10 rounded-xl flex items-center justify-center text-purple-600 dark:text-purple-400 shrink-0">
+                            <span class="material-symbols-outlined text-[28px]">groups</span>
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <p class="text-[11px] font-extrabold text-purple-600 dark:text-purple-400 uppercase tracking-widest truncate">Assigned Teams</p>
+                            <p class="text-2xl font-black text-purple-900 dark:text-white mt-1 leading-none" id="stat-assigned-teams"><?php echo $assigned_teams_count; ?></p>
+                        </div>
+                    </div>
+                    <!-- Active Projects -->
+                    <div class="stat-card p-5 bg-indigo-50/80 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/50 rounded-2xl flex items-center gap-4 transition-all duration-300">
+                        <div class="w-12 h-12 bg-indigo-500/10 rounded-xl flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
+                            <span class="material-symbols-outlined text-[28px]">play_circle</span>
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <p class="text-[11px] font-extrabold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest truncate">Active Projects</p>
+                            <p class="text-2xl font-black text-indigo-900 dark:text-white mt-1 leading-none" id="stat-active-projects"><?php echo $active_projects_count; ?></p>
+                        </div>
+                    </div>
+                    <!-- Assigned Mentors -->
+                    <div class="stat-card p-5 bg-pink-50/80 dark:bg-pink-950/20 border border-pink-100 dark:border-pink-900/50 rounded-2xl flex items-center gap-4 transition-all duration-300">
+                        <div class="w-12 h-12 bg-pink-500/10 rounded-xl flex items-center justify-center text-pink-600 dark:text-pink-400 shrink-0">
+                            <span class="material-symbols-outlined text-[28px]">supervised_user_circle</span>
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <p class="text-[11px] font-extrabold text-pink-600 dark:text-pink-400 uppercase tracking-widest truncate">Assigned Mentors</p>
+                            <p class="text-2xl font-black text-pink-900 dark:text-white mt-1 leading-none" id="stat-assigned-mentors"><?php echo $assigned_mentors_count; ?></p>
+                        </div>
+                    </div>
+                    <!-- Pending Daily Logs -->
+                    <div class="stat-card p-5 bg-orange-50/80 dark:bg-orange-950/20 border border-orange-100 dark:border-orange-900/50 rounded-2xl flex items-center gap-4 transition-all duration-300">
+                        <div class="w-12 h-12 bg-orange-500/10 rounded-xl flex items-center justify-center text-orange-600 dark:text-orange-400 shrink-0">
+                            <span class="material-symbols-outlined text-[28px]">pending_actions</span>
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <p class="text-[11px] font-extrabold text-orange-600 dark:text-orange-400 uppercase tracking-widest truncate">Pending Logs</p>
+                            <p class="text-2xl font-black text-orange-900 dark:text-white mt-1 leading-none" id="stat-pending-logs"><?php echo $pending_logs; ?></p>
+                        </div>
+                    </div>
+                    <!-- Unread Notifications -->
+                    <div class="stat-card p-5 bg-red-50/80 dark:bg-red-950/20 border border-red-100 dark:border-red-900/50 rounded-2xl flex items-center gap-4 transition-all duration-300">
+                        <div class="w-12 h-12 bg-red-500/10 rounded-xl flex items-center justify-center text-red-600 dark:text-red-400 shrink-0">
+                            <span class="material-symbols-outlined text-[28px]">notifications</span>
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <p class="text-[11px] font-extrabold text-red-600 dark:text-red-400 uppercase tracking-widest truncate">Unread Notifs</p>
+                            <p class="text-2xl font-black text-red-900 dark:text-white mt-1 leading-none" id="stat-unread-notifications"><?php echo $unread_count; ?></p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -717,87 +875,233 @@ function subtypeBadgeClass($subtype) {
             </div>
         </div>
 
-        <!-- ── SECTION 3: Internship Monitoring & Logs ── -->
-        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden fade-in">
-            <div class="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between bg-gray-50/60">
-                <div class="flex items-center gap-2">
-                    <span class="material-symbols-outlined text-blue-600 text-[18px]">monitoring</span>
-                    <h2 class="text-sm font-bold text-gray-800 uppercase tracking-widest">Internship Monitoring &amp; Logs</h2>
-                </div>
-                <div class="flex gap-2">
-                    <a href="coordinator_daily_logs.php" class="text-blue-600 text-sm font-semibold hover:underline">View All Logs →</a>
+        <!-- ── SECTION 3: Logs & Activity ── -->
+        <div class="flex flex-col lg:flex-row gap-6 items-stretch fade-in">
+            <!-- Left Panel: Internship Monitoring & Logs (65%) -->
+            <div class="flex-1 min-w-0 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col justify-between">
+                <div>
+                    <div class="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between bg-gray-50/60">
+                        <div class="flex items-center gap-2">
+                            <span class="material-symbols-outlined text-blue-600 text-[18px]">monitoring</span>
+                            <h2 class="text-sm font-bold text-gray-800 uppercase tracking-widest">Internship Monitoring &amp; Logs</h2>
+                        </div>
+                        <div class="flex gap-2">
+                            <a href="coordinator_daily_logs.php" class="text-blue-600 text-sm font-semibold hover:underline">View All Logs →</a>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left">
+                            <thead>
+                                <tr class="bg-gray-50 border-b border-gray-100">
+                                    <th class="px-5 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Intern</th>
+                                    <th class="px-5 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Tasks Completed</th>
+                                    <th class="px-5 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Focus Level</th>
+                                    <th class="px-5 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Hours</th>
+                                    <th class="px-5 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="logs-table-body" class="divide-y divide-gray-100">
+                                <?php if (empty($recent_logs)): ?>
+                                <tr>
+                                    <td colspan="5" class="px-5 py-8 text-center text-gray-400 text-sm">
+                                        <span class="material-symbols-outlined block mx-auto text-gray-200 text-[40px] mb-2">inbox</span>
+                                        No daily logs submitted yet.
+                                    </td>
+                                </tr>
+                                <?php else: ?>
+                                    <?php foreach ($recent_logs as $log):
+                                        $time_spent    = floatval($log['time_spent']);
+                                        $progress_pct  = min(100, round(($time_spent / 8.0) * 100));
+                                        $focus         = $log['focus_level'] ?? 'Medium';
+                                        $focus_cls     = match(strtolower($focus)) {
+                                            'high'   => 'bg-green-100 text-green-700',
+                                            'low'    => 'bg-red-100 text-red-700',
+                                            default  => 'bg-amber-100 text-amber-700',
+                                        };
+                                    ?>
+                                    <tr class="hover:bg-gray-50 transition-colors">
+                                        <td class="px-5 py-3.5">
+                                            <div class="flex items-center gap-3">
+                                                <div class="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-sm shrink-0">
+                                                    <?php echo strtoupper(substr($log['full_name'], 0, 1)); ?>
+                                                </div>
+                                                <div>
+                                                    <p class="text-sm font-semibold text-gray-800"><?php echo htmlspecialchars($log['full_name']); ?></p>
+                                                    <p class="text-xs text-gray-400"><?php echo htmlspecialchars($log['course']); ?> &bull; <?php echo htmlspecialchars($log['college_name']); ?></p>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td class="px-5 py-3.5 text-sm text-gray-600 max-w-xs truncate" title="<?php echo htmlspecialchars($log['tasks_completed']); ?>">
+                                            <?php echo htmlspecialchars(mb_strimwidth($log['tasks_completed'], 0, 45, '…')); ?>
+                                        </td>
+                                        <td class="px-5 py-3.5">
+                                            <span class="px-2.5 py-0.5 rounded-full text-xs font-bold <?php echo $focus_cls; ?>">
+                                                <?php echo htmlspecialchars($focus); ?>
+                                            </span>
+                                        </td>
+                                        <td class="px-5 py-3.5">
+                                            <div class="flex items-center gap-2">
+                                                <div class="w-20 bg-gray-100 h-1.5 rounded-full overflow-hidden">
+                                                    <div class="bg-blue-500 h-full rounded-full" style="width: <?php echo $progress_pct; ?>%"></div>
+                                                </div>
+                                                <span class="text-xs text-gray-500"><?php echo $time_spent; ?>h</span>
+                                            </div>
+                                        </td>
+                                        <td class="px-5 py-3.5 text-right">
+                                            <a href="coordinator_daily_logs.php" class="text-blue-600 text-xs font-bold hover:underline">Details →</a>
+                                        </td>
+                                    </tr>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
-            <div class="overflow-x-auto">
-                <table class="w-full text-left">
-                    <thead>
-                        <tr class="bg-gray-50 border-b border-gray-100">
-                            <th class="px-5 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Intern</th>
-                            <th class="px-5 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Tasks Completed</th>
-                            <th class="px-5 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Focus Level</th>
-                            <th class="px-5 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Hours</th>
-                            <th class="px-5 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody id="logs-table-body" class="divide-y divide-gray-100">
-                        <?php if (empty($recent_logs)): ?>
-                        <tr>
-                            <td colspan="5" class="px-5 py-8 text-center text-gray-400 text-sm">
-                                <span class="material-symbols-outlined block mx-auto text-gray-200 text-[40px] mb-2">inbox</span>
-                                No daily logs submitted yet.
-                            </td>
-                        </tr>
+
+            <!-- Right Panel: Recent Activity (35%) -->
+            <div class="w-full lg:w-96 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col justify-between shrink-0">
+                <div>
+                    <div class="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between bg-gray-50/60">
+                        <div class="flex items-center gap-2">
+                            <span class="material-symbols-outlined text-blue-600 text-[18px]">campaign</span>
+                            <h2 class="text-sm font-bold text-gray-800 uppercase tracking-widest">Recent Activity</h2>
+                        </div>
+                    </div>
+                    <div class="p-5 overflow-y-auto max-h-[380px]" id="activity-feed">
+                        <?php if (empty($recent_activities)): ?>
+                            <div class="flex flex-col items-center justify-center py-12 text-gray-400 text-sm">
+                                <span class="material-symbols-outlined text-[40px] text-gray-200 mb-2">history</span>
+                                No recent activity found.
+                            </div>
                         <?php else: ?>
-                            <?php foreach ($recent_logs as $log):
-                                $time_spent    = floatval($log['time_spent']);
-                                $progress_pct  = min(100, round(($time_spent / 8.0) * 100));
-                                $focus         = $log['focus_level'] ?? 'Medium';
-                                $focus_cls     = match(strtolower($focus)) {
-                                    'high'   => 'bg-green-100 text-green-700',
-                                    'low'    => 'bg-red-100 text-red-700',
-                                    default  => 'bg-amber-100 text-amber-700',
-                                };
-                            ?>
-                            <tr class="hover:bg-gray-50 transition-colors">
-                                <td class="px-5 py-3.5">
-                                    <div class="flex items-center gap-3">
-                                        <div class="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-sm shrink-0">
-                                            <?php echo strtoupper(substr($log['full_name'], 0, 1)); ?>
-                                        </div>
-                                        <div>
-                                            <p class="text-sm font-semibold text-gray-800"><?php echo htmlspecialchars($log['full_name']); ?></p>
-                                            <p class="text-xs text-gray-400"><?php echo htmlspecialchars($log['course']); ?> &bull; <?php echo htmlspecialchars($log['college_name']); ?></p>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td class="px-5 py-3.5 text-sm text-gray-600 max-w-xs truncate" title="<?php echo htmlspecialchars($log['tasks_completed']); ?>">
-                                    <?php echo htmlspecialchars(mb_strimwidth($log['tasks_completed'], 0, 45, '…')); ?>
-                                </td>
-                                <td class="px-5 py-3.5">
-                                    <span class="px-2.5 py-0.5 rounded-full text-xs font-bold <?php echo $focus_cls; ?>">
-                                        <?php echo htmlspecialchars($focus); ?>
+                            <div class="relative pl-6 border-l border-gray-200 dark:border-slate-800 space-y-6">
+                                <?php foreach ($recent_activities as $act):
+                                    $act_type = $act['activity_type'];
+                                    $icon = 'info';
+                                    $icon_color = 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400';
+                                    $title_html = '';
+                                    
+                                    if ($act_type === 'application') {
+                                        $icon = 'send';
+                                        $icon_color = 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400';
+                                        $title_html = '<strong>' . htmlspecialchars($act['primary_name'] ?: 'Student') . '</strong> applied for <strong>' . htmlspecialchars($act['detail_name']) . '</strong>';
+                                    } elseif ($act_type === 'team') {
+                                        $icon = 'groups';
+                                        $icon_color = 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400';
+                                        $title_html = 'Team <strong>' . htmlspecialchars($act['primary_name']) . '</strong> created for <strong>' . htmlspecialchars($act['detail_name']) . '</strong>';
+                                    } elseif ($act_type === 'assignment') {
+                                        $icon = 'assignment_ind';
+                                        $icon_color = 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400';
+                                        $title_html = '<strong>' . htmlspecialchars($act['primary_name']) . '</strong> assigned to <strong>' . htmlspecialchars($act['detail_name']) . '</strong>';
+                                    } elseif ($act_type === 'log') {
+                                        $icon = 'event_note';
+                                        $icon_color = 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400';
+                                        $title_html = '<strong>' . htmlspecialchars($act['primary_name']) . '</strong> logged <strong>' . htmlspecialchars($act['extra_info']) . 'h</strong>: "' . htmlspecialchars(mb_strimwidth($act['detail_name'], 0, 40, '…')) . '"';
+                                    }
+                                    
+                                    $time_display = date('h:i A, M d', strtotime($act['activity_time']));
+                                ?>
+                                <div class="relative">
+                                    <!-- Marker -->
+                                    <span class="absolute -left-[35px] top-0.5 w-6 h-6 <?php echo $icon_color; ?> rounded-full flex items-center justify-center">
+                                        <span class="material-symbols-outlined text-[14px]"><?php echo $icon; ?></span>
                                     </span>
-                                </td>
-                                <td class="px-5 py-3.5">
-                                    <div class="flex items-center gap-2">
-                                        <div class="w-20 bg-gray-100 h-1.5 rounded-full overflow-hidden">
-                                            <div class="bg-blue-500 h-full rounded-full" style="width: <?php echo $progress_pct; ?>%"></div>
-                                        </div>
-                                        <span class="text-xs text-gray-500"><?php echo $time_spent; ?>h</span>
+                                    <div>
+                                        <p class="text-xs text-gray-700 dark:text-slate-300 font-normal leading-relaxed"><?php echo $title_html; ?></p>
+                                        <span class="text-[10px] text-gray-400 dark:text-slate-500 block mt-1"><?php echo $time_display; ?></span>
                                     </div>
-                                </td>
-                                <td class="px-5 py-3.5 text-right">
-                                    <a href="coordinator_daily_logs.php" class="text-blue-600 text-xs font-bold hover:underline">Details →</a>
-                                </td>
-                            </tr>
-                            <?php endforeach; ?>
+                                </div>
+                                <?php endforeach; ?>
+                            </div>
                         <?php endif; ?>
-                    </tbody>
-                </table>
+                    </div>
+                </div>
             </div>
         </div>
     </div><!-- /dashboard body -->
     <?php endif; // end assigned_subtypes check ?>
+
+    <?php
+    // Fetch students for Student Progress Overview
+    $progress_students = [];
+    $prog_stmt = $conn->prepare("
+        SELECT u.id, u.full_name, u.email, sp.college_name, a.internship_id, COALESCE(i.title, a.internship_name) AS project_title, COALESCE(i.project_subtype, a.applied_subtype, 'General') AS project_subtype, a.team_name 
+        FROM internship_applications a
+        JOIN users u ON a.user_id = u.id
+        LEFT JOIN student_profiles sp ON sp.user_id = u.id
+        LEFT JOIN internships i ON a.internship_id = i.id
+        WHERE a.status IN ('Project Assigned', 'Team Assigned', 'Internship Started', 'Started', 'Active Intern', 'Selected')
+        ORDER BY u.full_name ASC
+    ");
+    if ($prog_stmt) {
+        $prog_stmt->execute();
+        $prog_res = $prog_stmt->get_result();
+        while ($row = $prog_res->fetch_assoc()) {
+            $progress_students[] = $row;
+        }
+        $prog_stmt->close();
+    }
+    ?>
+    <!-- Student Progress Overview -->
+    <div class="mt-6 w-full bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div class="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between bg-gray-50/60">
+            <div class="flex items-center gap-2">
+                <span class="material-symbols-outlined text-blue-600 text-[18px]">track_changes</span>
+                <h2 class="text-sm font-bold text-gray-800 uppercase tracking-widest">Student Progress Overview</h2>
+            </div>
+        </div>
+        <div class="p-0 overflow-x-auto max-h-[500px]">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-slate-50 border-b border-slate-100 text-[10px] uppercase tracking-wider text-slate-500 sticky top-0 z-10">
+                        <th class="px-5 py-3 font-semibold bg-slate-50">Student Name</th>
+                        <th class="px-5 py-3 font-semibold bg-slate-50">Project & Team</th>
+                        <th class="px-5 py-3 font-semibold text-center bg-slate-50">Progress</th>
+                        <th class="px-5 py-3 font-semibold text-center bg-slate-50">Approved Logs</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    <?php if (empty($progress_students)): ?>
+                        <tr><td colspan="4" class="px-5 py-8 text-center text-slate-400 text-sm">No active students found.</td></tr>
+                    <?php else: ?>
+                        <?php foreach ($progress_students as $student): ?>
+                        <?php
+                            $prog_data = calculate_internship_progress($conn, $student['id'], $student['internship_id']);
+                            $prog_val = $prog_data['progress_percentage'];
+                            $approved = $prog_data['approved_logs'];
+                            $expected = $prog_data['expected_logs'];
+                        ?>
+                        <tr class="hover:bg-slate-50 transition-colors">
+                            <td class="px-5 py-3.5">
+                                <p class="text-sm font-bold text-slate-800"><?php echo htmlspecialchars($student['full_name']); ?></p>
+                                <p class="text-[11px] text-slate-500"><?php echo htmlspecialchars($student['college_name'] ?: $student['email']); ?></p>
+                            </td>
+                            <td class="px-5 py-3.5">
+                                <p class="text-xs font-semibold text-slate-700"><?php echo htmlspecialchars($student['project_subtype']); ?></p>
+                                <p class="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5"><span class="material-symbols-outlined text-[12px]">groups</span> <?php echo htmlspecialchars($student['team_name'] ?: 'No Team'); ?></p>
+                            </td>
+                            <td class="px-5 py-3.5 text-center">
+                                <div class="flex items-center gap-2 max-w-[120px] mx-auto">
+                                    <div class="flex-1 bg-slate-100 h-2 rounded-full overflow-hidden">
+                                        <div class="bg-gradient-to-r from-blue-500 to-indigo-500 h-full rounded-full" style="width:<?php echo $prog_val; ?>%"></div>
+                                    </div>
+                                    <span class="text-xs font-bold text-slate-700 w-8 text-right"><?php echo $prog_val; ?>%</span>
+                                </div>
+                            </td>
+                            <td class="px-5 py-3.5 text-center">
+                                <span class="inline-flex items-center gap-1.5 rounded-full bg-slate-100 border border-slate-200 px-2.5 py-1 text-xs font-bold text-slate-700">
+                                    <span class="material-symbols-outlined text-[14px] text-blue-500">check_circle</span>
+                                    <?php echo $approved; ?> / <?php echo $expected; ?>
+                                </span>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
 
 </main>
 
@@ -942,7 +1246,7 @@ async function fetchFilteredData() {
     if (overviewSubtitle) overviewSubtitle.textContent = 'Loading…';
 
     // dim stats
-    ['stat-total-logs','stat-active-interns','stat-completion-pct','stat-pending-logs'].forEach(id => {
+    ['stat-created-projects','stat-pending-applications','stat-selected-students','stat-assigned-teams','stat-active-projects','stat-assigned-mentors','stat-pending-logs','stat-unread-notifications'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.opacity = '0.4';
     });
@@ -956,11 +1260,25 @@ async function fetchFilteredData() {
     } catch(e) {
         console.error('Analytics fetch failed:', e);
     } finally {
-        ['stat-total-logs','stat-active-interns','stat-completion-pct','stat-pending-logs'].forEach(id => {
+        ['stat-created-projects','stat-pending-applications','stat-selected-students','stat-assigned-teams','stat-active-projects','stat-assigned-mentors','stat-pending-logs','stat-unread-notifications'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.style.opacity = '1';
         });
     }
+}
+
+function formatDateTime(sqlDate) {
+    if (!sqlDate) return '';
+    const date = new Date(sqlDate.replace(/-/g, "/"));
+    let hours = date.getHours();
+    let minutes = date.getMinutes();
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12;
+    minutes = minutes < 10 ? '0'+minutes : minutes;
+    const strTime = hours + ':' + minutes + ' ' + ampm;
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return strTime + ', ' + months[date.getMonth()] + ' ' + date.getDate();
 }
 
 function updateDashboard(data) {
@@ -972,10 +1290,14 @@ function updateDashboard(data) {
     }
 
     // Stat cards
-    animateCount('stat-total-logs',    data.total_logs);
-    animateCount('stat-active-interns', data.active_interns);
-    animateCount('stat-pending-logs',  data.pending_logs);
-    setTextFade('stat-completion-pct', data.completion_pct + '%');
+    animateCount('stat-created-projects',     data.created_projects);
+    animateCount('stat-pending-applications', data.pending_applications);
+    animateCount('stat-selected-students',    data.selected_students);
+    animateCount('stat-assigned-teams',       data.assigned_teams);
+    animateCount('stat-active-projects',      data.active_projects);
+    animateCount('stat-assigned-mentors',     data.assigned_mentors);
+    animateCount('stat-pending-logs',         data.pending_logs);
+    animateCount('stat-unread-notifications', data.unread_notifications);
 
     // Project Filling
     const ar = document.getElementById('stat-assigned-ratio');
@@ -987,61 +1309,61 @@ function updateDashboard(data) {
     const ob = document.getElementById('stat-open-projects-bar');
     if (ob) ob.style.width = Math.min(100, data.open_projects * 10) + '%';
 
-        // Pipeline
-        const grid = document.getElementById('pipeline-grid');
-        if (grid) {
-            if (!data.pipeline_projects?.length) {
-                grid.innerHTML = `<div class="flex items-center justify-center w-full py-10 text-gray-400 text-sm font-medium">
-                    <span class="material-symbols-outlined mr-2 text-gray-300">inbox</span>No internships found for this subtype.</div>`;
-            } else {
-                // Deduplicate projects client‑side, prefer entries with a team assignment
-                const projMap = {};
-                data.pipeline_projects.forEach(p => {
-                    const id = p.id;
-                    if (!projMap[id] || (p.team_name && !projMap[id].team_name)) {
-                        projMap[id] = p;
-                    }
-                });
-                const projects = Object.values(projMap);
-                grid.innerHTML = projects.map(p => {
-                    const subtype = p.project_subtype || 'General';
-                    const badgeCls = subtypeBadgeCls(subtype);
-                    const assigned = parseInt(p.assigned_count) || 0;
-                    const avatars = Array.from({length: Math.min(3, assigned)}, (_, i) =>
-                        `<img class="w-7 h-7 rounded-full border-2 border-white shadow-sm"
-                              src="https://ui-avatars.com/api/?name=I${i+1}&background=2563eb&color=fff&size=64" alt="Intern">`
-                    ).join('');
-                    const extra = assigned > 3 ? `<div class="w-7 h-7 rounded-full border-2 border-white bg-gray-100 flex items-center justify-center text-[9px] font-bold text-gray-500">+${assigned - 3}</div>` : '';
-                    const assignedCls = assigned > 0 ? 'text-blue-600' : 'text-gray-400';
-                    const pStatus = p.status || 'Active';
-                    let statusCls = 'bg-green-50 text-green-700 border border-green-200';
-                    if (/approved/i.test(pStatus) || /available/i.test(pStatus)) statusCls = 'bg-blue-50 text-blue-700 border border-blue-200';
-                    else if (/completed/i.test(pStatus)) statusCls = 'bg-purple-50 text-purple-700 border border-purple-200';
-                    else if (/confirmed/i.test(pStatus)) statusCls = 'bg-emerald-50 text-emerald-700 border border-emerald-200';
-                    else if (/pending/i.test(pStatus)) statusCls = 'bg-amber-50 text-amber-700 border border-amber-200';
-                    const displayTitle = p.title || 'Internship not assigned yet';
-                    const teamHtml = p.team_name ? `<p class="text-xs text-indigo-600 font-semibold mt-1 flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">groups</span>Team: ${h(p.team_name)}</p>` : '';
-                    return `<div class="pipeline-card flex-shrink-0 w-[300px] bg-white border border-gray-200 rounded-xl p-4 flex flex-col justify-between">
-                        <div>
-                            <div class="flex items-start justify-between mb-2">
-                                <span class="text-[11px] font-bold px-2 py-0.5 rounded-full ${badgeCls}">${h(subtype)}</span>
-                                <span class="text-[11px] font-bold px-2 py-0.5 ${statusCls} rounded-full">${h(pStatus)}</span>
-                            </div>
-                            <h3 class="text-sm font-bold text-gray-900 mt-2 truncate" title="${h(displayTitle)}">${h(displayTitle)}</h3>
-                            ${teamHtml}
-                            <div class="mt-2 space-y-1">
-                                <p class="text-xs text-gray-500"><span class="font-semibold text-gray-700">Duration:</span> ${h(p.duration||'N/A')} &bull; <span class="font-semibold text-gray-700">Mode:</span> ${h(p.mode||'N/A')}</p>
-                                <p class="text-xs text-gray-500"><span class="font-semibold text-gray-700">Mentor:</span> ${h(p.mentor_name||'Not assigned')}</p>
-                            </div>
+    // Pipeline
+    const grid = document.getElementById('pipeline-grid');
+    if (grid) {
+        if (!data.pipeline_projects?.length) {
+            grid.innerHTML = `<div class="flex items-center justify-center w-full py-10 text-gray-400 text-sm font-medium">
+                <span class="material-symbols-outlined mr-2 text-gray-300">inbox</span>No internships found for this subtype.</div>`;
+        } else {
+            // Deduplicate projects client‑side, prefer entries with a team assignment
+            const projMap = {};
+            data.pipeline_projects.forEach(p => {
+                const id = p.id;
+                if (!projMap[id] || (p.team_name && !projMap[id].team_name)) {
+                    projMap[id] = p;
+                }
+            });
+            const projects = Object.values(projMap);
+            grid.innerHTML = projects.map(p => {
+                const subtype = p.project_subtype || 'General';
+                const badgeCls = subtypeBadgeCls(subtype);
+                const assigned = parseInt(p.assigned_count) || 0;
+                const avatars = Array.from({length: Math.min(3, assigned)}, (_, i) =>
+                    `<img class="w-7 h-7 rounded-full border-2 border-white shadow-sm"
+                          src="https://ui-avatars.com/api/?name=I${i+1}&background=2563eb&color=fff&size=64" alt="Intern">`
+                ).join('');
+                const extra = assigned > 3 ? `<div class="w-7 h-7 rounded-full border-2 border-white bg-gray-100 flex items-center justify-center text-[9px] font-bold text-gray-500">+${assigned - 3}</div>` : '';
+                const assignedCls = assigned > 0 ? 'text-blue-600' : 'text-gray-400';
+                const pStatus = p.status || 'Active';
+                let statusCls = 'bg-green-50 text-green-700 border border-green-200';
+                if (/approved/i.test(pStatus) || /available/i.test(pStatus)) statusCls = 'bg-blue-50 text-blue-700 border border-blue-200';
+                else if (/completed/i.test(pStatus)) statusCls = 'bg-purple-50 text-purple-700 border border-purple-200';
+                else if (/confirmed/i.test(pStatus)) statusCls = 'bg-emerald-50 text-emerald-700 border border-emerald-200';
+                else if (/pending/i.test(pStatus)) statusCls = 'bg-amber-50 text-amber-700 border border-amber-200';
+                const displayTitle = p.title || 'Internship not assigned yet';
+                const teamHtml = p.team_name ? `<p class="text-xs text-indigo-600 font-semibold mt-1 flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">groups</span>Team: ${h(p.team_name)}</p>` : '';
+                return `<div class="pipeline-card flex-shrink-0 w-[300px] bg-white border border-gray-200 rounded-xl p-4 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-start justify-between mb-2">
+                            <span class="text-[11px] font-bold px-2 py-0.5 rounded-full ${badgeCls}">${h(subtype)}</span>
+                            <span class="text-[11px] font-bold px-2 py-0.5 ${statusCls} rounded-full">${h(pStatus)}</span>
                         </div>
-                        <div class="flex items-center justify-between mt-4 pt-3 border-t border-gray-100">
-                            <div class="flex -space-x-2">${avatars}${extra}</div>
-                            <span class="text-xs font-bold ${assignedCls}">${assigned} Students Assigned</span>
+                        <h3 class="text-sm font-bold text-gray-900 mt-2 truncate" title="${h(displayTitle)}">${h(displayTitle)}</h3>
+                        ${teamHtml}
+                        <div class="mt-2 space-y-1">
+                            <p class="text-xs text-gray-500"><span class="font-semibold text-gray-700">Duration:</span> ${h(p.duration||'N/A')} &bull; <span class="font-semibold text-gray-700">Mode:</span> ${h(p.mode||'N/A')}</p>
+                            <p class="text-xs text-gray-500"><span class="font-semibold text-gray-700">Mentor:</span> ${h(p.mentor_name||'Not assigned')}</p>
                         </div>
-                    </div>`;
-                }).join('');
-            }
+                    </div>
+                    <div class="flex items-center justify-between mt-4 pt-3 border-t border-gray-100">
+                        <div class="flex -space-x-2">${avatars}${extra}</div>
+                        <span class="text-xs font-bold ${assignedCls}">${assigned} Students Assigned</span>
+                    </div>
+                </div>`;
+            }).join('');
         }
+    }
 
     // Logs table
     const tbody = document.getElementById('logs-table-body');
@@ -1078,6 +1400,57 @@ function updateDashboard(data) {
                     <td class="px-5 py-3.5 text-right"><a href="coordinator_daily_logs.php" class="text-blue-600 text-xs font-bold hover:underline">Details →</a></td>
                 </tr>`;
             }).join('');
+        }
+    }
+
+    // Recent Activity feed
+    const feed = document.getElementById('activity-feed');
+    if (feed) {
+        if (!data.recent_activities?.length) {
+            feed.innerHTML = `<div class="flex flex-col items-center justify-center py-12 text-gray-400 text-sm">
+                <span class="material-symbols-outlined text-[40px] text-gray-200 mb-2">history</span>No recent activity found.</div>`;
+        } else {
+            feed.innerHTML = `<div class="relative pl-6 border-l border-gray-200 dark:border-slate-800 space-y-6">` + 
+            data.recent_activities.map(act => {
+                let icon = 'info';
+                let iconColor = 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400';
+                let titleHtml = '';
+                
+                const type = act.activity_type;
+                const pName = h(act.primary_name || 'Student');
+                const dName = h(act.detail_name || '');
+                const extra = h(act.extra_info || '');
+                
+                if (type === 'application') {
+                    icon = 'send';
+                    iconColor = 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400';
+                    titleHtml = `<strong>${pName}</strong> applied for <strong>${dName}</strong>`;
+                } else if (type === 'team') {
+                    icon = 'groups';
+                    iconColor = 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400';
+                    titleHtml = `Team <strong>${pName}</strong> created for <strong>${dName}</strong>`;
+                } else if (type === 'assignment') {
+                    icon = 'assignment_ind';
+                    iconColor = 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400';
+                    titleHtml = `<strong>${pName}</strong> assigned to <strong>${dName}</strong>`;
+                } else if (type === 'log') {
+                    icon = 'event_note';
+                    iconColor = 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400';
+                    titleHtml = `<strong>${pName}</strong> logged <strong>${extra}h</strong>: "${dName.length > 40 ? dName.substr(0,40) + '…' : dName}"`;
+                }
+                
+                const timeDisplay = formatDateTime(act.activity_time);
+                
+                return `<div class="relative">
+                    <span class="absolute -left-[35px] top-0.5 w-6 h-6 ${iconColor} rounded-full flex items-center justify-center">
+                        <span class="material-symbols-outlined text-[14px]">${icon}</span>
+                    </span>
+                    <div>
+                        <p class="text-xs text-gray-700 dark:text-slate-300 font-normal leading-relaxed">${titleHtml}</p>
+                        <span class="text-[10px] text-gray-400 dark:text-slate-500 block mt-1">${timeDisplay}</span>
+                    </div>
+                </div>`;
+            }).join('') + `</div>`;
         }
     }
 }

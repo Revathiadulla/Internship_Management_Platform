@@ -4,6 +4,7 @@ ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 session_start();
 require_once 'db.php';
+require_once 'status_utils.php';
 if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
     exit();
@@ -32,7 +33,7 @@ if (isset($_GET['success'])) {
 $status_filter = isset($_GET['status']) ? trim($_GET['status']) : '';
 $search = isset($_GET['search']) ? trim($_GET['search']) : '';
 $where_clauses = [
-    "i.coordinator_id = " . intval($_SESSION['user_id']),
+    "(i.coordinator_id = " . intval($_SESSION['user_id']) . " OR ca.coordinator_id = " . intval($_SESSION['user_id']) . ")",
     "a.status NOT IN ('Rejected', 'Deleted')"
 ];
 $types = "";
@@ -54,12 +55,15 @@ if (!empty($search)) {
     $params[] = $search_param;
 }
 
-$sql = "SELECT a.id as app_id, a.id as id, a.status, a.applied_date, a.education_status,
-               COALESCE(i.title, a.internship_name) as title, u.full_name as student_name, u.email as student_email, sp.phone, sp.college_name, sp.skills as student_skills, ss.percentage as test_percentage
+$sql = "SELECT DISTINCT a.id as app_id, a.id as id, a.status, a.applied_date, a.education_status,
+               CONCAT_WS(' - ', NULLIF(TRIM(i.project_type), ''), NULLIF(TRIM(i.project_subtype), '')) as title, u.full_name as student_name, u.email as student_email, sp.phone, sp.college_name, sp.skills as student_skills, ss.percentage as test_percentage
         FROM internship_applications a
         JOIN users u ON a.user_id = u.id
         LEFT JOIN student_profiles sp ON u.id = sp.user_id
-                JOIN internships i ON a.internship_id = i.id
+        LEFT JOIN internships i ON a.internship_id = i.id
+        LEFT JOIN project_subtypes ps ON LOWER(TRIM(COALESCE(a.applied_subtype, a.internship_name))) = LOWER(TRIM(ps.subtype_name))
+        LEFT JOIN project_types pt2 ON ps.project_type_id = pt2.id
+        LEFT JOIN coordinator_assignments ca ON pt2.id = ca.project_type_id
         LEFT JOIN student_scores ss ON ss.application_id = a.id
         LEFT JOIN project_teams pt ON i.id = pt.internship_id";
 
@@ -162,10 +166,7 @@ mysqli_stmt_close($stmt);
                         <a href="coordinator_reports.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
                                 <span class="material-symbols-outlined text-[20px]">analytics</span> Reports
                         </a>
-						<a href="coordinator_student_reports.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
-							<span class="material-symbols-outlined text-[20px]">warning</span> Student Reports
-						</a>
-                        <a href="coordinator_teams.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
+						<a href="coordinator_teams.php" class="flex items-center gap-3 text-gray-600 px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
                                 <span class="material-symbols-outlined text-[20px]">manage_accounts</span> Teams
                         </a>
                 </nav>
@@ -320,7 +321,7 @@ mysqli_stmt_close($stmt);
                                         <thead class="bg-gray-50 text-gray-500 uppercase font-bold text-[10px] tracking-wider border-b border-gray-100">
                                                 <tr>
                                                         <th class="px-6 py-4">Student</th>
-                                                        <th class="px-6 py-4">Applied Position</th>
+                                                        <th class="px-6 py-4">Applied Internship</th>
                                                         <th class="px-6 py-4">Applied Date</th>
                                                         <th class="px-6 py-4">Education / College</th>
                                                         <th class="px-6 py-4">Status</th>
@@ -360,7 +361,7 @@ mysqli_stmt_close($stmt);
                                                                          <p class="text-[11px] text-gray-400"><?php echo htmlspecialchars($app['college_name'] ?? 'N/A'); ?></p>
                                                                  </td>
                                                                  <td class="px-6 py-4">
-                                                                         <span class="px-2.5 py-0.5 border rounded-full text-xs font-bold <?php echo $badge_cls; ?>"><?php echo htmlspecialchars($app['status']); ?></span>
+                                                                          <span class="px-2.5 py-0.5 border rounded-full text-xs font-bold <?php echo $badge_cls; ?>"><?php echo htmlspecialchars(formatStatusLabel($app['status'])); ?></span>
                                                                  </td>
                                                                  <td class="px-6 py-4 text-right space-x-2 whitespace-nowrap">
                                                                          <button onclick='openDetailsModal(<?php echo json_encode($app); ?>)' class="text-blue-600 hover:text-blue-800 font-bold text-xs bg-blue-50 px-2.5 py-1.5 rounded-lg border border-blue-200 hover:bg-blue-100 transition-colors cursor-pointer">View Details</button>
@@ -451,6 +452,18 @@ mysqli_stmt_close($stmt);
                 const detailAppliedDate = document.getElementById('detail-applied-date');
                 const detailSkills = document.getElementById('detail-skills');
 
+                function formatStatusLabel(status) {
+                    if (!status) return '';
+                    let s = status.replace(/^\s*application\s+status\s*:\s*/i, '');
+                    s = s.replace(/_/g, ' ').trim();
+                    s = s.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+                    s = s.replace(/\bHr\b/g, 'HR')
+                         .replace(/\bHod\b/g, 'HOD')
+                         .replace(/\bPan\b/g, 'PAN')
+                         .replace(/\bSmtp\b/g, 'SMTP')
+                         .replace(/\bId\b/g, 'ID');
+                    return s;
+                }
 
                 function openDetailsModal(app) {
                         detailName.textContent = app.student_name;
@@ -466,7 +479,7 @@ mysqli_stmt_close($stmt);
                         else if (st === 'Rejected') badgeClass = 'bg-red-100 text-red-800';
                         
                         detailStatus.className = `px-2 py-0.5 rounded text-xs inline-block font-bold ${badgeClass}`;
-                        detailStatus.textContent = st;
+                        detailStatus.textContent = formatStatusLabel(st);
 
                         detailEmail.textContent = app.student_email || 'N/A';
                         detailPhone.textContent = app.phone || 'N/A';
@@ -479,7 +492,6 @@ mysqli_stmt_close($stmt);
                         
                         detailSkills.textContent = app.student_skills || 'No skills listed';
 
-                        
                         detailsModal.classList.remove('hidden');
                 }
 

@@ -463,6 +463,56 @@ if ($student_user_id > 0) {
     $co_stmt->close();
 }
 
+// 5. Assigned Project Details (for Project Assigned / Team Assigned / Active statuses)
+$assigned_project_details = null;
+if ($student_user_id > 0) {
+    // Try to get team assignment via project_team_members -> project_teams
+    $proj_stmt = $conn->prepare("
+        SELECT 
+            pt.team_name,
+            pt.project_type,
+            pt.project_subtype,
+            pt.status AS team_status,
+            pt.created_at AS team_created_at,
+            pt.mentor_id,
+            COALESCE(i.title, '') AS internship_title,
+            COALESCE(i.duration, '') AS internship_duration,
+            COALESCE(i.mode, '') AS internship_mode,
+            COALESCE(i.skills, '') AS tech_stack,
+            COALESCE(mu.full_name, '') AS mentor_name,
+            COALESCE(mu.email, '') AS mentor_email
+        FROM project_team_members ptm
+        JOIN project_teams pt ON pt.id = ptm.project_team_id
+        LEFT JOIN internships i ON pt.internship_id = i.id
+        LEFT JOIN users mu ON pt.mentor_id = mu.id
+        WHERE ptm.student_id = ?
+        ORDER BY ptm.created_at DESC
+        LIMIT 1
+    ");
+    if ($proj_stmt) {
+        $proj_stmt->bind_param("i", $student_user_id);
+        $proj_stmt->execute();
+        $assigned_project_details = $proj_stmt->get_result()->fetch_assoc();
+        $proj_stmt->close();
+    }
+    // Fallback: try mentor_assignments if no team assignment found
+    if (!$assigned_project_details && !empty($assigned_mentor)) {
+        $assigned_project_details = [
+            'team_name' => '',
+            'project_type' => $applied_project_type ?: '',
+            'project_subtype' => $applied_internship_subtype ?: '',
+            'team_status' => '',
+            'team_created_at' => $assigned_mentor['assigned_at'] ?? '',
+            'mentor_name' => $assigned_mentor['mentor_name'] ?? '',
+            'mentor_email' => $assigned_mentor['mentor_email'] ?? '',
+            'internship_title' => $d['internship_title'] ?? '',
+            'internship_duration' => $internship_duration,
+            'internship_mode' => $internship_mode,
+            'tech_stack' => $internship_skills,
+        ];
+    }
+}
+
 // Compute aggregate metrics
 $avg_rating = 0.0;
 $total_ratings = 0;
@@ -552,7 +602,9 @@ $status_colors = [
       <a href="hr_applications.php" class="flex items-center gap-3 bg-blue-50 text-blue-700 border-l-4 border-blue-600 px-4 py-3"><span class="material-symbols-outlined">assignment</span><span>Applications</span></a>
       <a href="candidates.php" class="flex items-center gap-3 text-gray-600 px-4 py-3 hover:bg-gray-100 transition-all"><span class="material-symbols-outlined">group</span><span>Candidates</span></a>
       <a href="student_logs.php" class="flex items-center gap-3 text-gray-600 px-4 py-3 hover:bg-gray-100 transition-all"><span class="material-symbols-outlined">description</span><span>Student Logs</span></a>
+      <a href="hr_hiring_requests.php" class="flex items-center gap-3 text-gray-600 px-4 py-3 hover:bg-gray-100 transition-all"><span class="material-symbols-outlined">work</span><span>Hiring Requests</span></a>
       <a href="reports.php" class="flex items-center gap-3 text-gray-600 px-4 py-3 hover:bg-gray-100 transition-all"><span class="material-symbols-outlined">analytics</span><span>Reports</span></a>
+      <a href="hr_notifications.php" class="flex items-center gap-3 text-gray-600 px-4 py-3 hover:bg-gray-100 transition-all"><span class="material-symbols-outlined">notifications</span><span>Notifications</span></a>
     </nav>
     <div class="mt-auto border-t border-gray-200 pt-4 flex flex-col gap-1">
       <a href="#" class="flex items-center gap-3 text-gray-600 px-4 py-3 hover:bg-gray-100 transition-all"><span class="material-symbols-outlined">help</span><span>Help Center</span></a>
@@ -910,9 +962,56 @@ $status_colors = [
                 // Fetch HOD info from the application
                 $hod_appr_status = $d['hod_approval_status'] ?? '';
                 $hod_email_val   = $d['hod_email'] ?? $d['sp_hod_email'] ?? '';
+                $is_assigned_or_completed = in_array($current_status_key, ['project_assigned', 'team_assigned', 'started', 'internship_started', 'active_intern', 'completed', 'internship_completed', 'certificate_issued'], true);
               ?>
 
-              <?php if (!$is_rejected_status): ?>
+              <?php if ($is_assigned_or_completed): ?>
+                <div class="mt-5 border-t border-slate-100 pt-5 space-y-3">
+                  <p class="text-xs font-bold uppercase tracking-wider text-slate-400">Available Actions</p>
+                  <div class="rounded-2xl bg-emerald-50 border border-emerald-200 p-4 text-xs">
+                    <p class="font-bold text-emerald-750 flex items-center gap-1.5">
+                      <span class="material-symbols-outlined text-[16px] text-emerald-600">check_circle</span>
+                      Workflow Completed / Student Assigned to Project
+                    </p>
+                  </div>
+                </div>
+
+                <!-- Assigned Project Details -->
+                <div class="mt-5 border-t border-slate-100 pt-5 space-y-3">
+                  <p class="text-xs font-bold uppercase tracking-wider text-slate-400">Assigned Project Details</p>
+                  <?php if ($assigned_project_details): ?>
+                    <div class="grid gap-3">
+                      <?php
+                        $proj_fields = [
+                          'Project Title' => $assigned_project_details['internship_title'] ?? '',
+                          'Project Type' => $assigned_project_details['project_type'] ?? '',
+                          'Project Subtype' => $assigned_project_details['project_subtype'] ?? '',
+                          'Technology Stack' => $assigned_project_details['tech_stack'] ?? '',
+                          'Duration' => $assigned_project_details['internship_duration'] ?? '',
+                          'Mode' => $assigned_project_details['internship_mode'] ?? '',
+                          'Mentor Name' => $assigned_project_details['mentor_name'] ?? '',
+                          'Team Name' => $assigned_project_details['team_name'] ?? '',
+                          'Assigned Date' => !empty($assigned_project_details['team_created_at']) ? date('M d, Y', strtotime($assigned_project_details['team_created_at'])) : '',
+                          'Project Status' => $assigned_project_details['team_status'] ?? '',
+                        ];
+                      ?>
+                      <?php foreach ($proj_fields as $label => $value): ?>
+                        <div class="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                          <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400"><?php echo $label; ?></span>
+                          <span class="text-xs font-semibold text-slate-700 text-right max-w-[60%] truncate"><?php echo htmlspecialchars(!empty(trim($value)) ? $value : 'Not assigned'); ?></span>
+                        </div>
+                      <?php endforeach; ?>
+                    </div>
+                  <?php else: ?>
+                    <div class="rounded-2xl bg-amber-50 border border-amber-200 p-4 text-xs">
+                      <p class="font-bold text-amber-700 flex items-center gap-1">
+                        <span class="material-symbols-outlined text-[16px]">info</span>
+                        Project assignment details pending coordinator sync.
+                      </p>
+                    </div>
+                  <?php endif; ?>
+                </div>
+              <?php elseif (!$is_rejected_status): ?>
                 <div class="mt-5 border-t border-slate-100 pt-5 space-y-3">
                   <p class="text-xs font-bold uppercase tracking-wider text-slate-400">Available Actions</p>
                   
@@ -922,21 +1021,19 @@ $status_colors = [
 
                   <?php if ($is_selected_status): ?>
                     <?php $confirmation_letter_sent = (!empty($d['confirmation_letter_path']) || !empty($d['confirmation_letter_sent_at']) || (!empty($d['confirmation_letter_sent']) && (int) $d['confirmation_letter_sent'] === 1)); ?>
-                    <?php $offer_letter_path = trim((string) (!empty($d['offer_letter_path']) ? $d['offer_letter_path'] : (!empty($d['confirmation_letter_path']) ? $d['confirmation_letter_path'] : ''))); ?>
-                    <?php $confirmation_letter_ready = $confirmation_letter_sent || !empty($offer_letter_path); ?>
-                    <?php if ($confirmation_letter_ready): ?>
-                      <a href="<?php echo htmlspecialchars(getDocumentViewUrl($offer_letter_path)); ?>" target="_blank" class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition-all shadow-sm cursor-pointer mb-2">
-                        <span class="material-symbols-outlined text-base">visibility</span>
-                        View Confirmation Letter
-                      </a>
-                      <a href="<?php echo htmlspecialchars($offer_letter_path); ?>" download class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-200 transition-all shadow-sm cursor-pointer">
-                        <span class="material-symbols-outlined text-base">download</span>
-                        Download Confirmation Letter
-                      </a>
-                      <button disabled class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-200 px-4 py-2.5 text-sm font-semibold text-white cursor-not-allowed mt-2">
-                        <span class="material-symbols-outlined text-base">verified</span>
-                        Selected / Confirmation Letter Sent
-                      </button>
+                    <?php if ($confirmation_letter_sent): ?>
+                      <div class="rounded-2xl bg-emerald-50 border border-emerald-200 p-4 text-xs mb-2">
+                        <p class="font-bold text-emerald-800 flex items-center gap-1.5 text-sm">
+                          <span class="material-symbols-outlined text-[18px]">check_circle</span>
+                          Workflow Completed
+                        </p>
+                        <p class="mt-2 text-emerald-700 font-semibold">Confirmation Letter Sent ✓</p>
+                        <?php if (!empty($d['confirmation_letter_sent_at'])): ?>
+                          <p class="mt-1 text-slate-500">Sent Date: <?php echo date('M d, Y, h:i A', strtotime($d['confirmation_letter_sent_at'])); ?></p>
+                        <?php else: ?>
+                          <p class="mt-1 text-slate-500">Sent Date: <?php echo date('M d, Y'); ?></p>
+                        <?php endif; ?>
+                      </div>
                     <?php else: ?>
                       <button type="button" 
                               id="btn-send-conf-letter" 
@@ -982,6 +1079,12 @@ $status_colors = [
                   <?php endif; ?>
 
                   <?php if ($current_status_key === 'shortlisted'): ?>
+                    <button type="button" 
+                            id="btn-send-exam-link"
+                            class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-purple-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-purple-700 transition-all shadow-sm cursor-pointer">
+                      <span class="material-symbols-outlined text-base">mail</span>
+                      Send Exam Link
+                    </button>
                   <?php endif; ?>
 
                   <?php if ($is_exam_sent_status): ?>
@@ -1045,7 +1148,11 @@ $status_colors = [
                     <?php endif; ?>
                   <?php endif; ?>
 
-                  <?php if (!$is_selected_status && !$is_rejected_status && !$is_hod_rejected_status): ?>
+                  <?php
+                    $hr_review_stages = ['applied', 'shortlisted', 'exam_sent', 'exam_mail_sent', 'exam_qualified', 'hr_review', 'hod_pending', 'hod_approved'];
+                    $can_reject = in_array($current_status_key, $hr_review_stages, true) && !$is_selected_status && !$is_rejected_status && !$is_hod_rejected_status;
+                  ?>
+                  <?php if ($can_reject): ?>
                     <button type="button" 
                             id="btn-trigger-reject"
                             class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-100 transition-all border border-red-100 cursor-pointer mt-2">
@@ -1127,6 +1234,68 @@ $status_colors = [
       </div>
     </div>
   </main>
+
+  <!-- Exam Compose Modal -->
+  <div id="exam-compose-modal" class="fixed inset-0 z-[100] hidden">
+    <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" id="exam-modal-backdrop"></div>
+    <div class="absolute inset-0 flex items-center justify-center p-4">
+      <div class="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+        <div class="bg-gradient-to-r from-purple-600 to-indigo-600 px-6 py-4 flex items-center justify-between">
+          <div class="flex items-center gap-2 text-white">
+            <span class="material-symbols-outlined">mail</span>
+            <h3 class="text-lg font-bold">Send Exam Link</h3>
+          </div>
+          <button type="button" id="exam-modal-close" class="text-white/80 hover:text-white transition-colors">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <form id="exam-compose-form" class="p-6 space-y-4">
+          <input type="hidden" name="action" value="send_exam_link">
+          <input type="hidden" name="selected_ids[]" value="<?php echo $app_id; ?>">
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">To (Student Email)</label>
+            <input type="text" name="to" value="<?php echo htmlspecialchars($email); ?>" 
+                   class="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all" required>
+          </div>
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Subject</label>
+            <input type="text" name="subject" value="Internship Assessment - <?php echo htmlspecialchars($d['internship_title'] ?? 'Exam Invitation'); ?>" 
+                   class="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all" required>
+          </div>
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Message</label>
+            <textarea name="message" rows="5" 
+                      class="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all" required>Dear <?php echo htmlspecialchars($full_name); ?>,
+
+You have been shortlisted for the <?php echo htmlspecialchars($d['internship_title'] ?? 'internship'); ?> program.
+
+Please click the link below to take your assessment:
+{{EXAM_LINK}}
+
+Best regards,
+HR Team</textarea>
+          </div>
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Attachment (Optional)</label>
+            <input type="file" name="exam_attachment" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                   class="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 transition-all">
+            <p class="text-[11px] text-slate-400 mt-1">Max 5 MB. Allowed: PDF, DOC, DOCX, JPG, PNG</p>
+          </div>
+          <div class="flex gap-3 pt-2">
+            <button type="submit" id="exam-send-btn"
+                    class="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-purple-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-purple-700 transition-all shadow-sm">
+              <span class="material-symbols-outlined text-base">send</span>
+              Send Exam Link
+            </button>
+            <button type="button" id="exam-modal-cancel"
+                    class="inline-flex items-center justify-center rounded-xl bg-slate-100 px-4 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-200 transition-all">
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
 
   <!-- Toast Notification -->
   <div id="toast" class="fixed top-6 right-6 z-50 bg-white rounded-xl shadow-xl px-5 py-4 border flex items-center gap-3 transform translate-x-[400px] transition-transform duration-500 ease-out hidden">
@@ -1394,7 +1563,8 @@ $status_colors = [
     const btnConfirmReject = document.getElementById('btn-confirm-reject');
     const rejectionReasonInput = document.getElementById('rejection-reason');
 
-    const workflowButtons = [btnSendConfLetter];
+    const btnSendExamLink = document.getElementById('btn-send-exam-link');
+    const workflowButtons = [btnSendConfLetter, btnSendExamLink];
 
     if (btnTriggerReject) {
       btnTriggerReject.addEventListener('click', () => {
@@ -1438,6 +1608,83 @@ $status_colors = [
           }
         } catch (error) {
           showToast('error', 'Error', 'Failed to reject candidate');
+        }
+      });
+    }
+    // Exam Compose Modal handlers
+    const examModal = document.getElementById('exam-compose-modal');
+    const examModalBackdrop = document.getElementById('exam-modal-backdrop');
+    const examModalClose = document.getElementById('exam-modal-close');
+    const examModalCancel = document.getElementById('exam-modal-cancel');
+    const examComposeForm = document.getElementById('exam-compose-form');
+    const examSendBtn = document.getElementById('exam-send-btn');
+
+    function openExamModal() {
+      if (examModal) {
+        examModal.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+      }
+    }
+    function closeExamModal() {
+      if (examModal) {
+        examModal.classList.add('hidden');
+        document.body.style.overflow = '';
+      }
+    }
+
+    if (btnSendExamLink) {
+      btnSendExamLink.addEventListener('click', openExamModal);
+    }
+    if (examModalBackdrop) {
+      examModalBackdrop.addEventListener('click', closeExamModal);
+    }
+    if (examModalClose) {
+      examModalClose.addEventListener('click', closeExamModal);
+    }
+    if (examModalCancel) {
+      examModalCancel.addEventListener('click', closeExamModal);
+    }
+
+    if (examComposeForm) {
+      examComposeForm.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const defaultBtnHTML = '<span class="material-symbols-outlined text-base">send</span> Send Exam Link';
+        if (examSendBtn) {
+          examSendBtn.disabled = true;
+          examSendBtn.innerHTML = '<span class="material-symbols-outlined text-base animate-spin">progress_activity</span> Sending...';
+        }
+        try {
+          const formData = new FormData(examComposeForm);
+          const response = await fetch('hr_bulk_action.php', {
+            method: 'POST',
+            body: formData
+          });
+          const responseText = await response.text();
+          let result;
+          try {
+            result = JSON.parse(responseText);
+          } catch (parseErr) {
+            console.error('JSON parse error:', parseErr, 'Raw response:', responseText);
+            closeExamModal();
+            showToast('error', 'Server Error', 'Invalid response from server. Check console for details.');
+            return;
+          }
+          closeExamModal();
+          if (result.success) {
+            showToast('success', 'Exam Link Sent', result.message || 'Exam invitation email sent successfully.');
+            setTimeout(() => location.reload(), 1500);
+          } else {
+            showToast('error', 'Send Failed', result.message || 'Failed to send exam link.');
+          }
+        } catch (error) {
+          console.error('Exam link send error:', error);
+          closeExamModal();
+          showToast('error', 'Error', 'Request failed. Please try again.');
+        } finally {
+          if (examSendBtn) {
+            examSendBtn.disabled = false;
+            examSendBtn.innerHTML = defaultBtnHTML;
+          }
         }
       });
     }

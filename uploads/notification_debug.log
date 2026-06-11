@@ -106,3 +106,12 @@ SESSION_ROLE: student
 GET: {"action":"read","id":"214","source":"global"}
 POST: []
 HEADERS: {"Host":"localhost","Connection":"keep-alive","sec-ch-ua-platform":"\"Windows\"","User-Agent":"Mozilla\/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit\/537.36 (KHTML, like Gecko) Chrome\/149.0.0.0 Safari\/537.36 Edg\/149.0.0.0","sec-ch-ua":"\"Microsoft Edge\";v=\"149\", \"Chromium\";v=\"149\", \"Not)A;Brand\";v=\"24\"","sec-ch-ua-mobile":"?0","Accept":"*\/*","Sec-Fetch-Site":"same-origin","Sec-Fetch-Mode":"cors","Sec-Fetch-Dest":"empty","Referer":"http:\/\/localhost\/IMP\/student_dashboard.php?msg=Application+Submitted+Successfully%21","Accept-Encoding":"gzip, deflate, br, zstd","Accept-Language":"en-US,en;q=0.9","Cookie":"PHPSESSID=rn2ml007ajd6l9mq7ehccq1a79"}
+----- 2026-06-10 17:00:29 -----
+REQUEST_URI: /IMP/mark_notification_read.php?action=read_all&source=global&receiver_role=hr
+REMOTE_ADDR: ::1
+HTTP_USER_AGENT: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0
+SESSION_USER_ID: 78
+SESSION_ROLE: hr
+GET: {"action":"read_all","source":"global","receiver_role":"hr"}
+POST: []
+HEADERS: {"Host":"localhost","Connection":"keep-alive","sec-ch-ua-platform":"\"Windows\"","User-Agent":"Mozilla\/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit\/537.36 (KHTML, like Gecko) Chrome\/149.0.0.0 Safari\/537.36 Edg\/149.0.0.0","sec-ch-ua":"\"Microsoft Edge\";v=\"149\", \"Chromium\";v=\"149\", \"Not)A;Brand\";v=\"24\"","sec-ch-ua-mobile":"?0","Accept":"*\/*","Sec-Fetch-Site":"same-origin","Sec-Fetch-Mode":"cors","Sec-Fetch-Dest":"empty","Referer":"http:\/\/localhost\/IMP\/admin_received_notifications.php","Accept-Encoding":"gzip, deflate, br, zstd","Accept-Language":"en-US,en;q=0.9","Cookie":"PHPSESSID=8jipt54bdu0681tg0o189lbalh"}

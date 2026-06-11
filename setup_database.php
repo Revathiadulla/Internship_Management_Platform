@@ -488,6 +488,48 @@ foreach ($talent_pool_cols as $col => $def) {
     }
 }
 
+// 12. Create confirmation_letter_templates table and seed default data
+$chk_cl_table = mysqli_query($conn, "SHOW TABLES LIKE 'confirmation_letter_templates'");
+if (mysqli_num_rows($chk_cl_table) == 0) {
+    $create_sql = "CREATE TABLE confirmation_letter_templates (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        template_name VARCHAR(255) NOT NULL,
+        subject VARCHAR(255) NOT NULL,
+        content TEXT NOT NULL,
+        logo_path VARCHAR(255) NULL,
+        signature_name VARCHAR(255) NULL,
+        signature_designation VARCHAR(255) NULL,
+        is_active TINYINT(1) DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+    executeSetupQuery($conn, $create_sql, "Creating confirmation_letter_templates table", $errors, $is_cli);
+
+    $default_content = "Dear {student_name},\n\nWe are pleased to inform you that your application for the internship position \"{project_title}\" has been successful. You have been officially selected for this role.\n\nPlease note: Project allocation, team formation, and mentor assignment will be communicated separately by the Coordinator. You do not need to take any action regarding these assignments until further notice.\n\nCongratulations on your selection!";
+    $ins = mysqli_query($conn, "INSERT INTO confirmation_letter_templates (template_name, subject, content, signature_name, signature_designation, is_active) VALUES ('Default Template', 'Congratulations! You have been selected for the internship', '" . mysqli_real_escape_string($conn, $default_content) . "', 'HR Team', 'IMP Platform', 1)");
+}
+
+// 13. Create certificate_templates table and seed default data
+$chk_ct_table = mysqli_query($conn, "SHOW TABLES LIKE 'certificate_templates'");
+if (mysqli_num_rows($chk_ct_table) == 0) {
+    $create_sql = "CREATE TABLE certificate_templates (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        template_name VARCHAR(255) NOT NULL,
+        content TEXT NOT NULL,
+        logo_path VARCHAR(255) NULL,
+        signature_name VARCHAR(255) NULL,
+        signature_designation VARCHAR(255) NULL,
+        seal_image VARCHAR(255) NULL,
+        is_active TINYINT(1) DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+    executeSetupQuery($conn, $create_sql, "Creating certificate_templates table", $errors, $is_cli);
+
+    $default_content = "has successfully completed the internship program as a {project_title} at the {company_name}.";
+    $ins = mysqli_query($conn, "INSERT INTO certificate_templates (template_name, content, signature_name, signature_designation, is_active) VALUES ('Default Template', '" . mysqli_real_escape_string($conn, $default_content) . "', 'Program Coordinator', 'IMP Platform Director', 1)");
+}
+
 
 $admin_email = 'imp.webportal2026@gmail.com';
 $check_admin = mysqli_query($conn, "SELECT id FROM users WHERE email = '" . mysqli_real_escape_string($conn, $admin_email) . "'");

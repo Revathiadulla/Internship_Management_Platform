@@ -20,8 +20,8 @@ $query = "SELECT a.id, a.status, a.user_id, a.aadhaar_status, a.pan_status, a.ve
                  sp.student_type, u.full_name, u.email,
                  sp.hod_name AS sp_hod_name, sp.hod_email AS sp_hod_email, sp.hod_phone AS sp_hod_phone,
                  a.hod_name AS app_hod_name, a.hod_email AS app_hod_email, a.hod_phone AS app_hod_phone,
-                 a.internship_name,
-                 COALESCE(i.title, a.internship_name) AS internship_title
+                 a.internship_name, a.applied_subtype, a.project_subtype,
+                 COALESCE(i.project_subtype, a.project_subtype, a.applied_subtype, 'Not specified') AS applied_subtype
           FROM internship_applications a
           LEFT JOIN internships i ON a.internship_id = i.id AND a.internship_id > 0
           LEFT JOIN student_profiles sp ON a.user_id = sp.user_id
@@ -43,7 +43,7 @@ $student_type = trim((string) ($app['student_type'] ?? ''));
 $education_status = trim((string) ($app['education_status'] ?? ''));
 $is_pursuing = is_pursuing_student($education_status, $student_type);
 $is_passed_out = !$is_pursuing;
-$internship_title = $app['internship_title'] ?? 'Internship';
+$applied_subtype = $app['applied_subtype'] ?? 'Not specified';
 
 $verification_value = trim((string) ($app['verification_status'] ?? ''));
 $aadhaar_verified = strtolower((string) ($app['aadhaar_status'] ?? '')) === 'verified';
@@ -133,7 +133,7 @@ if ($update->execute()) {
             <div class='card'>
                 <table>
                     <tr><td class='label'>Student</td><td class='value'>" . htmlspecialchars($student_name) . "</td></tr>
-                    <tr><td class='label'>Internship</td><td class='value'>" . htmlspecialchars($internship_title) . "</td></tr>
+                    <tr><td class='label'>Applied Internship</td><td class='value'>" . htmlspecialchars($applied_subtype) . "</td></tr>
                     <tr><td class='label'>Status</td><td class='value'>Awaiting HOD Approval</td></tr>
                 </table>
             </div>
@@ -149,7 +149,7 @@ if ($update->execute()) {
     if (function_exists('sendEmail')) {
         sendEmail($hod_email, $hod_name, $subject, $hod_html_body);
     } else {
-        sendEmailNotification($hod_email, $subject, "Dear $hod_name,\n\nYour student $student_name has applied for an internship: $internship_title. Please approve here: $approve_url or reject here: $reject_url\n\nBest regards,\nIMP Team");
+        sendEmailNotification($hod_email, $subject, "Dear $hod_name,\n\nYour student $student_name has applied for an internship: $applied_subtype. Please approve here: $approve_url or reject here: $reject_url\n\nBest regards,\nIMP Team");
     }
 }
 

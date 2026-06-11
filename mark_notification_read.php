@@ -26,7 +26,7 @@ try {
 
 // Ensure user is logged in
 if (!isset($_SESSION['user_id']) || !isset($_SESSION['role'])) {
-    echo json_encode(['success' => false, 'message' => 'Unauthorized']);
+    echo json_encode(['success' => false, 'message' => 'Session expired. Please login again.']);
     exit();
 }
 

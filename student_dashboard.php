@@ -3,7 +3,9 @@ session_start();
 require_once __DIR__ . '/includes/auth.php';
 include "db.php";
 include "status_helper.php";
+include "status_utils.php";
 require_once __DIR__ . '/includes/cloudinary_config.php';
+require_once __DIR__ . '/includes/progress_helper.php';
 
 require_student_login();
 
@@ -42,11 +44,14 @@ $team_assign_sql = "SELECT t.id AS team_id,
                            COALESCE(NULLIF(i.description, ''), NULL) AS internship_description,
                            COALESCE(NULLIF(i.skills, ''), NULLIF(i.technology_stack, ''), '') AS internship_skills,
                            i.duration AS internship_duration,
+                           i.mode AS internship_mode,
                            i.technology_stack AS internship_technology_stack,
                            i.start_date AS internship_start_date,
                            i.end_date AS internship_end_date,
                            u.full_name AS mentor_name,
-                           u.email AS mentor_email
+                           u.email AS mentor_email,
+                           ptm.created_at AS assigned_date,
+                           t.status AS project_status
                     FROM project_team_members ptm
                     JOIN project_teams t ON ptm.project_team_id = t.id
                     LEFT JOIN internships i ON t.internship_id = i.id
@@ -81,9 +86,12 @@ if ($team_assign_res && ($team_assign_row = mysqli_fetch_assoc($team_assign_res)
             'description' => $team_assign_row['internship_description'],
             'skills' => !empty($team_assign_row['internship_skills']) ? $team_assign_row['internship_skills'] : $team_assign_row['internship_technology_stack'],
             'duration' => $team_assign_row['internship_duration'],
+            'mode' => $team_assign_row['internship_mode'],
             'technology_stack' => $team_assign_row['internship_technology_stack'],
             'start_date' => $team_assign_row['internship_start_date'],
             'end_date' => $team_assign_row['internship_end_date'],
+            'assigned_date' => $team_assign_row['assigned_date'],
+            'project_status' => $team_assign_row['project_status'],
         ];
     }
 }
@@ -354,7 +362,7 @@ if ($has_assigned_project) {
         'applied_subtype' => $assigned_project['project_subtype'] ?? null,
         'project_subtype' => $assigned_project['project_subtype'] ?? null,
         'duration' => $assigned_project['duration'],
-        'mode' => $existing_active['mode'] ?? '',
+        'mode' => $assigned_project['mode'] ?: ($existing_active['mode'] ?? ''),
         'status' => 'Assigned',
         'applied_date' => $existing_active['applied_date'] ?? null,
         'education_status' => $existing_active['education_status'] ?? null,
@@ -372,7 +380,9 @@ if ($has_assigned_project) {
         'end_date' => $assigned_project['end_date'],
         'confirmation_letter_path' => $existing_active['confirmation_letter_path'] ?? null,
         'exam_status' => $existing_active['exam_status'] ?? null,
-        'exam_link' => $existing_active['exam_link'] ?? null
+        'exam_link' => $existing_active['exam_link'] ?? null,
+        'assigned_date' => $assigned_project['assigned_date'] ?? null,
+        'project_status' => $assigned_project['project_status'] ?? 'Active'
     ]);
 }
 
@@ -657,28 +667,25 @@ if ($has_active) {
     $date_today = new DateTime();
     $date_today->setTime(0, 0, 0);
 
+    // Calculate Progress Based on Approved Logs
+    $progress_data = calculate_internship_progress($conn, $user_id, $active_intern['internship_id']);
+    $progress_pct = $progress_data['progress_percentage'];
+    $approved_logs = $progress_data['approved_logs'];
+    $expected_logs = $progress_data['expected_logs'];
+
     if ($start_date_obj) {
-        $total_days = max(1, $start_date_obj->diff($end_date)->days);
-
-        if ($date_today < $start_date_obj) {
-            $progress_pct = 0;
-        } elseif ($date_today > $end_date) {
-            $progress_pct = 100;
-        } else {
-            $progress_pct = min(100, round(($start_date_obj->diff($date_today)->days / $total_days) * 100));
-        }
-
         $days_left = ($date_today > $end_date) ? 0 : $date_today->diff($end_date)->days;
     } else {
-        $progress_pct = 0;
         $days_left = 0;
     }
 
-    $is_completed = ($start_date_obj && $date_today > $end_date) || strtolower($active_intern['status']) === 'completed';
+    $is_completed = ($progress_pct >= 100) || strtolower($active_intern['status']) === 'completed';
 } else {
     $phases            = [];
     $current_phase_num = 0;
     $progress_pct      = 0;
+    $approved_logs     = 0;
+    $expected_logs     = 0;
     $end_date          = null;
     $days_left         = 0;
     $is_completed      = false;
@@ -982,11 +989,13 @@ if (isset($_GET['warning'])) {
     ═══════════════════════════════════════════════════════════ -->
     <section id="sec-dashboard" class="dashboard-section active">
       <?php
-        $d_end = null; $d_left = 0; $d_pct = 0;
+        $d_end = null; $d_left = 0; $d_pct = 0; $d_approved = 0; $d_expected = 0;
         if ($has_active) {
           $d_end  = $end_date;
           $d_left = $days_left;
           $d_pct  = $progress_pct;
+          $d_approved = $approved_logs;
+          $d_expected = $expected_logs;
         }
       ?>
       <?php if ($has_active): ?>
@@ -1216,8 +1225,8 @@ if (isset($_GET['warning'])) {
             <div class="space-y-3 text-sm">
               <div>
                 <div class="flex justify-between text-xs mb-1">
-                  <span class="text-slate-500">Overall Progress</span>
-                  <span class="font-bold text-slate-700"><?php echo $d_pct; ?>%</span>
+                  <span class="text-slate-500">Overall Progress (Based on Approved Logs)</span>
+                  <span class="font-bold text-slate-700"><?php echo $d_pct; ?>% (<?php echo $d_approved; ?> / <?php echo $d_expected; ?>)</span>
                 </div>
                 <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
                   <div class="bg-gradient-to-r from-blue-500 to-indigo-500 h-full rounded-full" style="width:<?php echo $d_pct; ?>%"></div>
@@ -1542,7 +1551,7 @@ if (isset($_GET['warning'])) {
               }
             ?>
             <p class="mb-1"><span class="font-semibold">Applied Internship:</span> <?php echo htmlspecialchars($applied_internship); ?></p>
-            <p><span class="font-semibold">Application Status:</span> <?php echo htmlspecialchars($pending_app['status'] ?? 'Pending'); ?></p>
+            <p><span class="font-semibold">Application Status:</span> <?php echo htmlspecialchars(formatStatusLabel($pending_app['status'] ?? 'Pending')); ?></p>
           </div>
           <?php endif; ?>
           <div class="flex flex-col sm:flex-row gap-3 justify-center">
@@ -1788,7 +1797,7 @@ if (isset($_GET['warning'])) {
             }
           ?>
           <p class="mb-1"><span class="font-semibold">Applied Internship:</span> <?php echo htmlspecialchars($applied_internship_sec); ?></p>
-          <p><span class="font-semibold">Application Status:</span> <?php echo htmlspecialchars($pending_app['status'] ?? 'Pending'); ?></p>
+          <p><span class="font-semibold">Application Status:</span> <?php echo htmlspecialchars(formatStatusLabel($pending_app['status'] ?? 'Pending')); ?></p>
         </div>
         <?php endif; ?>
       </div>
@@ -1820,7 +1829,7 @@ if (isset($_GET['warning'])) {
           </div>
 
           <!-- Meta -->
-          <div class="grid grid-cols-3 gap-4 pt-4 border-t border-slate-50 text-sm">
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-slate-50 text-sm">
             <div>
               <p class="text-slate-400 text-xs font-medium">Project Type</p>
               <p class="font-semibold text-slate-700 mt-0.5"><?php echo htmlspecialchars($active_intern['project_type'] ?: 'General'); ?></p>
@@ -1833,8 +1842,12 @@ if (isset($_GET['warning'])) {
               <p class="text-slate-400 text-xs font-medium">Duration</p>
               <p class="font-semibold text-slate-700 mt-0.5"><?php echo htmlspecialchars($active_intern['duration'] ?: ($active_intern['internship_duration'] ?? 'N/A')); ?></p>
             </div>
+            <div>
+              <p class="text-slate-400 text-xs font-medium">Mode</p>
+              <p class="font-semibold text-slate-700 mt-0.5"><?php echo htmlspecialchars($active_intern['mode'] ?: 'N/A'); ?></p>
+            </div>
           </div>
-          <div class="grid grid-cols-2 gap-4 pt-4 border-t border-slate-50 text-sm">
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-slate-50 text-sm">
             <div>
               <p class="text-slate-400 text-xs font-medium">Assigned Team</p>
               <p class="font-semibold text-slate-700 mt-0.5"><?php echo htmlspecialchars($active_intern['team_name'] ?: 'Not Assigned'); ?></p>
@@ -1842,6 +1855,16 @@ if (isset($_GET['warning'])) {
             <div>
               <p class="text-slate-400 text-xs font-medium">Mentor</p>
               <p class="font-semibold text-slate-700 mt-0.5"><?php echo htmlspecialchars($active_intern['mentor_name'] ?: 'Not Assigned'); ?></p>
+            </div>
+            <div>
+              <p class="text-slate-400 text-xs font-medium">Assigned Date</p>
+              <p class="font-semibold text-slate-700 mt-0.5">
+                <?php echo (!empty($active_intern['assigned_date'])) ? htmlspecialchars(date('M d, Y', strtotime($active_intern['assigned_date']))) : 'N/A'; ?>
+              </p>
+            </div>
+            <div>
+              <p class="text-slate-400 text-xs font-medium">Project Status</p>
+              <p class="font-semibold text-slate-700 mt-0.5"><?php echo htmlspecialchars(formatStatusLabel($active_intern['project_status'] ?? 'Active')); ?></p>
             </div>
           </div>
           <div class="pt-4 border-t border-slate-50">
