@@ -11,24 +11,32 @@ if (!function_exists('imp_is_debug_mode')) {
     }
 }
 
-// Live Render + Clever Cloud connection configuration
-// Detect local host
-$is_local_host = (isset($_SERVER['HTTP_HOST']) && ($_SERVER['HTTP_HOST'] == 'localhost' || strpos($_SERVER['HTTP_HOST'], '127.0.0.1') !== false)) || (php_sapi_name() === 'cli' && !getenv('DB_HOST'));
+// Railway MySQL
+if (getenv('MYSQLHOST')) {
+    $host = getenv('MYSQLHOST');
+    $user = getenv('MYSQLUSER');
+    $pass = getenv('MYSQLPASSWORD');
+    $db   = getenv('MYSQLDATABASE');
+    $port = getenv('MYSQLPORT') ?: 3306;
+}
 
-if ($is_local_host) {
-    $host = getenv('DB_HOST') ?: "localhost";
-    $user = getenv('DB_USER') ?: "root";
-    $pass = getenv('DB_PASSWORD') ?: "";
-    $db   = getenv('DB_NAME') ?: "imp_db";
-    $port = getenv('DB_PORT') ?: 3306;
-} else {
-    $host = getenv('DB_HOST') ?: "by7xxebmaxfwobqrh1ne-mysql.services.clever-cloud.com";
-    $user = getenv('DB_USER') ?: "ujebqn1hlk9qd98k";
-    $pass = getenv('DB_PASSWORD') ?: "zqPIiSbk9EU6l3KHrvml";
-    $db   = getenv('DB_NAME') ?: "by7xxebmaxfwobqrh1ne";
+// Render / Clever Cloud
+elseif (getenv('DB_HOST')) {
+    $host = getenv('DB_HOST');
+    $user = getenv('DB_USER');
+    $pass = getenv('DB_PASSWORD');
+    $db   = getenv('DB_NAME');
     $port = getenv('DB_PORT') ?: 3306;
 }
 
+// Local XAMPP
+else {
+    $host = "localhost";
+    $user = "root";
+    $pass = "";
+    $db   = "imp_db";
+    $port = 3306;
+}
 try {
     mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
     $conn = mysqli_init();
