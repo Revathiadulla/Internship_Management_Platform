@@ -212,11 +212,11 @@ if (!class_exists('SimpleSMTP')) {
 }
 
 if (!function_exists('sendEmail')) {
-    require_once __DIR__ . '/../email_helper.php';
+    require_once __DIR__ . '/email_helper.php';
 }
 
 if (isset($conn) && $conn instanceof mysqli) {
-    @include_once __DIR__ . '/../ensure_extended_schema.php';
+    @include_once __DIR__ . '/ensure_extended_schema.php';
 }
 
 if (!function_exists('sendEmailNotification')) {

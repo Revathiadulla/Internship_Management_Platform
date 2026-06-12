@@ -3,7 +3,7 @@
  * workflow_helper.php – central helpers for status audit, workflow logs, and schema safety.
  */
 
-require_once dirname(__DIR__) . '/db.php'; // assumed existing DB connection $conn
+require_once __DIR__ . '/db.php'; // assumed existing DB connection $conn
 
 function normalize_education_status($value) {
     $raw = trim((string) ($value ?? ''));
@@ -63,13 +63,6 @@ function normalize_workflow_status($value) {
         'hr_review' => 'hr_review',
         'hr_reviews' => 'hr_review',
         'shortlisted' => 'shortlisted',
-        'exam_link_sent' => 'exam_sent',
-        'exam_sent' => 'exam_sent',
-        'exam_mail_sent' => 'exam_mail_sent',
-        'exam_mail' => 'exam_mail_sent',
-        'exam_sent_mail' => 'exam_mail_sent',
-        'exam_qualified' => 'exam_qualified',
-        'exam_completed' => 'exam_completed',
         'hod_pending' => 'hod_pending',
         'hod_approval_pending' => 'hod_pending',
         'hod_approval' => 'hod_pending',
@@ -78,6 +71,7 @@ function normalize_workflow_status($value) {
         'hod_approval_approved' => 'hod_approved',
         'hod_rejected' => 'hod_rejected',
         'hod_rejection_rejected' => 'hod_rejected',
+        'exam_link_sent' => 'exam_link_sent',
         'selected' => 'selected',
         'confirmation_letter_sent' => 'selected',
         'offer_sent' => 'selected',
@@ -91,14 +85,9 @@ function is_status_key($status, $expected) {
     return normalize_workflow_status($status) === normalize_workflow_status($expected);
 }
 
-function is_exam_sent_status($status) {
-    $normalized = normalize_workflow_status($status);
-    return in_array($normalized, ['exam_sent', 'exam_mail_sent'], true);
-}
 
-function is_exam_completed_status($status) {
-    return normalize_workflow_status($status) === 'exam_completed';
-}
+
+
 
 function is_hr_review_status($status) {
     return normalize_workflow_status($status) === 'hr_review';

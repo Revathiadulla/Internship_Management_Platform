@@ -1,5 +1,5 @@
 <?php
-include __DIR__ . '/../db.php';
+include __DIR__ . '/../includes/db.php';
 $tables = ['subtype_tests', 'student_scores', 'internship_applications'];
 foreach ($tables as $table) {
     echo "TABLE $table\n";

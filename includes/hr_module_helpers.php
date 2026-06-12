@@ -154,7 +154,7 @@ function ensure_module_schema(mysqli $conn): void {
         'Applied'       => 1,
         'HR Review'     => 2,
         'Shortlisted'   => 3,
-        'Exam Mail Sent'=> 4,
+        
         'HOD Pending'   => 5,
         'HOD Approved'  => 6,
         'Selected'      => 7,
@@ -528,7 +528,7 @@ function status_badge(string $status): string {
         'Applied'                 => 'bg-blue-50 text-blue-700 border-blue-200',
         'HR Review'               => 'bg-indigo-50 text-indigo-700 border-indigo-200',
         'Shortlisted'             => 'bg-amber-50 text-amber-700 border-amber-200',
-        'Exam Mail Sent'          => 'bg-purple-50 text-purple-700 border-purple-200',
+        
         'HOD Pending'             => 'bg-orange-50 text-orange-700 border-orange-200',
         'HOD Approved'            => 'bg-teal-50 text-teal-700 border-teal-200',
         'Selected'                => 'bg-emerald-50 text-emerald-700 border-emerald-200',
@@ -539,8 +539,8 @@ function status_badge(string $status): string {
         'Rejected'                => 'bg-red-50 text-red-700 border-red-200',
         'HOD Rejected'            => 'bg-red-50 text-red-700 border-red-200',
         // Legacy aliases
-        'Test Completed'          => 'bg-purple-50 text-purple-700 border-purple-200',
-        'Exam Completed'          => 'bg-purple-50 text-purple-700 border-purple-200',
+        
+        
         'HR Round'                => 'bg-indigo-50 text-indigo-700 border-indigo-200',
     ];
     $class = $classes[$status] ?? 'bg-slate-50 text-slate-700 border-slate-200';
@@ -638,23 +638,23 @@ main {
 function hr_sidebar(string $active): void {
     $role = strtolower($_SESSION['role'] ?? '');
     $items = [
-        ['Dashboard', 'hr_dashboard.php', 'dashboard', 'dashboard'],
-        ['Applications', 'hr_applications.php', 'assignment', 'applications'],
-        ['Candidates', 'candidates.php', 'group', 'candidates'],
-        ['Student Logs', 'student_logs.php', 'description', 'student_logs'],
-        ['Hiring Requests', 'hr_hiring_requests.php', 'handshake', 'hiring_requests'],
-        ['Reports', 'hr_reports.php', 'analytics', 'reports'],
-        ['Notifications', 'admin_received_notifications.php', 'notifications', 'notifications'],
+        ['Dashboard', '/IMP/hr/dashboard.php', 'dashboard', 'dashboard'],
+        ['Applications', '/IMP/hr/applications.php', 'assignment', 'applications'],
+        ['Candidates', '/IMP/hr/candidates.php', 'group', 'candidates'],
+        ['Student Logs', '/IMP/hr/student_logs.php', 'description', 'student_logs'],
+
+        ['Reports', '/IMP/hr/reports.php', 'analytics', 'reports'],
+        ['Notifications', '/IMP/hr/notifications.php', 'notifications', 'notifications'],
     ];
     if ($role === 'hr' || $role === 'admin') {
-        $items[] = ['Confirmation Letter Template', 'confirmation_letter_template.php', 'description', 'confirmation_template'];
+        $items[] = ['Confirmation Letter Template', '/IMP/includes/confirmation_letter_template.php', 'description', 'confirmation_template'];
     }
     if ($role === 'admin') {
-        $items[] = ['Certificate Template', 'certificate_template.php', 'workspace_premium', 'certificate_template'];
+        $items[] = ['Certificate Template', '/IMP/includes/certificate_template.php', 'workspace_premium', 'certificate_template'];
     }
     $visible = $items;
     echo '<aside class="fixed left-0 top-0 z-50 flex h-screen w-60 flex-col border-r border-gray-200 bg-gray-50 py-6 text-sm font-medium">
-<div class="mb-8 px-6"><a href="index.html" class="flex items-center gap-2"><span class="grid h-8 w-8 place-items-center rounded-lg bg-blue-600 text-sm font-extrabold text-white">IMP</span><span class="text-xl font-bold text-blue-600">IMP</span></a><p class="ml-1 mt-2 text-[10px] font-bold uppercase tracking-widest text-gray-500">HR Portal</p></div>
+<div class="mb-8 px-6"><a href="/IMP/hr/dashboard.php" class="flex items-center gap-2"><span class="grid h-8 w-8 place-items-center rounded-lg bg-blue-600 text-sm font-extrabold text-white">IMP</span><span class="text-xl font-bold text-blue-600">IMP</span></a><p class="ml-1 mt-2 text-[10px] font-bold uppercase tracking-widest text-gray-500">HR Portal</p></div>
 <nav class="flex-1 space-y-1 px-4">';
     foreach ($visible as [$label, $href, $icon, $key]) {
         $is_active = ($active === $key) || ($key === 'applications' && $active === 'archived_applications');
@@ -663,21 +663,21 @@ function hr_sidebar(string $active): void {
             : 'text-gray-600 hover:bg-gray-100';
         echo '<a href="' . e($href) . '" class="flex items-center gap-3 rounded-lg px-4 py-3 transition ' . $class . '"><span class="material-symbols-outlined">' . e($icon) . '</span><span>' . e($label) . '</span></a>';
     }
-    echo '</nav><div class="mt-auto border-t border-gray-200 px-4 pt-4"><a href="logout.php" class="flex items-center gap-3 rounded-lg px-4 py-3 text-gray-600 hover:bg-gray-100"><span class="material-symbols-outlined">logout</span><span>Logout</span></a></div></aside>';
+    echo '</nav><div class="mt-auto border-t border-gray-200 px-4 pt-4"><a href="/IMP/logout.php" class="flex items-center gap-3 rounded-lg px-4 py-3 text-gray-600 hover:bg-gray-100"><span class="material-symbols-outlined">logout</span><span>Logout</span></a></div></aside>';
 }
 
 function module_search_config(string $active): array {
     switch ($active) {
         case 'student_logs':
-            return ['student_logs.php', 'Search student daily logs by student name...'];
+            return ['/IMP/hr/student_logs.php', 'Search student daily logs by student name...'];
         case 'applications':
-            return ['hr_applications.php', 'Search applications by name or email...'];
+            return ['/IMP/hr/applications.php', 'Search applications by name or email...'];
         case 'archived_applications':
             return ['archived_applications.php', 'Search archived applications by name or email...'];
         case 'candidates':
-            return ['candidates.php', 'Search candidates, skills, or colleges...'];
+            return ['/IMP/hr/candidates.php', 'Search candidates, skills, or colleges...'];
         default:
-            return ['candidates.php', 'Search candidates, skills, or colleges...'];
+            return ['/IMP/hr/candidates.php', 'Search candidates, skills, or colleges...'];
     }
 }
 
@@ -790,21 +790,26 @@ function module_topbar(string $active, string $action_html = '', bool $show_sear
                     $icon_color = 'text-amber-600 bg-amber-50';
                 }
                 
-                $redirect_url = $is_mentor ? 'mentor_notifications.php' : 'hr_dashboard.php';
+                $in_mentor = (strpos($_SERVER['SCRIPT_NAME'], '/mentor/') !== false);
+                $m_prefix = $in_mentor ? '' : 'mentor/';
+                $r_prefix = $in_mentor ? '../' : '';
+                
+                $redirect_url = $is_mentor ? $m_prefix . 'notifications.php' : '/IMP/hr/dashboard.php';
                 if ($is_mentor) {
                     if ($ntype === 'log_submission' || $ntype === 'log_resubmission') {
-                        $redirect_url = 'mentor_daily_logs.php';
+                        $redirect_url = $m_prefix . 'daily_logs.php';
                     } elseif ($ntype === 'intern_assignment') {
-                        $redirect_url = 'mentor_dashboard.php';
+                        $redirect_url = $m_prefix . 'dashboard.php';
                     }
                 } else {
                     if ($ntype === 'log_submission' || $ntype === 'log_resubmission') {
-                        $redirect_url = 'student_logs.php';
+                        $redirect_url = '/IMP/hr/student_logs.php';
                     } elseif ($ntype === 'new_application' || $ntype === 'application_submitted') {
-                        $redirect_url = 'hr_applications.php';
+                        $redirect_url = '/IMP/hr/applications.php';
                     }
                 }
-                $notif_url = 'mark_notification_read.php?id=' . intval($n['id']) . '&redirect=' . urlencode($redirect_url);
+                
+                $notif_url = ($is_mentor && $in_mentor ? '../' : '') . 'mark_notification_read.php?id=' . intval($n['id']) . '&redirect=' . urlencode($redirect_url);
  
                 $items_html .= '<a href="' . $notif_url . '" class="block px-4 py-3 border-b border-slate-100 hover:bg-slate-50 transition ' . $unread_style . '">
                     <div class="flex gap-3">
@@ -824,7 +829,8 @@ function module_topbar(string $active, string $action_html = '', bool $show_sear
         }
         
         $badge_id = $is_mentor ? 'mentor-navbar-badge' : 'hr-notification-badge';
-        $view_all_url = $is_mentor ? 'mentor_notifications.php' : 'hr_applications.php';
+        $in_mentor = (strpos($_SERVER['SCRIPT_NAME'], '/mentor/') !== false);
+        $view_all_url = $is_mentor ? ($in_mentor ? 'notifications.php' : 'mentor/notifications.php') : '/IMP/hr/notifications.php';
         
         $notif_html = '<div class="notif-menu" id="imp-notif-menu">
             <button type="button" id="imp-notif-btn" onclick="impToggleNotifMenu(event)" style="cursor:pointer;" class="relative rounded-full p-2 text-slate-500 hover:bg-slate-50" title="Notifications">
@@ -856,14 +862,14 @@ function module_topbar(string $active, string $action_html = '', bool $show_sear
                 <span>Assigned Interns:</span>
                 <span class="bg-blue-50 text-blue-700 px-2.5 py-0.5 rounded-full font-extrabold">' . $interns_count . '</span>
             </div>
-            <a href="logout.php" class="block px-4 py-2.5 text-sm font-bold text-red-600 hover:bg-red-50 hover:text-red-700 transition">Logout</a>
+            <a href="/IMP/logout.php" class="block px-4 py-2.5 text-sm font-bold text-red-600 hover:bg-red-50 hover:text-red-700 transition">Logout</a>
         </div>';
     } else {
         $profile_dropdown_html = '<div class="dropdown">
             <div class="border-b border-slate-100 px-3 py-3"><p class="text-sm font-bold text-slate-900">' . e($name) . '</p><p class="truncate text-xs text-slate-500">' . e($email) . '</p></div>
             <a href="profile.php">Profile</a>
             <a href="settings.php">Settings</a>
-            <a href="logout.php" style="color:#dc2626;">Logout</a>
+            <a href="/IMP/logout.php" style="color:#dc2626;">Logout</a>
         </div>';
     }
     
@@ -1143,15 +1149,19 @@ function mentor_sidebar(string $active): void {
         }
     }
 
+    $in_mentor = (strpos($_SERVER['SCRIPT_NAME'], '/mentor/') !== false);
+    $m_prefix = $in_mentor ? '' : 'mentor/';
+    $r_prefix = $in_mentor ? '../' : '';
+
     echo '<aside class="fixed left-0 top-0 z-50 flex h-screen w-60 flex-col border-r border-gray-200 bg-gray-50 py-6 text-sm font-medium">
-<div class="mb-8 px-6"><a href="index.html" class="flex items-center gap-2 hover:opacity-95 transition-opacity"><span class="grid h-8 w-8 place-items-center rounded-lg bg-blue-600 text-sm font-extrabold text-white">IMP</span><span class="text-xl font-bold text-blue-600">IMP</span></a><p class="ml-1 mt-2 text-[10px] font-bold uppercase tracking-widest text-gray-500">Mentor Portal</p></div>
+<div class="mb-8 px-6"><a href="' . e($r_prefix . 'index.html') . '" class="flex items-center gap-2 hover:opacity-95 transition-opacity"><span class="grid h-8 w-8 place-items-center rounded-lg bg-blue-600 text-sm font-extrabold text-white">IMP</span><span class="text-xl font-bold text-blue-600">IMP</span></a><p class="ml-1 mt-2 text-[10px] font-bold uppercase tracking-widest text-gray-500">Mentor Portal</p></div>
 <nav class="flex-1 space-y-1 px-4">';
 
     $items = [
-        ['Dashboard', 'mentor_dashboard.php', 'dashboard', 'dashboard'],
-        ['Review Daily Logs', 'mentor_daily_logs.php', 'rate_review', 'review_logs'],
-        ['Projects', 'mentor_projects.php', 'folder', 'projects'],
-        ['Notifications', 'mentor_notifications.php', 'notifications', 'notifications'],
+        ['Dashboard', $m_prefix . 'dashboard.php', 'dashboard', 'dashboard'],
+        ['Review Daily Logs', $m_prefix . 'daily_logs.php', 'rate_review', 'review_logs'],
+        ['Projects', $m_prefix . 'projects.php', 'folder', 'projects'],
+        ['Notifications', $m_prefix . 'notifications.php', 'notifications', 'notifications'],
     ];
 
     foreach ($items as [$label, $href, $icon, $key]) {
@@ -1169,7 +1179,7 @@ function mentor_sidebar(string $active): void {
         echo '<a href="' . e($href) . '" class="flex items-center gap-3 rounded-lg px-4 py-3 transition ' . $class . '"><span class="material-symbols-outlined">' . e($icon) . '</span><span>' . e($label) . '</span>' . $badge . '</a>';
     }
 
-    echo '</nav><div class="mt-auto border-t border-gray-200 px-4 pt-4"><a href="logout.php" class="flex items-center gap-3 rounded-lg px-4 py-3 text-gray-600 hover:bg-gray-100"><span class="material-symbols-outlined">logout</span><span>Logout</span></a></div></aside>';
+    echo '</nav><div class="mt-auto border-t border-gray-200 px-4 pt-4"><a href="/IMP/logout.php" class="flex items-center gap-3 rounded-lg px-4 py-3 text-gray-600 hover:bg-gray-100"><span class="material-symbols-outlined">logout</span><span>Logout</span></a></div></aside>';
 }
 
 if (!function_exists('generate_csrf_token')) {

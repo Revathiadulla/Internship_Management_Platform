@@ -1,7 +1,7 @@
 <?php
 // populate_internship_subtypes.php
 // Heuristic script to populate missing project_subtype and project_type values
-require_once __DIR__ . '/../db.php';
+require_once __DIR__ . '/../includes/db.php';
 
 $rows = [];
 $res = mysqli_query($conn, "SELECT id, title, technology_stack, description, project_type, project_subtype, difficulty_level FROM internships WHERE project_subtype IS NULL OR TRIM(project_subtype) = '' OR project_type IS NULL OR TRIM(project_type) = ''");

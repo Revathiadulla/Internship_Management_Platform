@@ -4,7 +4,7 @@
 ?>
 <aside class="fixed left-0 top-0 h-screen w-64 z-40 bg-white border-r border-gray-200 flex flex-col py-6 shadow-sm">
   <div class="px-6 mb-8">
-    <a href="index.html" class="flex items-center gap-2 hover:opacity-95 transition-opacity">
+    <a href="../index.html" class="flex items-center gap-2 hover:opacity-95 transition-opacity">
       <svg class="w-8 h-8 text-blue-600 shrink-0" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
         <rect width="32" height="32" rx="8" fill="currentColor"/>
         <circle cx="16" cy="16" r="3" fill="white"/>
@@ -56,7 +56,7 @@
       <span class="material-symbols-outlined">help</span>
       <span class="text-sm font-medium">Help Center</span>
     </a>
-    <a class="flex items-center gap-3 text-gray-600 px-4 py-3 rounded-lg hover:bg-red-50 hover:text-red-600 transition-all" href="login.php">
+    <a class="flex items-center gap-3 text-gray-600 px-4 py-3 rounded-lg hover:bg-red-50 hover:text-red-600 transition-all" href="../login.php">
       <span class="material-symbols-outlined">logout</span>
       <span class="text-sm font-medium">Logout</span>
     </a>

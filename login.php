@@ -1,7 +1,7 @@
 <?php
 ob_start();
 session_start();
-require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/includes/db.php';
 include_once __DIR__ . '/includes/auth.php';
 
 // Helper function for temporary debug logs on failed logins
@@ -99,20 +99,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Redirect based on role
     if ($role === 'admin') {
-        header("Location: admin_dashboard.php");
+        header("Location: /IMP/admin/dashboard.php");
     } elseif ($role === 'hr') {
-        header("Location: hr_dashboard.php");
+        header("Location: /IMP/hr/dashboard.php");
     } elseif ($role === 'coordinator') {
-        header("Location: coordinator_dashboard.php");
+        header("Location: /IMP/coordinator/dashboard.php");
     } elseif ($role === 'mentor') {
-        header("Location: mentor_dashboard.php");
+        header("Location: /IMP/mentor/dashboard.php");
     } elseif ($role === 'student') {
-        header("Location: student_dashboard.php");
+        header("Location: /IMP/student/student_dashboard.php");
     } elseif ($role === 'company') {
         ensure_company_profile($conn, $user['id'], $user['full_name'] ?? '');
-        header("Location: company_dashboard.php");
-    } elseif ($role === 'hod') {
-        header("Location: hod_dashboard.php");
+        header("Location: /IMP/company/dashboard.php");
     } else {
         header("Location: login.php?error=" . urlencode("Invalid role configuration."));
     }
@@ -373,7 +371,7 @@ if (isset($_GET['success'])) $success_msg = htmlspecialchars(urldecode($_GET['su
 <div class="flex items-center justify-center gap-1.5 mt-10 mb-2 text-on-surface-variant opacity-60">
 <span class="material-symbols-outlined text-sm" data-icon="lock">lock</span>
 <span class="font-label-sm text-label-sm">Your data is securely protected</span>
-</div><p class="text-center font-body-md text-body-md text-on-surface-variant mt-2">Don't have an account? <a class="text-primary font-label-md hover:underline" href="registration_page.php">Sign Up</a></p>
+</div><p class="text-center font-body-md text-body-md text-on-surface-variant mt-2">Don't have an account? <a class="text-primary font-label-md hover:underline" href="student/registration_page.php">Sign Up</a></p>
 </div>
 </div>
 </div>

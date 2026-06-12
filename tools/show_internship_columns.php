@@ -1,6 +1,6 @@
 <?php
 $_SERVER['HTTP_HOST'] = 'localhost';
-require __DIR__ . '/../db.php';
+require __DIR__ . '/../includes/db.php';
 $tables = ['internship_applications', 'internships'];
 foreach ($tables as $table) {
     $result = mysqli_query($conn, "SHOW COLUMNS FROM $table");

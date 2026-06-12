@@ -1,6 +1,6 @@
 <?php
 session_start();
-include 'db.php';
+include __DIR__ . '/includes/db.php';
 
 $userId = isset($_SESSION['user_id']) ? intval($_SESSION['user_id']) : null;
 

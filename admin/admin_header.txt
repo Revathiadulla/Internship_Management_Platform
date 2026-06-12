@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>Admin Dashboard – IMP</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            primary: "#003ea8",
+            "primary-hover": "#002a75",
+            surface: "#f8f9fa",
+            "surface-container": "#ffffff",
+          },
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          }
+        }
+      }
+    };
+    if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+    <style>
+      body { background-color: #f8f9fa; color: #191c1d; }
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        vertical-align: middle;
+      }
+      .stat-card { transition: transform 0.15s ease, box-shadow 0.15s ease; }
+      .stat-card:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.06); }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col font-sans antialiased dark:bg-slate-950 dark:text-slate-100 transition-colors duration-200">
+  <!-- Top Nav -->
+  <header class="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between sticky top-0 z-40">
+    <div class="flex items-center gap-8">
+      <a href="index.html" class="flex items-center gap-2 hover:opacity-95 transition-opacity">
+        <svg class="w-8 h-8 text-blue-600 shrink-0" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect width="32" height="32" rx="8" fill="currentColor"/>
+          <circle cx="16" cy="16" r="3" fill="white"/>
+          <line x1="16" y1="13" x2="16" y2="9" stroke="white" stroke-width="1.5"/>
+          <circle cx="16" cy="8" r="1.5" fill="white"/>
+          <line x1="18.5" y1="15.1" x2="22.5" y2="13.8" stroke="white" stroke-width="1.5"/>
+          <circle cx="23.5" cy="13.5" r="1.5" fill="white"/>
+          <line x1="17.8" y1="18.4" x2="20.0" y2="21.5" stroke="white" stroke-width="1.5"/>
+          <circle cx="20.7" cy="22.5" r="1.5" fill="white"/>
+          <line x1="14.2" y1="18.4" x2="12.0" y2="21.5" stroke="white" stroke-width="1.5"/>
+          <circle cx="11.3" cy="22.5" r="1.5" fill="white"/>
+          <line x1="13.5" y1="15.1" x2="9.5" y2="13.8" stroke="white" stroke-width="1.5"/>
+          <circle cx="8.5" cy="13.5" r="1.5" fill="white"/>
+        </svg>
+        <span class="text-xl font-bold text-blue-600 tracking-tight">IMP</span>
+      </a>
+      <div class="hidden md:flex gap-2 text-xs font-bold text-gray-400 uppercase tracking-widest border-l border-gray-200 pl-6">
+        Platform Administration
+      </div>
+    </div>
+    
+    <div class="flex items-center gap-4">
+      <div class="flex items-center gap-2 text-sm text-gray-600 bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-xl shadow-sm">
+        <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+        <span class="font-semibold text-slate-700">System Online</span>
+      </div>
+
+      <!-- Theme Switcher -->
+      <button id="theme-toggle" class="p-2 text-gray-500 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors rounded-full flex items-center justify-center cursor-pointer">
+          <span class="material-symbols-outlined text-[20px]" id="theme-toggle-icon">dark_mode</span>
+      </button>
+      <!-- Notifications Bell -->
+      <div class="relative mr-1" id="notifications-container-menu">
+          <button id="notifications-menu-button" class="p-2 text-gray-500 hover:bg-gray-50 transition-colors rounded-full relative focus:outline-none cursor-pointer flex items-center justify-center">
+              <span class="material-symbols-outlined">notifications</span>
+              <?php if ($admin_unread_count > 0): ?>
+                  <span class="absolute top-1 right-1 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center text-[9px] font-bold"><?php echo $admin_unread_count; ?></span>
+              <?php endif; ?>
+          </button>
+          <div id="notifications-dropdown" class="hidden absolute right-0 mt-2 w-80 bg-white border border-gray-200 rounded-xl shadow-lg py-2 z-50">
+              <div class="px-4 py-2 border-b border-gray-100 flex items-center justify-between">
+                  <span class="font-bold text-xs text-gray-800">Notifications</span>
+                  <?php if ($admin_unread_count > 0): ?>
+                      <a href="../mark_notification_read.php?action=read_all&redirect=dashboard.php" class="text-[10px] font-bold text-blue-600 hover:text-blue-800">Mark all read</a>
+                  <?php endif; ?>
+              </div>
+              <div class="max-h-64 overflow-y-auto divide-y divide-gray-100">
+                  <?php if (empty($admin_latest_notifications)): ?>
+                      <div class="px-4 py-3 text-center text-xs text-gray-400">No notifications.</div>
+                  <?php else: ?>
+                      <?php foreach ($admin_latest_notifications as $notif): ?>
+                          <a href="/IMP/admin/notifications.php" class="block px-4 py-2.5 hover:bg-gray-50 transition-colors">
+                              <div class="flex justify-between items-start gap-1">
+                                  <span class="text-[9px] font-bold uppercase tracking-wider text-gray-400"><?php echo htmlspecialchars($notif['title']); ?></span>
+                                  <?php if (!$notif['is_read']): ?>
+                                      <span class="w-1.5 h-1.5 bg-blue-600 rounded-full shrink-0 mt-1"></span>
+                                  <?php endif; ?>
+                              </div>
+                              <p class="text-xs text-gray-700 font-medium truncate mt-0.5" title="<?php echo htmlspecialchars($notif['message']); ?>"><?php echo htmlspecialchars($notif['message']); ?></p>
+                              <span class="text-[9px] text-gray-400 mt-1 block"><?php echo date('h:i A, d M', strtotime($notif['created_at'])); ?></span>
+                          </a>
+                      <?php endforeach; ?>
+                  <?php endif; ?>
+              </div>
+              <div class="border-t border-gray-100 pt-1 text-center">
+                  <a href="/IMP/admin/notifications.php" class="block py-2 text-xs font-bold text-blue-600 hover:text-blue-800">View all notifications</a>
+              </div>
+          </div>
+      </div>
+      
+      <!-- Profile Button -->
+      <div class="relative">
+        <button id="profile-menu-button" class="flex items-center gap-2 focus:outline-none cursor-pointer group">
+          <span class="text-sm font-semibold text-gray-700 group-hover:text-blue-600 transition-colors hidden sm:inline">
+            <?php echo htmlspecialchars($header_name); ?> (Admin)
+          </span>
+          <div class="w-8 h-8 rounded-full overflow-hidden border border-gray-200 shadow-sm group-hover:border-blue-400 transition-colors">
+            <?php if (!empty($header_photo) && file_exists($header_photo)): ?>
+              <img src="<?php echo htmlspecialchars($header_photo); ?>" alt="Profile" class="w-full h-full object-cover">
+            <?php else: ?>
+              <img src="https://ui-avatars.com/api/?name=<?php echo urlencode($header_name); ?>&background=003ea8&color=fff" alt="Profile" class="w-full h-full object-cover">
+            <?php endif; ?>
+          </div>
+          <span class="material-symbols-outlined text-gray-400 text-[18px]">arrow_drop_down</span>
+        </button>
+        <div id="profile-dropdown" class="hidden absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-xl shadow-lg py-2 z-50">
+          <a href="users.php" class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
+            <span class="material-symbols-outlined text-gray-400 text-[18px]">manage_accounts</span> Manage Users
+          </a>
+          <hr class="my-1 border-gray-100">
+          <a href="../logout.php" class="flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50">
+            <span class="material-symbols-outlined text-red-400 text-[18px]">logout</span> Logout
+          </a>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="flex flex-1 overflow-hidden">
+    <!-- Sidebar -->
+    <?php include __DIR__ . '/../includes/admin_sidebar.php'; ?>
+
+    <!-- Main Content -->
+    <main class="flex-1 p-8 overflow-y-auto bg-gray-50">
+      <div class="max-w-6xl mx-auto space-y-6">
+        
+

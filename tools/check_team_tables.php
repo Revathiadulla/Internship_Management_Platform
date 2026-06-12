@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/../db.php';
+require_once __DIR__ . '/../includes/db.php';
 
 $tables = ['project_teams', 'project_team_members'];
 $results = [];
